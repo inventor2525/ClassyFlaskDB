@@ -92,25 +92,42 @@ def id_field(cls, id_type:ID_Type = Default_ID_Type, field_name:str = "id", prim
 		assert hasattr(cls.__dict__[field_name], '__get__'), "field_name must be a field or property."
 	else:
 		if id_type == ID_Type.IntAutoIncrement:
-			cls._next_id = 1
+			cls.next_id = 1
 			def _get_auto_increment_id(self):
 				if not hasattr(self, '_id'):
-					self._id = self._next_id
-					self._next_id += 1
+					self._id = self.next_id
+					self.next_id += 1
 				return self._id
+			def _set_auto_increment_id(self, value):
+				self._id = value
 			setattr(cls, '_get_auto_increment_id', _get_auto_increment_id)
-			
-			setattr(cls, field_name, property(lambda self: self._get_auto_increment_id()))
-			
+			setattr(cls, field_name, property(_get_auto_increment_id, _set_auto_increment_id))
+
 		elif id_type == ID_Type.UUIDv4:
-			setattr(cls, field_name, property(lambda self: uuid.uuid4().hex))
-			
+			def _get_uuid(self):
+				if not hasattr(self, '_uuid'):
+					self._uuid = uuid.uuid4().hex
+				return self._uuid
+			setattr(cls, '_get_uuid', _get_uuid)
+			setattr(cls, field_name, property(
+				lambda self: self._uuid,
+				lambda self, value: setattr(self, '_uuid', value)
+			))
+
 		elif id_type == ID_Type.PyHash:
 			setattr(cls, field_name, property(lambda self: hash(self)))
-			
+
 		elif id_type == ID_Type.Sha256:
-			setattr(cls, field_name, property(lambda self: hashlib.sha256(str(self).encode()).hexdigest()))
-	
+			if is_dataclass(cls):
+				def _get_sha256(self):
+					content = '|'.join(str(getattr(self, f.name)) for f in fields(cls))
+					return hashlib.sha256(content.encode()).hexdigest()
+			else:
+				def _get_sha256(self):
+					return hashlib.sha256(str(self).encode()).hexdigest()
+			setattr(cls, '_get_sha256', _get_sha256)
+			setattr(cls, field_name, property(_get_sha256))
+
 	if primary_key:
 		cls.primary_key = field_name
 
@@ -193,7 +210,6 @@ class EditSource(MessageSource):
 	
 @dataclass
 class ModelSource(MessageSource):
-	class_name: str
 	model_name: str
 	model_parameters: dict
 	message_sequence: MessageSequence
