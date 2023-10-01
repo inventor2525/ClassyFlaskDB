@@ -1,11 +1,11 @@
 from sqlalchemy import Column, String, Integer,  ForeignKey, DateTime, JSON, Enum, Boolean, Float, Text
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 from typing import Type, Iterable, Tuple, Dict, Any, Union, Callable, List, Set
 from itertools import chain
 from datetime import datetime
 
-from dataclasses import fields, is_dataclass
+from dataclasses import field, is_dataclass, dataclass, fields
 
 type_map = {
 	bool: Boolean,
@@ -63,15 +63,16 @@ def get_fields_to_save(
 		return s.startswith(prefix)
 		
 	field_names = set((attr for attr in chain(
-		included_fields, 
+		inclusion_set, 
 		(
 			attr for attr in dir(cls) if 
 			not callable(getattr(cls, attr)) 
 			and not safe_starts_with(attr, exclude_prefix)
 		) if auto_include_fields else []
-	) if attr not in excluded_fields))
+	) if attr not in exclusion_set))
 	
-	#TODO: order field_names in the order they were defined in cls
+	#Order field_names in the order they were defined in cls
+	field_names = sorted(field_names, key=lambda x: list(cls.__annotations__).index(x) if x in cls.__annotations__ else float('inf'))
 	return field_names, fields_dict
 
 DefaultBase = declarative_base()
@@ -86,77 +87,155 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 	
 	Then it adds a to_schema method to the decorated class, and a to_model method
 	to the internal schema class to enable type conversion.
-	'''
-	field_names, fields_dict = get_fields_to_save(cls, excluded_fields, included_fields, auto_include_fields, exclude_prefix)
 	
+	By convention dataclass field metadata will contain any number of keys to guide
+	the creation of the column for a given field on cls:
+	1. "Column" = Column(...) will let the user directly specify the column to use in the schema class
+	2. "primary_key" = True will make the column the primary key
+	3. "type" = <sqlalchemy.Type> will specify the type of the column, eg Column(Integer), Column(String), etc
+	4. "to_schema" = <Callable> will specify a function to convert the field to a schema equivalent
+	5. "from_schema" = <Callable> will specify a function to convert the field from a schema equivalent
+	
+	Any thing that is not a default sqlalchemy type without a "Column" key, "type" key, or "to_schema"
+	and "from_schema" keys, but that has a "__SQL_Schema_Class__" will create a relationship to the
+	__SQL_Schema_Class__.__tablename__ table with the same name as the field.
+	
+	If it is a list, tuple, or set, an intermediary table will be created to hold the relationship.
+	
+	:param cls: The class to add the to_schema method to and to create the schema class from.
+	:param Base: The SQLAlchemy Base class to inherit the schema class from.
+	:param excluded_fields: A list of fields on cls to exclude from the schema class.
+	:param included_fields: A list of fields on cls to include in the schema class.
+	:param auto_include_fields: Whether or not to automatically include all fields on cls in the schema class.
+	:param exclude_prefix: A prefix to exclude fields from the schema class.
+	:return: The decorated class.
+	'''
+	primary_key_field_name = "__primary_key_name__"
 	inner_schema_class_name = "__SQL_Schema_Class__"
 	
-	primary_key_name = None
-	#TODO: Asserting that there is exactly 1 primary key
-	# find the name of the primary key in one of a number of places:
-	# 1. A str field in cls named __primary_key__ that contains the name of the primary key
-	# 2. The field with the metadata "primary_key"=True
-	# 3. The field in cls named "id"
+	excluded_fields = chain(excluded_fields, [
+		primary_key_field_name,
+		inner_schema_class_name
+	])
 	
-	class SQLSchema(Base):
+	field_names, fields_dict = get_fields_to_save(cls, excluded_fields, included_fields, auto_include_fields, exclude_prefix)
+	
+	#Get the primary key name:
+	primary_key_name = None
+	if hasattr(cls, primary_key_field_name):
+		primary_key_name = cls.__primary_key_name__
+		
+	for field_name in field_names:
+		field = fields_dict[field_name]
+		if "primary_key" in field.metadata and field.metadata["primary_key"]:
+			if primary_key_name is not None:
+				raise ValueError(f"Multiple primary keys specified in {cls}.")
+			primary_key_name = field_name
+
+	if primary_key_name is None:
+		if 'id' in field_names:
+			primary_key_name = 'id'
+		else:
+			raise ValueError(f"No primary key specified for {cls}.")
+	
+	#Create the schema class:
+	class DynamicBase:
 		__tablename__ = f"{cls.__name__}_Table"
 		__model_class__ = cls
 		__field_names__ = field_names
 		__primary_key_name__ = primary_key_name
 		
 		def to_model(self) -> cls:
+			'''Converts the internal schema class to the decorated dataclass.'''
 			model = self.__model_class__()
 			for field_name in self.__field_names__:
 				setattr(model, field_name, getattr(self, field_name))
 			return model
 	
-	def to_schema(self) -> SQLSchema:
-		schema_class:SQLSchema = getattr(self, inner_schema_class_name)
+	def to_schema(self) -> DynamicBase:
+		'''Converts the decorated dataclass to the internal schema class.'''
+		schema_class:DynamicBase = getattr(self, inner_schema_class_name)
 		
 		schema = schema_class()
 		for field_name in schema_class.__field_names__:
 			setattr(schema, field_name, getattr(self, field_name))
 		return schema
-		
+	
+	# Create the columns for the schema class:
 	def auto_create_field(field_name:str, field_type:Type[Any]):
 		if field_type in type_map:
-			return Column(type_map[field_type])
+			setattr(DynamicBase, field_name, Column(type_map[field_type], primary_key=field_name==primary_key_name))
+		#TODO: elif field_type is a list, tuple, or set, assert that it is a iterable of a
+		#class with a __SQL_Schema_Class__, and create a relationship to that class with an
+		#intermediary table to hold the relationship.
+		
 		elif inner_schema_class_name in field_type.__dict__:
 			fields_schema_class = getattr(field_type, inner_schema_class_name)
 			
-			#TODO: create a relationship to field types table with the same name as field_name
-			#similar to this:
-			# parent = relationship(
-			# 		"Parent",
-			# 		primaryjoin="and_(Parent.name==foreign(Child.parent_name))",
-			# 		viewonly=True
-			# )
-			#
-			# WIP code:
-			# setattr(fields_schema_class, field_name, relationship(
-			# 	field_type.__tablename__,
+			foreign_name = f"{field_name}__{fields_schema_class.__primary_key_name__}"
+			fields_primary_key_column:Column = getattr(fields_schema_class, primary_key_name)
+			fields_primary_key_type = fields_primary_key_column.type
+			
+			setattr(SQLSchema, foreign_name, Column(fields_primary_key_type))
+			setattr(SQLSchema, field_name, relationship(
+				fields_schema_class.__tablename__,
+				primaryjoin=f"and_({fields_schema_class.__tablename__}.{fields_schema_class.__primary_key_name__}==foreign({SQLSchema.__tablename__}.{foreign_name}))",
+				viewonly=True,
+			))
 		else:
 			raise ValueError(f"Unsupported type {field_type} for field {field_name}")
 	
-	# field metadata will contain any number of keys to guide the creation of the column for field_name:
-	# 1. "Column" = Column(...) will let the user directly specify the column
-	# 2. "primary_key" = True will make the column the primary key
-	# 3. "type" = <sqlalchemy.Type> will specify the type of the column, eg Column(Integer), Column(String), etc
-	# 4. "to_schema" = <Callable> will specify a function to convert the field to a schema equivalent
-	# 5. "from_schema" = <Callable> will specify a function to convert the field from a schema equivalent
-	
-	for field_name in fields:
+	for field_name in field_names:
 		if field_name in fields_dict:
 			field = fields_dict[field_name]
 			if "Column" in field.metadata:
 				setattr(SQLSchema, field_name, field.metadata["Column"])
 			elif "type" in field.metadata:
-					Column(field.metadata["type"])
+				setattr(SQLSchema, field_name, Column(field.metadata["type"], primary_key=field_name==primary_key_name))
 			else:
-				setattr(SQLSchema, field_name, auto_create_field(field_name, field.type))
+				auto_create_field(field_name, field.type)
 		else:
-			setattr(SQLSchema, field_name, auto_create_field(field_name, field.type))
+			auto_create_field(field_name, field.type)
 			
-	setattr(cls, inner_schema_class_name, SQLSchema)
+	setattr(cls, inner_schema_class_name, type("SQLSchema", (DynamicBase, Base), {}))
 	setattr(cls, 'to_schema', to_schema)
 	return cls
+
+if __name__ == "__main__":
+	from dataclasses import dataclass
+	from sqlalchemy import create_engine
+	from sqlalchemy.orm import sessionmaker
+	
+	engine = create_engine('sqlite:///:memory:', echo=True)
+	Session = sessionmaker(bind=engine)
+	
+	@to_sql
+	@dataclass
+	class TestClass:
+		__primary_key_name__ = "field1"
+		field1: str = "test"
+		field2: int	= 1
+		field3: float = 1.0
+		field4: bool = True
+		field5: datetime = field(default_factory=datetime.now)
+	
+	@to_sql
+	@dataclass
+	class TestClass2:
+		__primary_key_name__ = "field2"
+		field1: str = "test"
+		field2: int	= 1
+	
+	test = TestClass()
+	test2 = TestClass2()
+	
+	DefaultBase.metadata.create_all(engine)
+	
+	session = Session()
+	session.add(test.to_schema())
+	session.add(test2.to_schema())
+	session.commit()
+	
+	obj = session.query(TestClass.__SQL_Schema_Class__).all()
+	obj2 = session.query(TestClass2.__SQL_Schema_Class__).all()
+	print()
