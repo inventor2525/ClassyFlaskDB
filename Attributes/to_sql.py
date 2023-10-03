@@ -203,6 +203,7 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 				auto_create_field(field_name, field.type)
 		else:
 			auto_create_field(field_name, field.type)
+			
 	#remove all relationship info keys from field names:
 	for field_name in DynamicBase.__relationship_info__.keys():
 		DynamicBase.__field_names__.remove(field_name)
@@ -211,42 +212,7 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 	setattr(cls, 'to_schema', to_schema)
 	return cls
 
-if __name__ == "__main__":
-	from dataclasses import dataclass
-	from sqlalchemy import create_engine
-	from sqlalchemy.orm import sessionmaker
-	
-	engine = create_engine('sqlite:///:memory:', echo=True)
-	Session = sessionmaker(bind=engine)
-	
-	# class TestClass_schema(DefaultBase):
-	# 	__tablename__ = 'testclass'
-	# 	__primary_key_name__ = 'Field1'
-
-	# 	Field1 = Column(String, primary_key=True)
-	# 	Field2 = Column(Integer)
-	# 	Field3 = Column(Float)
-	# 	Field4 = Column(Boolean)
-	# 	Field5 = Column(DateTime, default=datetime.now)
-	
-	# class bla:
-	# 	class TestClass2_schema(DefaultBase):
-	# 		__tablename__ = 'testclass2'
-	# 		__primary_key_name__ = 'Field2'
-
-	# 		Field1 = Column(String)
-	# 		Field2 = Column(Integer, primary_key=True)
-
-	# 		# Auto-created relationship fields
-	# 		Field3__Field1 = Column(String)
-	# 		Field3 = relationship(
-	# 			'TestClass_schema',
-	# 			primaryjoin="and_(TestClass_schema.Field1==foreign(TestClass2_schema.Field3__Field1))",
-	# 			viewonly=True
-	# 		)
-		
-	
-		
+if __name__ == "__main__":		
 	@to_sql
 	@dataclass
 	class TestClass:
@@ -266,41 +232,32 @@ if __name__ == "__main__":
 		field3: TestClass = field(default_factory=TestClass)
 	
 	
-		
+	# Create database and tables
+	from dataclasses import dataclass
+	from sqlalchemy import create_engine
+	from sqlalchemy.orm import sessionmaker
+	
+	engine = create_engine('sqlite:///:memory:', echo=True)
+	Session = sessionmaker(bind=engine)
+	
+	DefaultBase.metadata.create_all(engine)
+	
+	# Create sample data
 	test = TestClass()
 	test1 = TestClass()
 	test1.field2 = 55
 	test2 = TestClass2()
 	test2.field3 = test
 	
-	DefaultBase.metadata.create_all(engine)
-	
-	# session = Session()
-	# # Create instances of TestClass_schema and TestClass2_schema
-	# test1 = TestClass_schema(Field1="test1", Field2=1, Field3=1.0, Field4=True)
-	# test2 = bla.TestClass2_schema(Field1="test2", Field2=2, Field3__Field1="test1")
-
-	# # Add instances to session
-	# session.add(test1)
-	# session.add(test2)
-	
-	
-	# session.commit()
-	
-	# obj = session.query(TestClass_schema).all()
-	# obj2 = session.query(bla.TestClass2_schema).all()
-	
+	# Insert sample data
 	session = Session()
-	s = test.to_schema()
 	
-	s2 = test2.to_schema()
-	session.add(s)
-	session.add(s2)
+	session.add(test.to_schema())
+	session.add(test2.to_schema())
 	
 	session.commit()
 	
+	# Query
 	obj = session.query(TestClass.__SQL_Schema_Class__).all()
 	obj2 = session.query(TestClass2.__SQL_Schema_Class__).all()
-	
-	
 	print()
