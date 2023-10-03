@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from typing import Type, Iterable, Tuple, Dict, Any, Union, Callable, List, Set
 from itertools import chain
 from datetime import datetime
+from sqlalchemy.ext.declarative import declared_attr
 
 from dataclasses import field, is_dataclass, dataclass, fields
 
@@ -13,11 +14,7 @@ type_map = {
 	float: Float,
     str: Text,
 	
-    datetime: DateTime,
-	
-	list: JSON,
-	tuple: JSON,
-	set: JSON,
+    datetime: DateTime
 }
 
 def get_fields_to_save(
@@ -139,10 +136,12 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 			raise ValueError(f"No primary key specified for {cls}.")
 	
 	#Create the schema class:
+	new_schema_class_name = f"{cls.__name__}_schema"
 	class DynamicBase:
 		__tablename__ = f"{cls.__name__}_Table"
 		__model_class__ = cls
 		__field_names__ = field_names
+		__relationship_info__ = {}
 		__primary_key_name__ = primary_key_name
 		
 		def to_model(self) -> cls:
@@ -159,6 +158,9 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 		schema = schema_class()
 		for field_name in schema_class.__field_names__:
 			setattr(schema, field_name, getattr(self, field_name))
+			
+		for field_name, relationship_info in schema_class.__relationship_info__.items():
+			setattr(schema, relationship_info["foreign_name"], getattr(self, relationship_info["primary_key_name"]))
 		return schema
 	
 	# Create the columns for the schema class:
@@ -173,15 +175,20 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 			fields_schema_class = getattr(field_type, inner_schema_class_name)
 			
 			foreign_name = f"{field_name}__{fields_schema_class.__primary_key_name__}"
-			fields_primary_key_column:Column = getattr(fields_schema_class, primary_key_name)
+			fields_primary_key_column:Column = getattr(fields_schema_class, fields_schema_class.__primary_key_name__)
 			fields_primary_key_type = fields_primary_key_column.type
 			
-			setattr(SQLSchema, foreign_name, Column(fields_primary_key_type))
-			setattr(SQLSchema, field_name, relationship(
-				fields_schema_class.__tablename__,
-				primaryjoin=f"and_({fields_schema_class.__tablename__}.{fields_schema_class.__primary_key_name__}==foreign({SQLSchema.__tablename__}.{foreign_name}))",
-				viewonly=True,
-			))
+			setattr(DynamicBase, foreign_name, Column(fields_primary_key_type))
+			
+			@declared_attr
+			def get_relationship(cls):
+				return relationship(
+					fields_schema_class.__name__,
+					primaryjoin=f"and_({fields_schema_class.__name__}.{fields_schema_class.__primary_key_name__}==foreign({new_schema_class_name}.{foreign_name}))",
+					viewonly=True,
+				)
+			DynamicBase.__relationship_info__[field_name] = {"foreign_name": foreign_name, "primary_key_name": fields_schema_class.__primary_key_name__}
+			setattr(DynamicBase, field_name, get_relationship)
 		else:
 			raise ValueError(f"Unsupported type {field_type} for field {field_name}")
 	
@@ -189,15 +196,18 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 		if field_name in fields_dict:
 			field = fields_dict[field_name]
 			if "Column" in field.metadata:
-				setattr(SQLSchema, field_name, field.metadata["Column"])
+				setattr(DynamicBase, field_name, field.metadata["Column"])
 			elif "type" in field.metadata:
-				setattr(SQLSchema, field_name, Column(field.metadata["type"], primary_key=field_name==primary_key_name))
+				setattr(DynamicBase, field_name, Column(field.metadata["type"], primary_key=field_name==primary_key_name))
 			else:
 				auto_create_field(field_name, field.type)
 		else:
 			auto_create_field(field_name, field.type)
-			
-	setattr(cls, inner_schema_class_name, type("SQLSchema", (DynamicBase, Base), {}))
+	#remove all relationship info keys from field names:
+	for field_name in DynamicBase.__relationship_info__.keys():
+		DynamicBase.__field_names__.remove(field_name)
+	
+	setattr(cls, inner_schema_class_name, type(new_schema_class_name, (DynamicBase, Base), {}))
 	setattr(cls, 'to_schema', to_schema)
 	return cls
 
@@ -209,6 +219,34 @@ if __name__ == "__main__":
 	engine = create_engine('sqlite:///:memory:', echo=True)
 	Session = sessionmaker(bind=engine)
 	
+	# class TestClass_schema(DefaultBase):
+	# 	__tablename__ = 'testclass'
+	# 	__primary_key_name__ = 'Field1'
+
+	# 	Field1 = Column(String, primary_key=True)
+	# 	Field2 = Column(Integer)
+	# 	Field3 = Column(Float)
+	# 	Field4 = Column(Boolean)
+	# 	Field5 = Column(DateTime, default=datetime.now)
+	
+	# class bla:
+	# 	class TestClass2_schema(DefaultBase):
+	# 		__tablename__ = 'testclass2'
+	# 		__primary_key_name__ = 'Field2'
+
+	# 		Field1 = Column(String)
+	# 		Field2 = Column(Integer, primary_key=True)
+
+	# 		# Auto-created relationship fields
+	# 		Field3__Field1 = Column(String)
+	# 		Field3 = relationship(
+	# 			'TestClass_schema',
+	# 			primaryjoin="and_(TestClass_schema.Field1==foreign(TestClass2_schema.Field3__Field1))",
+	# 			viewonly=True
+	# 		)
+		
+	
+		
 	@to_sql
 	@dataclass
 	class TestClass:
@@ -225,17 +263,44 @@ if __name__ == "__main__":
 		__primary_key_name__ = "field2"
 		field1: str = "test"
 		field2: int	= 1
+		field3: TestClass = field(default_factory=TestClass)
 	
+	
+		
 	test = TestClass()
+	test1 = TestClass()
+	test1.field2 = 55
 	test2 = TestClass2()
+	test2.field3 = test
 	
 	DefaultBase.metadata.create_all(engine)
 	
+	# session = Session()
+	# # Create instances of TestClass_schema and TestClass2_schema
+	# test1 = TestClass_schema(Field1="test1", Field2=1, Field3=1.0, Field4=True)
+	# test2 = bla.TestClass2_schema(Field1="test2", Field2=2, Field3__Field1="test1")
+
+	# # Add instances to session
+	# session.add(test1)
+	# session.add(test2)
+	
+	
+	# session.commit()
+	
+	# obj = session.query(TestClass_schema).all()
+	# obj2 = session.query(bla.TestClass2_schema).all()
+	
 	session = Session()
-	session.add(test.to_schema())
-	session.add(test2.to_schema())
+	s = test.to_schema()
+	
+	s2 = test2.to_schema()
+	session.add(s)
+	session.add(s2)
+	
 	session.commit()
 	
 	obj = session.query(TestClass.__SQL_Schema_Class__).all()
 	obj2 = session.query(TestClass2.__SQL_Schema_Class__).all()
+	
+	
 	print()
