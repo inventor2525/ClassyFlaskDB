@@ -243,16 +243,14 @@ if __name__ == "__main__":
 	DefaultBase.metadata.create_all(engine)
 	
 	# Create sample data
-	test = TestClass()
 	test1 = TestClass()
-	test1.field2 = 55
 	test2 = TestClass2()
-	test2.field3 = test
+	test2.field3 = test1
 	
 	# Insert sample data
 	session = Session()
 	
-	session.add(test.to_schema())
+	session.add(test1.to_schema())
 	session.add(test2.to_schema())
 	
 	session.commit()
