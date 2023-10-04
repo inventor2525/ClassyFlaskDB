@@ -12,7 +12,9 @@ class TestSQLAlchemyDataClasses(unittest.TestCase):
 		Session = sessionmaker(bind=self.engine)
 		DefaultBase.metadata.create_all(self.engine)
 		self.session = Session()
+		
 	def test_fields_are_equal(self):
+		# Create test database
 		@to_sql
 		@dataclass
 		class TestClass:
@@ -33,21 +35,21 @@ class TestSQLAlchemyDataClasses(unittest.TestCase):
 		
 		self.__create_db__()
 		
-		
-		# Arrange
+		# Create test data
 		test1 = TestClass()
 		test2 = TestClass2()
 		test2.field3 = test1
 		
+		# Add test data to database
 		self.session.add(test1.to_schema())
 		self.session.add(test2.to_schema())
 		self.session.commit()
 		
-		# Act
+		# Query test data from database
 		obj = self.session.query(TestClass.__SQL_Schema_Class__).first()
 		obj2 = self.session.query(TestClass2.__SQL_Schema_Class__).first()
 		
-		# Assert
+		# Assert test data is equal
 		self.assertEqual(obj.field1, "test")
 		self.assertEqual(obj.field2, 1)
 		self.assertEqual(obj.field3, 1.0)
