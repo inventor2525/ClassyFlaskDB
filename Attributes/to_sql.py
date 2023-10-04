@@ -167,10 +167,8 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 	def auto_create_field(field_name:str, field_type:Type[Any]):
 		if field_type in type_map:
 			setattr(DynamicBase, field_name, Column(type_map[field_type], primary_key=field_name==primary_key_name))
-		#TODO: elif field_type is a list, tuple, or set, assert that it is a iterable of a
-		#class with a __SQL_Schema_Class__, and create a relationship to that class with an
-		#intermediary table to hold the relationship.
-		
+			
+		# If this is a class with a __SQL_Schema_Class__ attribute, create a relationship to that class:
 		elif inner_schema_class_name in field_type.__dict__:
 			fields_schema_class = getattr(field_type, inner_schema_class_name)
 			
@@ -186,9 +184,40 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 					fields_schema_class.__name__,
 					primaryjoin=f"and_({fields_schema_class.__name__}.{fields_schema_class.__primary_key_name__}==foreign({new_schema_class_name}.{foreign_name}))",
 					viewonly=True,
+					uselist=False
 				)
 			DynamicBase.__relationship_info__[field_name] = {"foreign_name": foreign_name, "primary_key_name": fields_schema_class.__primary_key_name__}
 			setattr(DynamicBase, field_name, get_relationship)
+			
+		elif isinstance(field_type, list):
+			inner_type = field_type[0]
+			if inner_schema_class_name in inner_type.__dict__:
+				inner_schema = getattr(inner_type, inner_schema_class_name)
+				inner_primary_key = inner_schema.__primary_key_name__
+
+				fk1_name = f"{DynamicBase.__tablename__}_{primary_key_name}"
+				fk2_name = f"{inner_schema.__tablename__}_{inner_primary_key}"
+
+				# Create a new mapping table
+				mapping_tablename = f"{cls.__name__}_{inner_type.__name__}_mapping"
+				mapping_table = Table(
+					mapping_tablename,
+					Base.metadata,
+					Column(fk1_name, ForeignKey(f"{DynamicBase.__tablename__}.{primary_key_name}")),
+					Column(fk2_name, ForeignKey(f"{inner_schema.__tablename__}.{inner_primary_key}"))
+				)
+				
+				setattr(DynamicBase, f"_{mapping_tablename}", mapping_table)
+				
+				# Create the relationship
+				@declared_attr
+				def get_relationship(cls):
+					return relationship(
+						inner_schema.__name__,
+						secondary=mapping_table,
+						back_populates=f"{cls.__name__}List"
+					)
+				setattr(DynamicBase, field_name, get_relationship)
 		else:
 			raise ValueError(f"Unsupported type {field_type} for field {field_name}")
 	
@@ -211,51 +240,3 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 	setattr(cls, inner_schema_class_name, type(new_schema_class_name, (DynamicBase, Base), {}))
 	setattr(cls, 'to_schema', to_schema)
 	return cls
-
-if __name__ == "__main__":		
-	@to_sql
-	@dataclass
-	class TestClass:
-		__primary_key_name__ = "field1"
-		field1: str = "test"
-		field2: int	= 1
-		field3: float = 1.0
-		field4: bool = True
-		field5: datetime = field(default_factory=datetime.now)
-	
-	@to_sql
-	@dataclass
-	class TestClass2:
-		__primary_key_name__ = "field2"
-		field1: str = "test"
-		field2: int	= 1
-		field3: TestClass = field(default_factory=TestClass)
-	
-	
-	# Create database and tables
-	from dataclasses import dataclass
-	from sqlalchemy import create_engine
-	from sqlalchemy.orm import sessionmaker
-	
-	engine = create_engine('sqlite:///:memory:', echo=True)
-	Session = sessionmaker(bind=engine)
-	
-	DefaultBase.metadata.create_all(engine)
-	
-	# Create sample data
-	test1 = TestClass()
-	test2 = TestClass2()
-	test2.field3 = test1
-	
-	# Insert sample data
-	session = Session()
-	
-	session.add(test1.to_schema())
-	session.add(test2.to_schema())
-	
-	session.commit()
-	
-	# Query
-	obj = session.query(TestClass.__SQL_Schema_Class__).all()
-	obj2 = session.query(TestClass2.__SQL_Schema_Class__).all()
-	print()
