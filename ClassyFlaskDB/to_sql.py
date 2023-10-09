@@ -1,12 +1,7 @@
-from sqlalchemy import Column, String, Integer,  ForeignKey, DateTime, JSON, Enum, Boolean, Float, Text
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy import Table, Column, String, Integer, ForeignKey, DateTime, JSON, Enum, Boolean, Float, Text
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.ext.declarative import declared_attr
-
-from dataclasses import field, is_dataclass, dataclass, fields
-
-from sqlalchemy import Table
+from datetime import datetime
 
 from ClassyFlaskDB.helpers import *
 
