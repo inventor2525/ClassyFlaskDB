@@ -8,13 +8,15 @@ from sqlalchemy.ext.declarative import declared_attr
 
 from dataclasses import field, is_dataclass, dataclass, fields
 
+from sqlalchemy import Table
+
 type_map = {
 	bool: Boolean,
-    int: Integer,
+	int: Integer,
 	float: Float,
-    str: Text,
+	str: Text,
 	
-    datetime: DateTime
+	datetime: DateTime
 }
 
 def get_fields_to_save(
@@ -189,8 +191,8 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 			DynamicBase.__relationship_info__[field_name] = {"foreign_name": foreign_name, "primary_key_name": fields_schema_class.__primary_key_name__}
 			setattr(DynamicBase, field_name, get_relationship)
 			
-		elif isinstance(field_type, list):
-			inner_type = field_type[0]
+		elif hasattr(field_type, '__origin__') and field_type.__origin__ is list:
+			inner_type = field_type.__args__[0]
 			if inner_schema_class_name in inner_type.__dict__:
 				inner_schema = getattr(inner_type, inner_schema_class_name)
 				inner_primary_key = inner_schema.__primary_key_name__
@@ -214,8 +216,7 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 				def get_relationship(cls):
 					return relationship(
 						inner_schema.__name__,
-						secondary=mapping_table,
-						back_populates=f"{cls.__name__}List"
+						secondary=mapping_table
 					)
 				setattr(DynamicBase, field_name, get_relationship)
 		else:

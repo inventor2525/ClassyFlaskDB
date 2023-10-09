@@ -78,7 +78,7 @@ class TestSQLAlchemyDataClasses(unittest.TestCase):
 		class TestClass2:
 			__primary_key_name__ = "field1"
 			field1: int = 1
-			list1: List[TestClass] = field(default_factory=TestClass)
+			list1: List[TestClass] = field(default_factory=list)
 		
 		self.__create_db__()
 		
@@ -94,6 +94,8 @@ class TestSQLAlchemyDataClasses(unittest.TestCase):
 		# Add test data to database
 		self.session.add(test1.to_schema())
 		self.session.add(test2.to_schema())
+		self.session.add(test3.to_schema())
+		self.session.add(test_list.to_schema())
 		self.session.commit()
 		
 		# Query test data from database
