@@ -17,6 +17,7 @@ def saveable_field(*args, internal=False, should_save=True, **kwargs):
 
 	metadata = kwargs.get('metadata', {})
 	metadata['should_save'] = should_save
+	metadata['internal'] = internal
 	kwargs['metadata'] = metadata
 
 	return field(*args, **kwargs)
@@ -133,6 +134,31 @@ def id_field(cls, id_type:ID_Type = Default_ID_Type, field_name:str = "id", prim
 
 	return cls
 
+def id_field(cls, field_name:str = "id", primary_key:bool = True):
+	'''
+	Adds a id field to the decorated class and specifies if it
+	should be the primary key to use in a database.
+	'''
+	cls.id_type = id_type
+	
+	if field_name in cls.__dict__:
+		assert hasattr(cls.__dict__[field_name], '__get__'), "field_name must be a field or property."
+	else:
+		def _get_uuid(self):
+			if not hasattr(self, '_uuid'):
+				self._uuid = uuid.uuid4().hex
+			return self._uuid
+		setattr(cls, '_get_uuid', _get_uuid)
+		setattr(cls, field_name, property(
+			lambda self: self._uuid,
+			lambda self, value: setattr(self, '_uuid', value)
+		))
+		
+	if primary_key:
+		cls.primary_key = field_name
+
+	return cls
+	
 @id_field
 @lazy_hash
 @dataclass(unsafe_hash=True)
