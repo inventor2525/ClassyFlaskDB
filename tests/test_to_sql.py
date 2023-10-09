@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from Attributes.to_sql import to_sql, DefaultBase # Your specific import
+from ClassyFlaskDB.to_sql import to_sql, DefaultBase # Your specific import
 
 from typing import List
 
