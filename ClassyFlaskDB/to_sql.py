@@ -13,9 +13,8 @@ type_map = {
 	
 	datetime: DateTime
 }
-
-DefaultBase = declarative_base()
-def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], included_fields:Iterable[str]=[], auto_include_fields=True, exclude_prefix:str="_"):
+	
+def to_sql(excluded_fields:Iterable[str]=[], included_fields:Iterable[str]=[], auto_include_fields=True, exclude_prefix:str="_"):
 	'''
 	Creates an SQLAlchemy schema class equivalent of the decorated class.
 	
@@ -48,10 +47,7 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 	:param auto_include_fields: Whether or not to automatically include all fields on cls in the schema class.
 	:param exclude_prefix: A prefix to exclude fields from the schema class.
 	:return: The decorated class.
-	'''
-	primary_key_field_name = "__primary_key_name__"
-	inner_schema_class_name = "__SQL_Schema_Class__"
-	
+	'''	
 	excluded_fields = chain(excluded_fields, [
 		primary_key_field_name,
 		inner_schema_class_name
@@ -77,108 +73,112 @@ def to_sql(cls:Type[Any], Base=DefaultBase, excluded_fields:Iterable[str]=[], in
 		else:
 			raise ValueError(f"No primary key specified for {cls}.")
 	
-	#Create the schema class:
-	new_schema_class_name = f"{cls.__name__}_schema"
-	class DynamicBase:
-		__tablename__ = f"{cls.__name__}_Table"
-		__model_class__ = cls
-		__field_names__ = field_names
-		__relationship_info__ = {}
-		__primary_key_name__ = primary_key_name
+	def decorator(cls:Type[Any], Base:DeclarativeMeta):
+		#Create the schema class:
+		new_schema_class_name = f"{cls.__name__}_schema"
+		class DynamicBase:
+			__tablename__ = f"{cls.__name__}_Table"
+			__model_class__ = cls
+			__field_names__ = field_names
+			__relationship_info__ = {}
+			__primary_key_name__ = primary_key_name
+			
+			def to_model(self) -> cls:
+				'''Converts the internal schema class to the decorated dataclass.'''
+				model = self.__model_class__()
+				for field_name in self.__field_names__:
+					setattr(model, field_name, getattr(self, field_name))
+				return model
 		
-		def to_model(self) -> cls:
-			'''Converts the internal schema class to the decorated dataclass.'''
-			model = self.__model_class__()
-			for field_name in self.__field_names__:
-				setattr(model, field_name, getattr(self, field_name))
-			return model
-	
-	def to_schema(self) -> DynamicBase:
-		'''Converts the decorated dataclass to the internal schema class.'''
-		schema_class:DynamicBase = getattr(self, inner_schema_class_name)
+		def to_schema(self) -> DynamicBase:
+			'''Converts the decorated dataclass to the internal schema class.'''
+			schema_class:DynamicBase = getattr(self, inner_schema_class_name)
+			
+			schema = schema_class()
+			for field_name in schema_class.__field_names__:
+				setattr(schema, field_name, getattr(self, field_name))
+				
+			for field_name, relationship_info in schema_class.__relationship_info__.items():
+				setattr(schema, relationship_info["foreign_name"], getattr(self, relationship_info["primary_key_name"]))
+			return schema
 		
-		schema = schema_class()
-		for field_name in schema_class.__field_names__:
-			setattr(schema, field_name, getattr(self, field_name))
-			
-		for field_name, relationship_info in schema_class.__relationship_info__.items():
-			setattr(schema, relationship_info["foreign_name"], getattr(self, relationship_info["primary_key_name"]))
-		return schema
-	
-	# Create the columns for the schema class:
-	def auto_create_field(field_name:str, field_type:Type[Any]):
-		if field_type in type_map:
-			setattr(DynamicBase, field_name, Column(type_map[field_type], primary_key=field_name==primary_key_name))
-			
-		# If this is a class with a __SQL_Schema_Class__ attribute, create a relationship to that class:
-		elif inner_schema_class_name in field_type.__dict__:
-			fields_schema_class = getattr(field_type, inner_schema_class_name)
-			
-			foreign_name = f"{field_name}__{fields_schema_class.__primary_key_name__}"
-			fields_primary_key_column:Column = getattr(fields_schema_class, fields_schema_class.__primary_key_name__)
-			fields_primary_key_type = fields_primary_key_column.type
-			
-			setattr(DynamicBase, foreign_name, Column(fields_primary_key_type))
-			
-			@declared_attr
-			def get_relationship(cls):
-				return relationship(
-					fields_schema_class.__name__,
-					primaryjoin=f"and_({fields_schema_class.__name__}.{fields_schema_class.__primary_key_name__}==foreign({new_schema_class_name}.{foreign_name}))",
-					viewonly=True,
-					uselist=False
-				)
-			DynamicBase.__relationship_info__[field_name] = {"foreign_name": foreign_name, "primary_key_name": fields_schema_class.__primary_key_name__}
-			setattr(DynamicBase, field_name, get_relationship)
-			
-		elif hasattr(field_type, '__origin__') and field_type.__origin__ is list:
-			inner_type = field_type.__args__[0]
-			if inner_schema_class_name in inner_type.__dict__:
-				inner_schema = getattr(inner_type, inner_schema_class_name)
-				inner_primary_key = inner_schema.__primary_key_name__
-
-				fk1_name = f"{DynamicBase.__tablename__}_{primary_key_name}"
-				fk2_name = f"{inner_schema.__tablename__}_{inner_primary_key}"
-
-				# Create a new mapping table
-				mapping_tablename = f"{cls.__name__}_{inner_type.__name__}_mapping"
-				mapping_table = Table(
-					mapping_tablename,
-					Base.metadata,
-					Column(fk1_name, ForeignKey(f"{DynamicBase.__tablename__}.{primary_key_name}")),
-					Column(fk2_name, ForeignKey(f"{inner_schema.__tablename__}.{inner_primary_key}"))
-				)
+		# Create the columns for the schema class:
+		def auto_create_field(field_name:str, field_type:Type[Any]):
+			if field_type in type_map:
+				setattr(DynamicBase, field_name, Column(type_map[field_type], primary_key=field_name==primary_key_name))
 				
-				setattr(DynamicBase, f"_{mapping_tablename}", mapping_table)
+			# If this is a class with a __SQL_Schema_Class__ attribute, create a relationship to that class:
+			elif inner_schema_class_name in field_type.__dict__:
+				fields_schema_class = getattr(field_type, inner_schema_class_name)
 				
-				# Create the relationship
+				foreign_name = f"{field_name}__{fields_schema_class.__primary_key_name__}"
+				fields_primary_key_column:Column = getattr(fields_schema_class, fields_schema_class.__primary_key_name__)
+				fields_primary_key_type = fields_primary_key_column.type
+				
+				setattr(DynamicBase, foreign_name, Column(fields_primary_key_type))
+				
 				@declared_attr
 				def get_relationship(cls):
 					return relationship(
-						inner_schema.__name__,
-						secondary=mapping_table
+						fields_schema_class.__name__,
+						primaryjoin=f"and_({fields_schema_class.__name__}.{fields_schema_class.__primary_key_name__}==foreign({new_schema_class_name}.{foreign_name}))",
+						viewonly=True,
+						uselist=False
 					)
+				DynamicBase.__relationship_info__[field_name] = {"foreign_name": foreign_name, "primary_key_name": fields_schema_class.__primary_key_name__}
 				setattr(DynamicBase, field_name, get_relationship)
-		else:
-			raise ValueError(f"Unsupported type {field_type} for field {field_name}")
-	
-	for field_name in field_names:
-		if field_name in fields_dict:
-			field = fields_dict[field_name]
-			if "Column" in field.metadata:
-				setattr(DynamicBase, field_name, field.metadata["Column"])
-			elif "type" in field.metadata:
-				setattr(DynamicBase, field_name, Column(field.metadata["type"], primary_key=field_name==primary_key_name))
+				
+			elif hasattr(field_type, '__origin__') and field_type.__origin__ is list:
+				inner_type = field_type.__args__[0]
+				if inner_schema_class_name in inner_type.__dict__:
+					inner_schema = getattr(inner_type, inner_schema_class_name)
+					inner_primary_key = inner_schema.__primary_key_name__
+
+					fk1_name = f"{DynamicBase.__tablename__}_{primary_key_name}"
+					fk2_name = f"{inner_schema.__tablename__}_{inner_primary_key}"
+
+					# Create a new mapping table
+					mapping_tablename = f"{cls.__name__}_{inner_type.__name__}_mapping"
+					mapping_table = Table(
+						mapping_tablename,
+						Base.metadata,
+						Column(fk1_name, ForeignKey(f"{DynamicBase.__tablename__}.{primary_key_name}")),
+						Column(fk2_name, ForeignKey(f"{inner_schema.__tablename__}.{inner_primary_key}"))
+					)
+					
+					setattr(DynamicBase, f"_{mapping_tablename}", mapping_table)
+					
+					# Create the relationship
+					@declared_attr
+					def get_relationship(cls):
+						return relationship(
+							inner_schema.__name__,
+							secondary=mapping_table
+						)
+					setattr(DynamicBase, field_name, get_relationship)
+				else:
+					raise ValueError(f"Unsupported list type {inner_type} for field {field_name} in {cls}")
+			else:
+				raise ValueError(f"Unsupported type {field_type} for field {field_name} in {cls}")
+		
+		for field_name in field_names:
+			if field_name in fields_dict:
+				field = fields_dict[field_name]
+				if "Column" in field.metadata:
+					setattr(DynamicBase, field_name, field.metadata["Column"])
+				elif "type" in field.metadata:
+					setattr(DynamicBase, field_name, Column(field.metadata["type"], primary_key=field_name==primary_key_name))
+				else:
+					auto_create_field(field_name, field.type)
 			else:
 				auto_create_field(field_name, field.type)
-		else:
-			auto_create_field(field_name, field.type)
-			
-	#remove all relationship info keys from field names:
-	for field_name in DynamicBase.__relationship_info__.keys():
-		DynamicBase.__field_names__.remove(field_name)
-	
-	setattr(cls, inner_schema_class_name, type(new_schema_class_name, (DynamicBase, Base), {}))
-	setattr(cls, 'to_schema', to_schema)
-	return cls
+				
+		#remove all relationship info keys from field names:
+		for field_name in DynamicBase.__relationship_info__.keys():
+			DynamicBase.__field_names__.remove(field_name)
+		
+		setattr(cls, inner_schema_class_name, type(new_schema_class_name, (DynamicBase, Base), {}))
+		setattr(cls, 'to_schema', to_schema)
+		return cls
+	return decorator
 
