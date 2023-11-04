@@ -1,4 +1,4 @@
-from typing import Type, Iterable, Tuple, Dict, Any, Set
+from typing import Type, Iterable, Tuple, List, Dict, Any, Set
 from dataclasses import field, is_dataclass, dataclass, fields
 from itertools import chain
 
