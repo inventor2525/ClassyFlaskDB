@@ -6,49 +6,85 @@ class FieldInfo:
 	field_name : str
 	field_type : Type[Any]
 	depth: int
+
+	is_primary_key : bool = False
+	is_dataclass : bool = False
+
+	dont_go_deeper : bool = False
+	stop_iterating_cls : int = 0
 	
 @dataclass
 class FieldsInfo:
-		__model_class__ : Type[Any]
-		__field_names__ : List[str]
-		__fields_dict__ : Dict[str, field]
-		__primary_key_name__ : str
-		
-		def iterate(self, max_depth: int=-1) -> Iterable[FieldInfo]:
-			"""Iterate through __model_class__'S fields and their types in a BFS manner, up to max_depth."""
-			open_list = [(self.__model_class__, 0)]
-			closed_list = set()
+	model_class : Type[Any]
+	field_names : List[str]
+	fields_dict : Dict[str, field]
+	primary_key_name : str
+	_type_hints : Dict[str, Type[Any]] = field(init=False, repr=False, default_factory=None)
 
-			while open_list:
-				current_cls, current_depth = open_list.pop(0)
-
-				if current_cls in closed_list or (max_depth !=-1 and current_depth > max_depth):
-					continue
-				closed_list.add(current_cls)
-
-				if hasattr(current_cls, 'FieldsInfo'):
-					fields_dict = current_cls.FieldsInfo.__fields_dict__
-					field_names = current_cls.FieldsInfo.__field_names__
-					type_hints = get_type_hints(current_cls)
-
-					for fname in field_names:
-						if fname in fields_dict:
-							field_type = fields_dict[fname].type
-							field_type = resolve_type(field_type, current_cls)
-						elif fname in type_hints:
-							field_type = type_hints[fname]
-							field_type = resolve_type(field_type, current_cls)
-						else:
-							attr = getattr(current_cls, fname)
-							field_type = type(attr)
-
-						# Store the current depth in the FieldInfo
-						if not hasattr(field_type, 'FieldsInfo'):
-							yield FieldInfo(current_cls, fname, field_type, current_depth)
-						else:
-							open_list.append((field_type, current_depth + 1))
-
+	@property
+	def type_hints(self) -> Dict[str, Type[Any]]:
+		if self._type_hints is None:
+			self._type_hints = get_type_hints(self.model_class)
+		return self._type_hints
 	
+	def get_field_type(self, field_name:str) -> Type[Any]:
+		# Get field type:
+		if field_name in self.fields_dict:
+			field_type = self.fields_dict[field_name].type
+			field_type = resolve_type(field_type, self.model_class)
+		elif field_name in self.type_hints:
+			field_type = self.type_hints[field_name]
+			field_type = resolve_type(field_type, self.model_class)
+		else:
+			attr = getattr(self.model_class, field_name)
+			field_type = type(attr)
+		return field_type
+	
+	def iterate(self, max_depth: int=-1) -> Iterable[FieldInfo]:
+		"""Iterate through __model_class__'S fields and their types in a BFS manner, up to max_depth."""
+		open_list = [(self.model_class, 0)]
+		closed_list = set()
+
+		while open_list:
+			current_cls, current_depth = open_list.pop(0)
+
+			if (max_depth !=-1 and current_depth > max_depth) or current_cls in closed_list:
+				continue
+
+			if hasattr(current_cls, 'FieldsInfo'):
+				fields_dict = current_cls.FieldsInfo.__fields_dict__
+				field_names = current_cls.FieldsInfo.__field_names__
+
+				# Iterate through fields in current_cls:
+				for field_name in field_names:
+					field_type = current_cls.FieldsInfo.get_field_type(field_name)
+
+					# yield:
+					fi = FieldInfo(current_cls, field_name, field_type, current_depth)
+					if current_cls.FieldsInfo.__primary_key_name__ == field_name:
+						fi.is_primary_key = True
+					if hasattr(field_type, 'FieldsInfo'):
+						fi.is_dataclass = True
+					yield fi
+
+					# Handle yield return values (these control the iteration):
+					if fi.is_dataclass and not fi.dont_go_deeper:
+						open_list.append((field_type, current_depth + 1))
+					if fi.stop_iterating_cls > 0:
+						if fi.stop_iterating_cls > 1:
+							closed_list.add(current_cls)
+						break
+	
+	def iterate_cls(self, max_depth: int=-1) -> Iterable[FieldInfo]:
+		closed_list = set()
+
+		for fi in self.iterate(max_depth):
+			if fi.parent_class not in closed_list:
+				yield fi
+				closed_list.add(fi.parent_class)
+			fi.dont_go_deeper = True
+			fi.stop_iterating_cls = 2
+
 def capture_field_info(cls:Type[Any], excluded_fields:Iterable[str]=[], included_fields:Iterable[str]=[], auto_include_fields=True, exclude_prefix:str="_") -> FieldsInfo:
 	excluded_fields = chain(excluded_fields, [
 		primary_key_field_name,
