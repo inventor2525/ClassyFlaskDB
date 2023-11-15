@@ -1,7 +1,8 @@
 from sqlalchemy import Table, Column, String, Integer, ForeignKey, DateTime, JSON, Enum, Boolean, Float, Text
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, registry
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 from datetime import datetime
+from ClassyFlaskDB.capture_field_info import FieldInfo
 
 from ClassyFlaskDB.helpers import *
 
@@ -19,90 +20,65 @@ def type_table_name(cls):
 class GetterSetter:
 	def __init__(self, field_info:FieldInfo):
 		self.field_info = field_info
-
-	def append_to_schema(self, schema):
-		pass
-	def set_on_model(self):
-		pass
-	def set_on_schema(self):
-		pass
+		self.columns :List[Column] = []
+		self.relationships :Dict[str,relationship] = {}
 
 class SimpleOneToOne(GetterSetter):
 	def __init__(self, field_info:FieldInfo, column:Column):
 		super().__init__(field_info)
-		self.column = column
-		
-	def append_to_schema(self, schema):
-		# Add column to schema:
-		setattr(schema, self.field_info.field_name, self.column)
-	
-	def set_on_model(self, model, schema):
-		setattr(model, self.field_info.field_name, getattr(schema, self.field_info.field_name))
-	def set_on_schema(self, model, schema):
-		setattr(schema, self.field_info.field_name, getattr(model, self.field_info.field_name))
+
+		column.name = self.field_info.field_name
+		self.columns = [column]
 
 class OneToOneReference(GetterSetter):
 	def __init__(self, field_info:FieldInfo):
 		super().__init__(field_info)
-		
-	def append_to_schema(self, schema):
+
 		field_type = self.field_info.field_type
-		self.primary_key_name = field_type.FieldsInfo.__primary_key_name__
+		field_primary_key_name = field_info.field_type.FieldsInfo.primary_key_name
 
 		# Create foreign key column:
 		self.fk_name = f"{self.field_info.field_name}_fk"
-		self.fk_type = field_type.get_field_type(self.primary_key_name)
-		fk_column = Column(self.fk_name, type_map[self.fk_type], ForeignKey(f"{type_table_name(field_type)}.{self.primary_key_name}"))
+		self.fk_type = field_type.FieldsInfo.get_field_type(field_primary_key_name)
+		fk_column = Column(self.fk_name, type_map[self.fk_type], ForeignKey(f"{type_table_name(field_type)}.{field_primary_key_name}"))
 
-		# Add foreign key column to schema:
-		setattr(schema, self.fk_name, fk_column)
+		self.columns = [fk_column]
 
-		# Add relationship to schema:
-		r = relationship(
-			type_table_name(field_type),
-			primaryjoin=f"and_({type_table_name(field_type)}.{self.primary_key_name}==foreign({type_table_name(self.field_info.parent_class)}.{self.fk_name}))",
-			viewonly=True,
-			uselist=False
-		)
-		setattr(schema, self.field_info.field_name, r)
-
-	def set_on_model(self, model, schema):
-		setattr(model, self.field_info.field_name, getattr(schema, self.field_info.field_name))
-	
-	def set_on_schema(self, model, schema):
-		setattr(schema, self.fk_name, getattr(model, self.primary_key_name))
+		self.relationships = {
+			self.field_info.field_name : relationship(field_type, uselist=False)
+		}
 
 class OneToMany_List(GetterSetter):
-	def __init__(self, field_info:FieldInfo):
+	def __init__(self, field_info:FieldInfo, mapper_registry:registry):
 		super().__init__(field_info)
-
-	def append_to_schema(self, schema):
 		
 		# Create intermediary table:
-		self.mapping_table_name = f"{self.field_info.parent_class.__name__}_{self.field_info.field_name}_mapping"
+		self.mapping_table_name = f"{field_info.parent_type.__name__}_{field_info.field_name}_mapping"
+
+
+		self.fk_name_parent = f"{field_info.parent_type.__name__}_fk"
+		self.fk2_name_field = f"{field_info.field_type.__name__}_fk"
+
+		parent_primary_key_name = field_info.parent_type.FieldsInfo.primary_key_name
+		field_primary_key_name = field_info.field_type.FieldsInfo.primary_key_name
 		self.mapping_table = Table(
 			self.mapping_table_name,
-			Base.metadata,
-			Column(self.fk1_name, ForeignKey(f"{type_table_name(self.field_info.parent_class)}.{self.primary_key_name}")),
-			Column(self.fk2_name, ForeignKey(f"{type_table_name(self.field_info.field_type)}.{self.primary_key_name}"))
+			mapper_registry.metadata,
+			Column(
+				self.fk_name_parent,
+				field_info.parent_type.FieldsInfo.get_field_type(parent_primary_key_name),
+				ForeignKey(f"{type_table_name(field_info.parent_type)}.{parent_primary_key_name}")
+			),
+			Column(
+				self.fk2_name_field,
+				field_info.field_type.FieldsInfo.get_field_type(field_primary_key_name),
+				ForeignKey(f"{type_table_name(field_info.field_type)}.{field_primary_key_name}")
+			)
 		)
 
-		# Add intermediary table to schema:
-		setattr(schema, self.mapping_table_name, self.mapping_table)
-
-		# Add relationship to schema:
-		r = relationship(
-			type_table_name(self.field_info.field_type),
-			secondary=self.mapping_table,
-			backref=f"{self.field_info.parent_class.__name__}_mapping"
-		)
-		setattr(schema, self.field_info.field_name, r)
-
-	def set_on_model(self, model, schema):
-		pass
-
-	def set_on_schema(self, model, schema):
-		pass
+		self.relationships = {
+			self.field_info.field_name : relationship(field_info.field_type, secondary=self.mapping_table)
+		}
 
 def to_sql():
 	'''
@@ -138,14 +114,13 @@ def to_sql():
 	:param exclude_prefix: A prefix to exclude fields from the schema class.
 	:return: The decorated class.
 	'''
-	def decorator(cls:Type[Any], Base:DeclarativeMeta):
-		table_name = f"{cls.__name__}_Table"
+	def decorator(cls:Type[Any], mapper_registry:registry):
 		getter_setters = []
 
 		create_column = True
-		def add_column(field_name:str, column:Column):
+		def add_column(field_info:FieldInfo,column:Column):
 			nonlocal create_column
-			getter_setters.append(SimpleOneToOne(field_name, column))
+			getter_setters.append(SimpleOneToOne(field_info, column))
 			create_column = False
 			
 		for fi in cls.FieldsInfo.iterate_cls(0):
@@ -153,12 +128,12 @@ def to_sql():
 			field_type = fi.field_type
 			create_column = True
 			
-			if field_name in fi.fields_dict:
-				field = fi.fields_dict[field_name]
+			if field_name in fi.parent_type.FieldsInfo.fields_dict:
+				field = fi.parent_type.FieldsInfo.fields_dict[field_name]
 				if "Column" in field.metadata:
-					add_column(field.metadata["Column"])
+					add_column(fi, field.metadata["Column"])
 				elif "type" in field.metadata:
-					add_column(Column(fi.metadata["type"], primary_key=fi.is_primary_key))
+					add_column(fi, Column(field_name, fi.metadata["type"], primary_key=fi.is_primary_key))
 
 			if create_column:
 				if fi.is_dataclass:
@@ -166,10 +141,17 @@ def to_sql():
 				elif field_type is list:
 					getter_setters.append(OneToMany_List(fi))
 				else:
-					add_column(Column(type_map[field_type], primary_key=fi.is_primary_key))
+					add_column(fi, Column(field_name, type_map[field_type], primary_key=fi.is_primary_key))
 
-		cls_table = Table(table_name, Base.metadata, *columns)
-		setattr(cls, 'to_schema', to_schema)
+		columns = []
+		relationships = {}
+		for gs in getter_setters:
+			columns.extend(gs.columns)
+			for relationship_name, relationship in gs.relationships.items():
+				relationships[relationship_name] = relationship
+				
+		cls_table = Table(type_table_name(cls), mapper_registry.metadata, *columns)
+		mapper_registry.map_imperatively(cls, cls_table, properties=relationships)
 		return cls
 	return decorator
 

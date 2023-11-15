@@ -2,7 +2,7 @@ from ClassyFlaskDB.helpers import *
 
 @dataclass
 class FieldInfo:
-	parent_class : Type[Any]
+	parent_type : Type[Any]
 	field_name : str
 	field_type : Type[Any]
 	depth: int
@@ -12,14 +12,19 @@ class FieldInfo:
 
 	dont_go_deeper : bool = False
 	stop_iterating_cls : int = 0
-	
+
+def get_type_hints(cls:Type[Any]) -> Dict[str, Type[Any]]:
+	type_hints = {}
+	for base in reversed(cls.__mro__):
+		type_hints.update(getattr(base, '__annotations__', {}))
+	return type_hints
 @dataclass
 class FieldsInfo:
 	model_class : Type[Any]
 	field_names : List[str]
 	fields_dict : Dict[str, field]
 	primary_key_name : str
-	_type_hints : Dict[str, Type[Any]] = field(init=False, repr=False, default_factory=None)
+	_type_hints : Dict[str, Type[Any]] = field(init=False, repr=False, default_factory=dict)
 
 	@property
 	def type_hints(self) -> Dict[str, Type[Any]]:
@@ -52,8 +57,8 @@ class FieldsInfo:
 				continue
 
 			if hasattr(current_cls, 'FieldsInfo'):
-				fields_dict = current_cls.FieldsInfo.__fields_dict__
-				field_names = current_cls.FieldsInfo.__field_names__
+				fields_dict = current_cls.FieldsInfo.fields_dict
+				field_names = current_cls.FieldsInfo.field_names
 
 				# Iterate through fields in current_cls:
 				for field_name in field_names:
@@ -61,7 +66,7 @@ class FieldsInfo:
 
 					# yield:
 					fi = FieldInfo(current_cls, field_name, field_type, current_depth)
-					if current_cls.FieldsInfo.__primary_key_name__ == field_name:
+					if current_cls.FieldsInfo.primary_key_name == field_name:
 						fi.is_primary_key = True
 					if hasattr(field_type, 'FieldsInfo'):
 						fi.is_dataclass = True
@@ -79,23 +84,22 @@ class FieldsInfo:
 		closed_list = set()
 
 		for fi in self.iterate(max_depth):
-			if fi.parent_class not in closed_list:
+			if fi.parent_type not in closed_list:
 				yield fi
-				closed_list.add(fi.parent_class)
+				closed_list.add(fi.parent_type)
 			fi.dont_go_deeper = True
 			fi.stop_iterating_cls = 2
 
 def capture_field_info(cls:Type[Any], excluded_fields:Iterable[str]=[], included_fields:Iterable[str]=[], auto_include_fields=True, exclude_prefix:str="_") -> FieldsInfo:
 	excluded_fields = chain(excluded_fields, [
-		primary_key_field_name,
-		inner_schema_class_name
+		"__primary_key_name__"
 	])
 	
 	field_names, fields_dict = get_fields_matching(cls, excluded_fields, included_fields, auto_include_fields, exclude_prefix)
 	
 	#Get the primary key name:
 	primary_key_name = None
-	if hasattr(cls, primary_key_field_name):
+	if hasattr(cls, "__primary_key_name__"):
 		primary_key_name = cls.__primary_key_name__
 		
 	for field_name in field_names:

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List
-from sqlalchemy import create_engine, Column, Integer, String, Table, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Table, ForeignKey, Float
 from sqlalchemy.orm import registry, relationship, sessionmaker
 
 # Define an engine and base
@@ -27,8 +27,8 @@ conversation_table = Table(
 # Association table for the many-to-many relationship
 conversation_message_table = Table(
     'conversation_message', mapper_registry.metadata,
-    Column('conversation_id', Integer, ForeignKey('conversation.id'), primary_key=True),
-    Column('message_id', String, ForeignKey('message.id'), primary_key=True)
+    Column('conversation_id', Integer, ForeignKey('conversation.id')),
+    Column('message_id', String, ForeignKey('message.id'))
 )
 
 @dataclass
