@@ -12,33 +12,25 @@ from sqlalchemy.orm import relationship
 
 from ClassyFlaskDB.LazyDecorator import LazyDecorator
 from ClassyFlaskDB.capture_field_info import capture_field_info, FieldInfo, FieldsInfo
+from ClassyFlaskDB.DATA import DATA
 
 from dataclasses import dataclass, field
 
 from typing import List
-lazzy = LazyDecorator()
 
 # Define an engine and base
 engine = create_engine('sqlite:///:memory:')
-mapper_registry = registry()
-Base = declarative_base()
 
-@lazzy([to_sql()])
-@capture_field_info
-@dataclass
+@DATA
 class Bar:
     id: str
 
-@lazzy([to_sql()])
-@capture_field_info
-@dataclass
+@DATA
 class Foo:
     id: int
     bar: Bar
     bars: List[Bar] = field(default_factory=list)
-
-lazzy["default"](mapper_registry)
-mapper_registry.metadata.create_all(engine)
+DATA.finalize(engine)
 
 # Create a session
 Session = sessionmaker(bind=engine)

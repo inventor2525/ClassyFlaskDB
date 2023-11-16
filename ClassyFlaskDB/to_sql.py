@@ -154,4 +154,3 @@ def to_sql():
 		mapper_registry.map_imperatively(cls, cls_table, properties=relationships)
 		return cls
 	return decorator
-
