@@ -55,29 +55,30 @@ class OneToMany_List(GetterSetter):
 		# Create intermediary table:
 		self.mapping_table_name = f"{field_info.parent_type.__name__}_{field_info.field_name}_mapping"
 
-
 		self.fk_name_parent = f"{field_info.parent_type.__name__}_fk"
-		self.fk2_name_field = f"{field_info.field_type.__name__}_fk"
+		self.fk_name_field = f"{field_info.field_name}_fk"
 
 		parent_primary_key_name = field_info.parent_type.FieldsInfo.primary_key_name
-		field_primary_key_name = field_info.field_type.FieldsInfo.primary_key_name
+		#Get the type inside any collection like foo from list[foo] or foo from tuple[foo] or foo from set[foo], and get its primary key name from its FieldsInfo where field_info.field_type is something like list[foo] or tuple[foo] or set[foo]:
+		field_type = field_info.field_type.__args__[0]
+		field_primary_key_name = field_type.FieldsInfo.primary_key_name
 		self.mapping_table = Table(
 			self.mapping_table_name,
 			mapper_registry.metadata,
 			Column(
 				self.fk_name_parent,
-				field_info.parent_type.FieldsInfo.get_field_type(parent_primary_key_name),
+				type_map[field_info.parent_type.FieldsInfo.get_field_type(parent_primary_key_name)],
 				ForeignKey(f"{type_table_name(field_info.parent_type)}.{parent_primary_key_name}")
 			),
 			Column(
-				self.fk2_name_field,
-				field_info.field_type.FieldsInfo.get_field_type(field_primary_key_name),
-				ForeignKey(f"{type_table_name(field_info.field_type)}.{field_primary_key_name}")
+				self.fk_name_field,
+				type_map[field_type.FieldsInfo.get_field_type(field_primary_key_name)],
+				ForeignKey(f"{type_table_name(field_type)}.{field_primary_key_name}")
 			)
 		)
 
 		self.relationships = {
-			self.field_info.field_name : relationship(field_info.field_type, secondary=self.mapping_table)
+			self.field_info.field_name : relationship(field_type, secondary=self.mapping_table)
 		}
 
 def to_sql():
@@ -123,7 +124,7 @@ def to_sql():
 			getter_setters.append(SimpleOneToOne(field_info, column))
 			create_column = False
 			
-		for fi in cls.FieldsInfo.iterate_cls(0):
+		for fi in cls.FieldsInfo.iterate(0):
 			field_name = fi.field_name
 			field_type = fi.field_type
 			create_column = True
@@ -138,8 +139,9 @@ def to_sql():
 			if create_column:
 				if fi.is_dataclass:
 					getter_setters.append(OneToOneReference(fi))
-				elif field_type is list:
-					getter_setters.append(OneToMany_List(fi))
+				#figure out if field_type which might be like this "list[__main__.Bar]" is a list:
+				elif hasattr(field_type, "__origin__") and field_type.__origin__ in [list, tuple, set]:
+					getter_setters.append(OneToMany_List(fi, mapper_registry))
 				else:
 					add_column(fi, Column(field_name, type_map[field_type], primary_key=fi.is_primary_key))
 

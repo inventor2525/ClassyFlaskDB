@@ -97,7 +97,7 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 
 # Create the engine and session
-engine = create_engine('sqlite:///:memory:')
+engine = create_engine('sqlite:///my_database2.db')
 session = sessionmaker(bind=engine)()
 
 # Create the tables
@@ -164,13 +164,10 @@ from sqlalchemy import create_engine, MetaData
 from sqlalchemy.orm import sessionmaker
 import json
 
-def load_json_into_db(json_data, engine):
+def load_json_into_db(json_data, session):
     metadata = MetaData()
-    metadata.reflect(bind=engine)
+    metadata.reflect(bind=session.bind)
     db_data = json.loads(json_data)
-
-    Session = sessionmaker(bind=engine)
-    session = Session()
 
     for table_name, rows in db_data.items():
         table = metadata.tables[table_name]
@@ -184,8 +181,10 @@ def load_json_into_db(json_data, engine):
 # Assuming `json_data` is the JSON string from the previous dump
 engine = create_engine('sqlite:///:memory:')
 mapper_registry.metadata.create_all(engine)  # Assuming tables are already defined in mapper_registry
+Session = sessionmaker(bind=engine)
+session = Session()
 
-new_session = load_json_into_db(json_data, engine)
+new_session = load_json_into_db(json_data, session)
 
 # Verify the loaded data
 holders = new_session.query(Holder).all()

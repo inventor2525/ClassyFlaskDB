@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Table, ForeignKey
 from sqlalchemy.orm import registry, relationship, sessionmaker
 
 # Define an engine and base
-engine = create_engine('sqlite:///:memory:')
+engine = create_engine('sqlite:///my_database1.db')
 mapper_registry = registry()
 
 # Define the tables

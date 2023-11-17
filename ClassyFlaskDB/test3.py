@@ -30,7 +30,7 @@ class Foo:
     id: int
     bar: Bar
     bars: List[Bar] = field(default_factory=list)
-DATA.finalize(engine)
+DATA.finalize(engine).metadata.create_all(engine)
 
 # Create a session
 Session = sessionmaker(bind=engine)
@@ -42,6 +42,9 @@ foo_instance = Foo(id=1, bar=bar_instance)
 foo_instance.bars.append(Bar(id='bar2'))
 foo_instance.bars.append(Bar(id='bar3'))
 
+import json
+print(json.dumps(foo_instance.to_json(),indent=4))
+Foo.from_json(foo_instance.to_json())
 # Add to the session and commit
 session.add_all([foo_instance, bar_instance])
 session.commit()
