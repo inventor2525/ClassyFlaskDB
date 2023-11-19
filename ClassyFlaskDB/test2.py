@@ -43,19 +43,31 @@ Holder_table = Table(
 class BaseClass:
     id: int
 
+    def __str__(self) -> str:
+        return f"Type: {self.__class__.__name__}, ID: {self.id}"
+
 @dataclass
 class Child1(BaseClass):
     name: str
     age: int
+
+    def __str__(self) -> str:
+        return super().__str__() + f", Name: {self.name}, Age: {self.age}"
 
 @dataclass
 class Child2(BaseClass):
     description: str
     height: float
 
+    def __str__(self) -> str:
+        return super().__str__() + f", Description: {self.description}, Height: {self.height}"
+
 @dataclass
 class Grandchild1(Child1):
     favorite_color: str
+
+    def __str__(self) -> str:
+        return super().__str__() + f", Favorite Color: {self.favorite_color}"
 
 
 @dataclass
@@ -72,36 +84,29 @@ Child2Schema = class_schema(Child2)()
 BaseClassSchema = class_schema(BaseClass)()
 HolderSchema = class_schema(Holder)()
 
-
 # Configure mappers
 mapper_registry.map_imperatively(BaseClass, BaseClass_table, 
-    properties={
-        'child1': relationship(Child1, uselist=False),
-        'child2': relationship(Child2, uselist=False)
-    },
     polymorphic_identity='baseclass',
     polymorphic_on=BaseClass_table.c.type
 )
 
 mapper_registry.map_imperatively(Child1, Child1_table, 
     inherits=BaseClass, 
-    polymorphic_identity='child1'
+    polymorphic_identity='Child1'
 )
 
 mapper_registry.map_imperatively(Child2, Child2_table, 
     inherits=BaseClass, 
-    polymorphic_identity='child2'
+    polymorphic_identity='Child2'
 )
 mapper_registry.map_imperatively(Grandchild1, Grandchild1_table, 
     inherits=Child1, 
-    polymorphic_identity='grandchild1'
+    polymorphic_identity='Grandchild1'
 )
 
 mapper_registry.map_imperatively(Holder, Holder_table, 
     properties={
-        'child': relationship(BaseClass, 
-                              lazy='joined', 
-                              join_depth=1)
+        'child': relationship(BaseClass, uselist=False)
     }
 )
 
@@ -122,8 +127,8 @@ child1 = Child1(id=1, name="Alice", age=30)
 child2 = Child2(id=2, description="Tall person", height=6.1)
 
 # Add the children to the session
-session.add(child1)
-session.add(child2)
+session.merge(child1)
+session.merge(child2)
 session.commit()
 
 # Create Holder instances
@@ -140,21 +145,21 @@ holder = HolderSchema.loads(holder_json)
 print("Holder:", holder)
 
 # Add the Holder instances to the session
-session.add(holder1)
-session.add(holder2)
+session.merge(holder1)
+session.merge(holder2)
 session.commit()
 
 grandchild1 = Grandchild1(id=3, name="Bob", age=12, favorite_color="Blue")
 
 # Add the grandchild to the session
-session.add(grandchild1)
+session.merge(grandchild1)
 session.commit()
 
 # Create Holder instance for the grandchild
 holder3 = Holder(id=3, child=grandchild1)
 
 # Add the Holder instance to the session
-session.add(holder3)
+session.merge(holder3)
 session.commit()
 
 # Query the Holder table and load the associated children
@@ -162,10 +167,7 @@ holders = session.query(Holder).all()
 
 for holder in holders:
     print(f"Holder ID: {holder.id}")
-    if isinstance(holder.child, Child1):
-        print(f"Child Type: Child1, Name: {holder.child.name}, Age: {holder.child.age}")
-    elif isinstance(holder.child, Child2):
-        print(f"Child Type: Child2, Description: {holder.child.description}, Height: {holder.child.height}")
+    print(f"Child: {holder.child}")
 
 
 
@@ -218,7 +220,4 @@ holders = new_session.query(Holder).all()
 
 for holder in holders:
     print(f"Holder ID: {holder.id}")
-    if isinstance(holder.child, Child1):
-        print(f"Child Type: Child1, Name: {holder.child.name}, Age: {holder.child.age}")
-    elif isinstance(holder.child, Child2):
-        print(f"Child Type: Child2, Description: {holder.child.description}, Height: {holder.child.height}")
+    print(f"Child: {holder.child}")
