@@ -118,23 +118,37 @@ def to_sql():
 	def decorator(cls:Type[Any], mapper_registry:registry):
 		getter_setters = []
 
+		cls_parent_type = cls.__bases__[0]
+		cls_is_base = cls_parent_type is object
+		cls_has_children = len(cls.__subclasses__()) > 0
+
 		create_column = True
 		def add_column(field_info:FieldInfo,column:Column):
 			nonlocal create_column
 			getter_setters.append(SimpleOneToOne(field_info, column))
 			create_column = False
-			
+		def create_col(field_info:FieldInfo, col_type:type):
+			if not cls_is_base and field_info.is_primary_key:
+				add_column(field_info, Column(field_info.field_name, col_type, ForeignKey(f"{type_table_name(cls_parent_type)}.{field_info.field_name}"), primary_key=field_info.is_primary_key))
+			else:
+				add_column(field_info, Column(field_info.field_name, col_type, primary_key=field_info.is_primary_key))
+
 		for fi in cls.FieldsInfo.iterate(0):
 			field_name = fi.field_name
 			field_type = fi.field_type
 			create_column = True
+			
+			if not cls_is_base:
+				if field_name in cls_parent_type.__dict__:
+					if not fi.is_primary_key:
+						continue
 			
 			if field_name in fi.parent_type.FieldsInfo.fields_dict:
 				field = fi.parent_type.FieldsInfo.fields_dict[field_name]
 				if "Column" in field.metadata:
 					add_column(fi, field.metadata["Column"])
 				elif "type" in field.metadata:
-					add_column(fi, Column(field_name, fi.metadata["type"], primary_key=fi.is_primary_key))
+					create_col(fi, field.metadata["type"])
 
 			if create_column:
 				if fi.is_dataclass:
@@ -143,7 +157,7 @@ def to_sql():
 				elif hasattr(field_type, "__origin__") and field_type.__origin__ in [list, tuple, set]:
 					getter_setters.append(OneToMany_List(fi, mapper_registry))
 				else:
-					add_column(fi, Column(field_name, type_map[field_type], primary_key=fi.is_primary_key))
+					create_col(fi, type_map[field_type])
 
 		columns = []
 		relationships = {}
@@ -151,8 +165,24 @@ def to_sql():
 			columns.extend(gs.columns)
 			for relationship_name, relationship in gs.relationships.items():
 				relationships[relationship_name] = relationship
-				
-		cls_table = Table(type_table_name(cls), mapper_registry.metadata, *columns)
-		mapper_registry.map_imperatively(cls, cls_table, properties=relationships)
+		
+		if cls_is_base:
+			if cls_has_children:
+				polymorphic_descriminator = Column('__cls_type__', String)
+				columns.append(polymorphic_descriminator)
+				cls_table = Table(type_table_name(cls), mapper_registry.metadata, *columns)
+				mapper_registry.map_imperatively(cls, cls_table, properties=relationships,
+					polymorphic_identity=cls.__name__, polymorphic_on=polymorphic_descriminator
+				)
+			else:
+				cls_table = Table(type_table_name(cls), mapper_registry.metadata, *columns)
+				mapper_registry.map_imperatively(cls, cls_table, properties=relationships)
+		else:
+			cls_table = Table(type_table_name(cls), mapper_registry.metadata, *columns)
+			mapper_registry.map_imperatively(cls, cls_table,
+				inherits=cls_parent_type,
+				polymorphic_identity=cls.__name__,
+				properties=relationships
+			)
 		return cls
 	return decorator

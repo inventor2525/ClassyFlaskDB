@@ -92,7 +92,8 @@ class FieldsInfo:
 
 def capture_field_info(cls:Type[Any], excluded_fields:Iterable[str]=[], included_fields:Iterable[str]=[], auto_include_fields=True, exclude_prefix:str="_") -> FieldsInfo:
 	excluded_fields = chain(excluded_fields, [
-		"__primary_key_name__"
+		"__primary_key_name__",
+		"FieldsInfo"
 	])
 	
 	field_names, fields_dict = get_fields_matching(cls, excluded_fields, included_fields, auto_include_fields, exclude_prefix)

@@ -19,11 +19,15 @@ from dataclasses import dataclass, field
 from typing import List
 
 # Define an engine and base
-engine = create_engine('sqlite:///:memory:')
+engine = create_engine('sqlite:///my_database3.db')
 
 @DATA
 class Bar:
     id: str
+
+@DATA
+class Bar2(Bar):
+    name: str
 
 @DATA
 class Foo:
@@ -41,11 +45,25 @@ bar_instance = Bar(id='bar1')
 foo_instance = Foo(id=1, bar=bar_instance)
 foo_instance.bars.append(Bar(id='bar2'))
 foo_instance.bars.append(Bar(id='bar3'))
+session.add_all([foo_instance, bar_instance])
+session.commit()
+
+bar_instance = Bar2(id='bar4', name='Bar 4')
+foo_instance = Foo(id=2, bar=bar_instance)
+foo_instance.bars.append(Bar2(id='bar5', name='Bar 5'))
+foo_instance.bars.append(Bar(id='bar6'))
 
 import json
-print(json.dumps(foo_instance.to_json(),indent=4))
-Foo.from_json(foo_instance.to_json())
+print(json.dumps(foo_instance.to_json(), indent=4))
 # Add to the session and commit
+
+session.add_all([foo_instance, bar_instance])
+session.commit()
+
+# import json
+# print(json.dumps(foo_instance.to_json(),indent=4))
+# Foo.from_json(foo_instance.to_json())
+# # Add to the session and commit
 session.add_all([foo_instance, bar_instance])
 session.commit()
 
