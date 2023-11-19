@@ -27,11 +27,16 @@ Child2_table = Table(
     Column('height', Float)
 )
 
+Grandchild1_table = Table(
+    'grandchild1', mapper_registry.metadata,
+    Column('id', Integer, ForeignKey('child1.id'), primary_key=True),
+    Column('favorite_color', String)
+)
+
 Holder_table = Table(
     'holder', mapper_registry.metadata,
     Column('id', Integer, primary_key=True),
-    Column('child_id', Integer, ForeignKey('baseclass.id')),
-    Column('child_type', String)
+    Column('child_id', Integer, ForeignKey('baseclass.id'))
 )
 
 @dataclass
@@ -47,6 +52,11 @@ class Child1(BaseClass):
 class Child2(BaseClass):
     description: str
     height: float
+
+@dataclass
+class Grandchild1(Child1):
+    favorite_color: str
+
 
 @dataclass
 class Holder:
@@ -81,6 +91,10 @@ mapper_registry.map_imperatively(Child1, Child1_table,
 mapper_registry.map_imperatively(Child2, Child2_table, 
     inherits=BaseClass, 
     polymorphic_identity='child2'
+)
+mapper_registry.map_imperatively(Grandchild1, Grandchild1_table, 
+    inherits=Child1, 
+    polymorphic_identity='grandchild1'
 )
 
 mapper_registry.map_imperatively(Holder, Holder_table, 
@@ -128,6 +142,19 @@ print("Holder:", holder)
 # Add the Holder instances to the session
 session.add(holder1)
 session.add(holder2)
+session.commit()
+
+grandchild1 = Grandchild1(id=3, name="Bob", age=12, favorite_color="Blue")
+
+# Add the grandchild to the session
+session.add(grandchild1)
+session.commit()
+
+# Create Holder instance for the grandchild
+holder3 = Holder(id=3, child=grandchild1)
+
+# Add the Holder instance to the session
+session.add(holder3)
 session.commit()
 
 # Query the Holder table and load the associated children
