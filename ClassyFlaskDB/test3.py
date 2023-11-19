@@ -45,34 +45,24 @@ bar_instance = Bar(id='bar1')
 foo_instance = Foo(id=1, bar=bar_instance)
 foo_instance.bars.append(Bar(id='bar2'))
 foo_instance.bars.append(Bar(id='bar3'))
-session.add_all([foo_instance, bar_instance])
+session.merge(foo_instance)
 session.commit()
 
 bar_instance = Bar2(id='bar4', name='Bar 4')
 foo_instance = Foo(id=2, bar=bar_instance)
 foo_instance.bars.append(Bar2(id='bar5', name='Bar 5'))
 foo_instance.bars.append(Bar(id='bar6'))
+session.merge(foo_instance)
+session.commit()
 
 import json
 print(json.dumps(foo_instance.to_json(), indent=4))
-# Add to the session and commit
-
-session.add_all([foo_instance, bar_instance])
-session.commit()
-
-# import json
-# print(json.dumps(foo_instance.to_json(),indent=4))
-# Foo.from_json(foo_instance.to_json())
-# # Add to the session and commit
-session.add_all([foo_instance, bar_instance])
-session.commit()
 
 # Query
 queried_foo = session.query(Foo).filter_by(id=1).first()
 
+print(json.dumps(DATA.dump_as_json(engine, session), indent=4))
 if queried_foo and queried_foo.bar:
     print(f"Foo ID: {queried_foo.id}, Bar ID: {queried_foo.bar.id}")
 else:
     print("Foo or associated Bar not found")
-
-# Define the tables
