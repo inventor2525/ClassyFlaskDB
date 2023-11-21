@@ -8,11 +8,13 @@ from sqlalchemy import inspect
 
 from ClassyFlaskDB.LazyDecorator import LazyDecorator
 from ClassyFlaskDB.capture_field_info import capture_field_info, FieldInfo, FieldsInfo
+from ClassyFlaskDB.helpers.resolve_type import TypeResolver
 from ClassyFlaskDB.to_sql import to_sql
 
 from dataclasses import dataclass, field
 
-from typing import Any, List, Type
+from typing import Any, Dict, List, Type
+import uuid
 
 class DATADecorator:
     def __init__(self, *args, **kwargs):
@@ -21,7 +23,8 @@ class DATADecorator:
         self.kwargs = kwargs
         self.lazy = LazyDecorator()
 
-    def finalize(self, engine:Engine) -> registry:
+    def finalize(self, engine:Engine, globals_return:Dict[str, Any]=globals()) -> registry:
+        TypeResolver.append_globals(globals_return)
         self.mapper_registry = registry()
         self.lazy["default"](self.mapper_registry)
         return self.mapper_registry
@@ -57,6 +60,20 @@ class DATADecorator:
     def __call__(self, cls:Type[Any]):
         cls = dataclass(cls)
         cls = capture_field_info(cls)
+        if cls.FieldsInfo.primary_key_name is None:
+            setattr(cls, "uuid", None)
+            cls.__annotations__["uuid"] = str
+            init = cls.__init__
+            def __init__(self, *args, **kwargs):
+                self.uuid = str(uuid.uuid4())
+                init(self, *args, **kwargs)
+            setattr(cls, "__init__", __init__)
+            cls.FieldsInfo.primary_key_name = "uuid"
+            if "uuid" not in cls.FieldsInfo.field_names:
+                cls.FieldsInfo.field_names.append("uuid")
+            if cls.FieldsInfo.type_hints is not None:
+                cls.FieldsInfo.type_hints["uuid"] = str
+            
         cls = self.lazy([to_sql()])(cls)
 
         def to_json(cls_self):

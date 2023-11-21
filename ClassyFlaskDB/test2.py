@@ -24,7 +24,8 @@ Child2_table = Table(
     'child2', mapper_registry.metadata,
     Column('id', Integer, ForeignKey('baseclass.id'), primary_key=True),
     Column('description', String),
-    Column('height', Float)
+    Column('height', Float),
+    Column('bc_id', Integer, ForeignKey('baseclass.id'))
 )
 
 Grandchild1_table = Table(
@@ -58,6 +59,7 @@ class Child1(BaseClass):
 class Child2(BaseClass):
     description: str
     height: float
+    bc :BaseClass = None
 
     def __str__(self) -> str:
         return super().__str__() + f", Description: {self.description}, Height: {self.height}"
@@ -94,10 +96,14 @@ mapper_registry.map_imperatively(Child1, Child1_table,
     inherits=BaseClass, 
     polymorphic_identity='Child1'
 )
-
+from sqlalchemy import text
 mapper_registry.map_imperatively(Child2, Child2_table, 
     inherits=BaseClass, 
-    polymorphic_identity='Child2'
+    polymorphic_identity='Child2',
+    inherit_condition=text("child2.id = baseclass.id"),  # Specify the inherit_condition
+    properties={
+        'bc': relationship(BaseClass, foreign_keys=[Child2_table.c.bc_id])
+    }
 )
 mapper_registry.map_imperatively(Grandchild1, Grandchild1_table, 
     inherits=Child1, 

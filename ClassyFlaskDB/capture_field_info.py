@@ -36,13 +36,16 @@ class FieldsInfo:
 		# Get field type:
 		if field_name in self.fields_dict:
 			field_type = self.fields_dict[field_name].type
-			field_type = resolve_type(field_type, self.model_class)
+			field_type = TypeResolver.resolve_type(field_type)
 		elif field_name in self.type_hints:
 			field_type = self.type_hints[field_name]
-			field_type = resolve_type(field_type, self.model_class)
+			field_type = TypeResolver.resolve_type(field_type)
 		else:
 			attr = getattr(self.model_class, field_name)
-			field_type = type(attr)
+			if isinstance(attr, property):
+				field_type = extract_property_type(self.model_class, field_name)
+			else:
+				field_type = type(attr)
 		return field_type
 	
 	def iterate(self, max_depth: int=-1) -> Iterable[FieldInfo]:
@@ -102,8 +105,10 @@ def capture_field_info(cls:Type[Any], excluded_fields:Iterable[str]=[], included
 	primary_key_name = None
 	if hasattr(cls, "__primary_key_name__"):
 		primary_key_name = cls.__primary_key_name__
+		if primary_key_name not in field_names:
+			field_names.append(primary_key_name)
 		
-	for field_name in field_names:
+	for field_name in fields_dict:
 		field = fields_dict[field_name]
 		if "primary_key" in field.metadata and field.metadata["primary_key"]:
 			if primary_key_name is not None:
@@ -113,8 +118,6 @@ def capture_field_info(cls:Type[Any], excluded_fields:Iterable[str]=[], included
 	if primary_key_name is None:
 		if 'id' in field_names:
 			primary_key_name = 'id'
-		else:
-			raise ValueError(f"No primary key specified for {cls}.")
 	
 	setattr(cls, 'FieldsInfo', FieldsInfo(cls, field_names, fields_dict, primary_key_name))
 	return cls

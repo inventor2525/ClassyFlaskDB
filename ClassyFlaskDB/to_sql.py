@@ -11,6 +11,7 @@ type_map = {
 	int: Integer,
 	float: Float,
 	str: Text,
+	dict: JSON,
 	
 	datetime: DateTime
 }
@@ -182,6 +183,7 @@ def to_sql():
 			mapper_registry.map_imperatively(cls, cls_table,
 				inherits=cls_parent_type,
 				polymorphic_identity=cls.__name__,
+				inherit_condition=(getattr(cls_table.c, cls_parent_type.FieldsInfo.primary_key_name) == getattr(cls_table.c, cls_parent_type.FieldsInfo.primary_key_name)),
 				properties=relationships
 			)
 		return cls
