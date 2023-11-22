@@ -46,7 +46,7 @@ class OneToOneReference(GetterSetter):
 		self.columns = [fk_column]
 
 		self.relationships = {
-			self.field_info.field_name : relationship(field_type, uselist=False)
+			self.field_info.field_name : relationship(field_type, uselist=False, foreign_keys=[fk_column])
 		}
 
 class OneToMany_List(GetterSetter):
@@ -79,7 +79,12 @@ class OneToMany_List(GetterSetter):
 		)
 
 		self.relationships = {
-			self.field_info.field_name : relationship(field_type, secondary=self.mapping_table)
+			self.field_info.field_name: relationship(
+				field_type,
+				secondary=self.mapping_table
+				# primaryjoin=self.fk_name_parent == self.mapping_table.c[self.fk_name_parent],
+				# secondaryjoin=self.fk_name_field == self.mapping_table.c[self.fk_name_field]
+			)
 		}
 
 def to_sql():
