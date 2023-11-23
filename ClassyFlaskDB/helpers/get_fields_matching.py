@@ -11,6 +11,11 @@ def get_fields_matching(
 	inclusion_set = set(included_fields)
 	exclusion_set = set(excluded_fields)
 	
+	def safe_starts_with(s:str, prefix:str):
+		if prefix is None or len(prefix)==0:
+			return False
+		return s.startswith(prefix)
+	
 	fields_dict = {}
 	if is_dataclass(cls):
 		fields_dict = {f.name: f for f in fields(cls)}
@@ -37,12 +42,8 @@ def get_fields_matching(
 			else:
 				if not handle_should_save(field):
 					if auto_include_fields:
-						inclusion_set.add(field.name)	
-								
-	def safe_starts_with(s:str, prefix:str):
-		if prefix is None or len(prefix)==0:
-			return False
-		return s.startswith(prefix)
+						if not safe_starts_with(field.name, exclude_prefix):
+							inclusion_set.add(field.name)
 		
 	field_names = set((attr for attr in chain(
 		inclusion_set, 
