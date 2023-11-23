@@ -46,7 +46,7 @@ class OneToOneReference(GetterSetter):
 		self.columns = [fk_column]
 
 		self.relationships = {
-			self.field_info.field_name : relationship(field_type, uselist=False, foreign_keys=[fk_column])
+			self.field_info.field_name : relationship(field_type, uselist=False, foreign_keys=[fk_column], post_update=True)
 		}
 
 class OneToMany_List(GetterSetter):
