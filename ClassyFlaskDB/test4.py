@@ -59,6 +59,7 @@ class Conversation:
 			self._root_messages.append(message)
 		else:
 			message.prev_message._children.append(message)
+		message.conversation = self
 
 @DATA
 class EditSource(MessageSource):
@@ -85,13 +86,14 @@ session = Session()
 
 # Example usage
 
-session.merge(Message(content='!', source=UserSource(user_name='Alice')))
+m1 = Message(content='!', source=UserSource(user_name='Alice'))
+session.merge(m1)
 
 
 conversation = Conversation(name='Conversation 1', description='First conversation')
-conversation.add_message(Message(content='Hello'))
-conversation.add_message(Message(content='World'))
-conversation.add_message(Message(content='!'))
+conversation.add_message(Message(content='Hello', source=UserSource(user_name='Alice')))
+conversation.add_message(Message(content='World', source=UserSource(user_name='Alice')))
+conversation.add_message(Message(content='!', source=EditSource(original=m1, new=Message(content='?', source=UserSource(user_name='Bob')), new_message_source=UserSource(user_name='Bob'))))
 session.merge(conversation)
 session.commit()
 
@@ -105,3 +107,7 @@ class DateTimeEncoder(JSONEncoder):
         return JSONEncoder.default(self, obj)
 	
 print(json.dumps(DATA.dump_as_json(engine, session), indent=4, cls=DateTimeEncoder))
+
+# Query
+queried_conversation = session.query(Conversation).filter_by(name="Conversation 1").first()
+print("Conversation:", queried_conversation.name)
