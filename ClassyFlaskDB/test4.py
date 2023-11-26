@@ -8,7 +8,7 @@ from typing import List
 
 from ClassyFlaskDB.helpers.resolve_type import TypeResolver
 
-engine = create_engine('sqlite:///my_database4.db')
+engine = create_engine('sqlite:///my_database4.db', echo=True)
 
 @DATA
 class MessageSource:
@@ -64,8 +64,8 @@ class Conversation:
 @DATA
 class EditSource(MessageSource):
 	original: Message
-	new: Message
-	new_message_source: MessageSource
+	new: Message = None
+	new_message_source: MessageSource = None
 	pass
 	
 @DATA
@@ -86,14 +86,16 @@ session = Session()
 
 # Example usage
 
-m1 = Message(content='!', source=UserSource(user_name='Alice'))
+m1 = Message(content='!', source=UserSource(user_name='Fred'))
 session.merge(m1)
+session.commit()
 
 
 conversation = Conversation(name='Conversation 1', description='First conversation')
-conversation.add_message(Message(content='Hello', source=UserSource(user_name='Alice')))
+conversation.add_message(Message(content='Hello', source=UserSource(user_name='George')))
 conversation.add_message(Message(content='World', source=UserSource(user_name='Alice')))
-conversation.add_message(Message(content='!', source=EditSource(original=m1, new=Message(content='?', source=UserSource(user_name='Bob')), new_message_source=UserSource(user_name='Bob'))))
+conversation.add_message(Message(content='!', source=EditSource(original=m1, new_message_source=UserSource(user_name='Bob'))))
+conversation.message_sequence.messages[2].source.new = conversation.message_sequence.messages[2]
 session.merge(conversation)
 session.commit()
 
