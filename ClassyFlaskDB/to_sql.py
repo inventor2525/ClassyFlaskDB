@@ -3,6 +3,8 @@ from sqlalchemy.orm import declarative_base, relationship, registry
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 from datetime import datetime
 from ClassyFlaskDB.capture_field_info import FieldInfo
+from sqlalchemy.sql import expression
+from sqlalchemy import text
 
 from ClassyFlaskDB.helpers import *
 
@@ -185,11 +187,13 @@ def to_sql():
 				mapper_registry.map_imperatively(cls, cls_table, properties=relationships)
 		else:
 			cls_table = Table(type_table_name(cls), mapper_registry.metadata, *columns)
+			parent_table = getattr(cls_parent_type, "__table__")
 			mapper_registry.map_imperatively(cls, cls_table,
 				inherits=cls_parent_type,
 				polymorphic_identity=cls.__name__,
-				inherit_condition=(getattr(cls_table.c, cls_parent_type.FieldsInfo.primary_key_name) == getattr(cls_table.c, cls_parent_type.FieldsInfo.primary_key_name)),
+				inherit_condition=(getattr(cls_table.c, cls.FieldsInfo.primary_key_name) == getattr(parent_table.c, cls_parent_type.FieldsInfo.primary_key_name)),
 				properties=relationships
 			)
+		setattr(cls, "__table__", cls_table)
 		return cls
 	return decorator
