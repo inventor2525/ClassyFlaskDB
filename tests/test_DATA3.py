@@ -10,13 +10,13 @@ DATA = DATADecorator() #Re-define the DATA decorator since having only 1 accross
 
 # Define the data classes
 @DATA
-class Bar3:
+class Bar:
 	name: str
 	location: str
-	foe: "Foe3" = None
+	foe: "Foe" = None
 
 @DATA
-class Foe3:
+class Foe:
 	name: str
 	strength: int
 
@@ -32,15 +32,15 @@ class DATA_Decorator2(unittest.TestCase):
 		Session = sessionmaker(bind=engine)
 		session = Session()
 
-		foe = Foe3(name="Dragon", strength=100)
-		bar = Bar3(name="Dragon's Lair", location="Mountain", foe=foe)
+		foe = Foe(name="Dragon", strength=100)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
 
 		# Insert into database
 		session.add(bar)
 		session.commit()
 
 		# Query from database
-		queried_bar = session.query(Bar3).filter_by(name="Dragon's Lair").first()
+		queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
 
 		# Validate
 		self.assertEqual(queried_bar.name, bar.name)

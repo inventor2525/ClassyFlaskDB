@@ -53,7 +53,8 @@ class DATA_Decorator6(unittest.TestCase):
 		session.commit()
 
 
-
+		# merge 2 times again to test for a polymorphic relationship bug that was found that would
+		# cause a Unique key error for uuid of a held child class (foe1 in this case)
 		foe1 = Foe1(name="Dragon", strength=100, hit_points=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe1)
 

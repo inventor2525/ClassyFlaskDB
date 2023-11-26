@@ -11,15 +11,15 @@ DATA = DATADecorator() #Re-define the DATA decorator since having only 1 accross
 
 # Define the data classes
 @DATA
-class Foe1:
+class Foe:
 	name: str
 	strength: int
 
 @DATA
-class Bar1:
+class Bar:
 	name: str
 	location: str
-	foe: Foe1 = None
+	foe: Foe = None
 	
 class DATA_Decorator1(unittest.TestCase):
 	def test_relationship(self):
@@ -33,15 +33,15 @@ class DATA_Decorator1(unittest.TestCase):
 		Session = sessionmaker(bind=engine)
 		session = Session()
 
-		foe = Foe1(name="Dragon", strength=100)
-		bar = Bar1(name="Dragon's Lair", location="Mountain", foe=foe)
+		foe = Foe(name="Dragon", strength=100)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
 
 		# Insert into database
 		session.add(bar)
 		session.commit()
 
 		# Query from database
-		queried_bar = session.query(Bar1).filter_by(name="Dragon's Lair").first()
+		queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
 
 		# Validate
 		self.assertEqual(queried_bar.name, bar.name)

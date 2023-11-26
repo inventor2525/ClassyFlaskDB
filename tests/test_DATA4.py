@@ -10,16 +10,16 @@ DATA = DATADecorator() #Re-define the DATA decorator since having only 1 accross
 
 # Define the data classes
 @DATA
-class Foe4:
+class Foe:
 	name: str
 	strength: int
-	bar: "Bar4" = None
+	bar: "Bar" = None
 
 @DATA
-class Bar4:
+class Bar:
 	name: str
 	location: str
-	foes: List[Foe4] = field(default_factory=list)
+	foes: List[Foe] = field(default_factory=list)
 
 class DATA_Decorator3(unittest.TestCase):
 	def test_list_relationship_with_circular_ref(self):
@@ -33,10 +33,10 @@ class DATA_Decorator3(unittest.TestCase):
 		Session = sessionmaker(bind=engine)
 		session = Session()
 
-		foe1 = Foe4(name="Dragon1", strength=100)
-		foe2 = Foe4(name="Dragon2", strength=200)
-		foe3 = Foe4(name="Dragon2", strength=200)
-		bar = Bar4(name="Dragon's Lair", location="Mountain", foes=[foe1, foe2, foe3])
+		foe1 = Foe(name="Dragon1", strength=100)
+		foe2 = Foe(name="Dragon2", strength=200)
+		foe3 = Foe(name="Dragon2", strength=200)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foes=[foe1, foe2, foe3])
 
 		foe1.bar = bar
 		foe2.bar = bar
@@ -47,7 +47,7 @@ class DATA_Decorator3(unittest.TestCase):
 		session.commit()
 
 		# Query from database
-		queried_bar = session.query(Bar4).filter_by(name="Dragon's Lair").first()
+		queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
 
 		# Validate
 		self.assertEqual(queried_bar.name, bar.name)
