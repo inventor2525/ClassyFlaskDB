@@ -6,7 +6,7 @@ from ClassyFlaskDB.Decorators.method_decorator import method_decorator
 @dataclass
 @method_decorator('__route__')
 class Route:
-    path: str
+    path: str = None
     methods: Optional[List[str]] = None
     endpoint: Optional[str] = None
     defaults: Optional[dict] = None
