@@ -7,12 +7,7 @@ def method_decorator(model_attr_name):
 	'''
 	def decorator(cls):
 		def __call__(self, func):
-			# Create a copy of the model instance without the __call__ method
-			model_instance = deepcopy(self)
-			if hasattr(model_instance, '__call__'):
-				delattr(model_instance, '__call__')
-			
-			setattr(func, model_attr_name, model_instance)
+			setattr(func, model_attr_name, self)
 			return func
 
 		setattr(cls, '__call__', __call__)
