@@ -81,7 +81,7 @@ class FlaskifyServerDecorator:
 
             # Set the class name for Flask-Classful if no prefix is provided
             if route_prefix is not None:
-                FlaskifiedView.route_base = route_prefix
+                FlaskifiedView.route_base = f"/{route_prefix}"
             else:
                 FlaskifiedView.__name__ = original_cls.__name__
 

@@ -9,12 +9,10 @@ class BaseSerializer:
     mime_type: str = None
     
     def serialize(self, obj: Any) -> Union[dict, BytesIO]:
-        # Implement serialization logic
-        pass
+        return obj
 
     def deserialize(self, data: Union[dict, BytesIO]) -> Any:
-        # Implement deserialization logic
-        pass
+        return data
 
 class AudioSerializer(BaseSerializer):
     def __init__(self):

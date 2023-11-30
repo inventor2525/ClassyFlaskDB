@@ -1,7 +1,11 @@
 from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService
-from ClassyFlaskDB.Flaskify.to_client import flaskify_client
+from ClassyFlaskDB.Flaskify.to_client import FlaskifyClientDecorator
 from ClassyFlaskDB.Flaskify.serialization import type_serializer_mapping
 
+flaskify_client = FlaskifyClientDecorator(type_serializer_mapping, base_url="http://localhost:8000")
+
 # Flaskify services
-ClientifiedMyService = flaskify_client(MyService, type_serializer_mapping, "http://localhost:8000")
-ClientifiedAnotherService = flaskify_client(AnotherService, type_serializer_mapping, "http://localhost:8000")
+ClientifiedMyService = flaskify_client()(MyService)
+ClientifiedAnotherService = flaskify_client("another")(AnotherService)
+
+print(ClientifiedAnotherService.add_numbers(1, 2))

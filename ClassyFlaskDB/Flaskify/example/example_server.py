@@ -8,7 +8,7 @@ flaskify_server = FlaskifyServerDecorator(app, type_serializer_mapping)
 
 # Flaskify services
 FlaskifiedMyService = flaskify_server()(MyService)
-FlaskifiedAnotherService = flaskify_server(route_prefix='/another')(AnotherService)
+FlaskifiedAnotherService = flaskify_server(route_prefix='another')(AnotherService)
 
 # Print out all routes
 with app.app_context():
