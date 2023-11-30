@@ -21,7 +21,8 @@ class MyService:
 
 class AnotherService:
     @Route()
-    def add_numbers(self, num1: int, num2: int) -> int:
+    @staticmethod
+    def add_numbers(num1: int, num2: int) -> int:
         return num1 + num2
 
     @Route()
