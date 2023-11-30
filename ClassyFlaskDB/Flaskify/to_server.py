@@ -22,7 +22,7 @@ class FlaskifyServerDecorator:
         deserializing arguments, calling the original method, and serializing the
         result as a response to the client.
         '''
-        def view_method(self_view, *args: Any, **kwargs: Any) -> Union[Response, jsonify]:
+        def view_method(self, *args: Any, **kwargs: Any) -> Union[Response, jsonify]:
             '''
             Flask-Classful view method that will be registered with the app.
             
@@ -50,7 +50,7 @@ class FlaskifyServerDecorator:
                         kwargs[param_name] = serializer.deserialize(data)
 
             # Call the original method with the deserialized arguments
-            result = original_method(self_view.original_instance, **kwargs)
+            result = original_method(self.original_instance, **kwargs)
             return_type = sig.return_annotation if sig.return_annotation != _empty else type(result)
 
             # Serialize the result based on the return type:
