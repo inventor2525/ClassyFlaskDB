@@ -80,7 +80,7 @@ class FlaskifyServerDecorator:
 			if response_serializer:
 				if response_serializer.as_file:
 					file_data = response_serializer.serialize(result)
-					return send_file(file_data, mimetype=response_serializer.mime_type, as_attachment=True)
+					return send_file(file_data, mimetype=response_serializer.mime_type, as_attachment=True, download_name='file')
 				else:
 					json_data = response_serializer.serialize(result)
 					return jsonify(json_data)

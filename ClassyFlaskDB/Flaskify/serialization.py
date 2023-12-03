@@ -16,7 +16,7 @@ class BaseSerializer:
 
 class AudioSerializer(BaseSerializer):
     def __init__(self):
-        super().__init__(as_file=True, mime_type='audio/mp3')
+        super().__init__(as_file=True, mime_type='audio/wav')
     
     def serialize(self, obj: AudioSegment) -> BytesIO:
         buffer = BytesIO()

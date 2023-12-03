@@ -5,6 +5,7 @@ from ClassyFlaskDB.Flaskify.serialization import BaseSerializer
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from ClassyFlaskDB.Flaskify.Route import Route
 from dataclasses import dataclass
+from io import BytesIO
 import json
 
 @dataclass
@@ -70,7 +71,7 @@ class FlaskifyClientDecorator:
 			return_type = sig.return_annotation if sig.return_annotation != _empty else type(response.json())
 			return_serializer = self_decorator.type_serializer_mapping.get(return_type, BaseSerializer())
 			if return_serializer.as_file:
-				return return_serializer.deserialize(response.content)
+				return return_serializer.deserialize(BytesIO(response.content))
 			else:
 				return return_serializer.deserialize(response.json())
 

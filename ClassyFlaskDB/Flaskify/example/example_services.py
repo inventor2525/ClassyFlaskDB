@@ -2,6 +2,11 @@ from pydub import AudioSegment
 from ClassyFlaskDB.Flaskify.Route import Route
 
 class MyService:
+    @Route()
+    @staticmethod
+    def get_audio(path: str) -> AudioSegment:
+        return AudioSegment.from_file(path, format="mp3")
+    
     @Route(path='/process_audio', methods=['POST'])
     @staticmethod
     def process_audio(text: str, audio: AudioSegment) -> str:

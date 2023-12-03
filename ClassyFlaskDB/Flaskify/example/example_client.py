@@ -9,7 +9,7 @@ ClientifiedMyService = flaskify_client()(MyService)
 ClientifiedAnotherService = flaskify_client("another")(AnotherService)
 
 from pydub import AudioSegment
-a_s = AudioSegment.from_file("hello.mp3", format="mp3")
+a_s = ClientifiedMyService.get_audio("hello.mp3")
 print(ClientifiedMyService.process_audio("hello", a_s))
 print(ClientifiedMyService.reverse_text("hello"))
 print(ClientifiedMyService.text_length("hello"))
