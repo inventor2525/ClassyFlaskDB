@@ -20,12 +20,12 @@ class AudioSerializer(BaseSerializer):
     
     def serialize(self, obj: AudioSegment) -> BytesIO:
         buffer = BytesIO()
-        obj.export(buffer, format="mp3")
+        obj.export(buffer, format="wav")
         buffer.seek(0)
         return buffer
 
     def deserialize(self, data: BytesIO) -> AudioSegment:
-        return AudioSegment.from_file(data, format="mp3")
+        return AudioSegment.from_file(data, format="wav")
 
 type_serializer_mapping = {
     str: BaseSerializer(),
