@@ -21,7 +21,7 @@ class FlaskifyClientDecorator:
 		Creates a method that makes an HTTP request to the corresponding server endpoint.
 		This method will replace the original method in the decorated class.
 		'''
-		def request_method(self_client, *args: Any, **kwargs: Any):
+		def request_method(*args: Any, **kwargs: Any):
 			'''
 			HTTP request method replacing the original method in the client class.
 			'''
@@ -34,27 +34,35 @@ class FlaskifyClientDecorator:
 					kwargs[param_names[i]] = arg
 
 			# Serialize all arguments by name using the type serializer mapping
-			serialized_args = {}
+			json_args = {}
+			file_args = {}
 			for param_name, param in sig.parameters.items():
 				value = kwargs.get(param_name)
 				param_type = param.annotation
 				serializer = self_decorator.type_serializer_mapping.get(param_type, BaseSerializer())
-				serialized_args[param_name] = serializer.serialize(value)
+				serialized_arg = serializer.serialize(value)
+
+				if serializer.as_file:
+					file_args[param_name] = serialized_arg
+				else:
+					json_args[param_name] = serialized_arg
 
 			# Construct the request URL and make the HTTP request
 			url = f"{route_base}/{original_method.__name__}" #+ route_info.path
 
-			http_method = route_info.methods[0] if route_info.methods else 'GET'
+			http_method = route_info.methods[0] if route_info.methods else 'POST'
 			if http_method == 'POST':
-				response = requests.post(url, json=serialized_args)
-			elif http_method == 'GET':
-				response = requests.get(url, params=serialized_args)
-			elif http_method == 'PUT':
-				response = requests.put(url, json=serialized_args)
+				response = requests.post(url, json=json_args, files=file_args)
+			else:
+				raise NotImplementedError(f"HTTP method {http_method} not implemented. Currently all Flaskify methods must be POST.")
 
 			# Deserialize the response based on the return type of the original method
 			return_type = sig.return_annotation if sig.return_annotation != _empty else type(response.json())
-			return self_decorator.type_serializer_mapping.get(return_type, BaseSerializer()).deserialize(response.json())
+			return_serializer = self_decorator.type_serializer_mapping.get(return_type, BaseSerializer())
+			if return_serializer.as_file:
+				return return_serializer.deserialize(response.content)
+			else:
+				return return_serializer.deserialize(response.json())
 
 		return request_method
 

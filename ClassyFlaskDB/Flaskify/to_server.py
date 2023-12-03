@@ -46,10 +46,9 @@ class FlaskifyServerDecorator:
 				if serializer:
 					if serializer.as_file:
 						data = request.files.get(param_name)
-						kwargs[param_name] = serializer.deserialize(data)
 					else:
 						data = request.json.get(param_name)
-						kwargs[param_name] = serializer.deserialize(data)
+					kwargs[param_name] = serializer.deserialize(data)
 
 			# Call the original method with the deserialized arguments
 			result = original_method(**kwargs)
@@ -62,7 +61,7 @@ class FlaskifyServerDecorator:
 			if response_serializer:
 				if response_serializer.as_file:
 					file_data = response_serializer.serialize(result)
-					return send_file(file_data, mimetype=response_serializer.mime_type)
+					return send_file(file_data, mimetype=response_serializer.mime_type, as_attachment=True)
 				else:
 					json_data = response_serializer.serialize(result)
 					return jsonify(json_data)
@@ -94,6 +93,7 @@ class FlaskifyServerDecorator:
 					route_path = f"/{prefix}/{suffix}" 
 					view_method = self_decorator.create_view_method(method)
 					view_method.__name__ = f"{route_path.replace('_','').replace('-','__')}_view"
+					
 					flask_route_decorator = self_decorator.app.route(route_path, methods=route_info.methods)
 					route = flask_route_decorator(view_method)
 
