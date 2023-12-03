@@ -2,10 +2,11 @@ import requests
 from typing import Any, Dict, Type
 from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer
+from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from ClassyFlaskDB.Flaskify.Route import Route
 from dataclasses import dataclass
-from inflection import underscore
-import re
+import json
+
 @dataclass
 class FlaskifyClientDecorator:
 	'''
@@ -48,11 +49,20 @@ class FlaskifyClientDecorator:
 					json_args[param_name] = serialized_arg
 
 			# Construct the request URL and make the HTTP request
-			url = f"{route_base}/{original_method.__name__}" #+ route_info.path
+			if route_info.path:
+				url = f"{route_base}/{route_info.path}".lower()
+			else:
+				url = f"{route_base}/{original_method.__name__}".lower() #+ route_info.path
 
 			http_method = route_info.methods[0] if route_info.methods else 'POST'
 			if http_method == 'POST':
-				response = requests.post(url, json=json_args, files=file_args)
+				if len(file_args)>0:
+					response = requests.post(url, files={
+						'__json_args__': json.dumps(json_args),
+						**file_args
+					})
+				else:
+					response = requests.post(url, json=json_args)
 			else:
 				raise NotImplementedError(f"HTTP method {http_method} not implemented. Currently all Flaskify methods must be POST.")
 
@@ -82,7 +92,7 @@ class FlaskifyClientDecorator:
 			if route_prefix:
 				route_base = f"{self_decorator.base_url}/{route_prefix}"
 			else:
-				class_name = underscore( re.sub(r'View$', '', original_cls.__name__) )
+				class_name = underscoreify_uppercase( original_cls.__name__ )
 				route_base = f"{self_decorator.base_url}/{class_name}"
 			
 			# Override methods in the original class with HTTP request methods
