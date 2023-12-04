@@ -14,7 +14,7 @@ class MessageSource:
 	
 @DATA
 class Message:
-	content: str
+	content: str = None
 	source: MessageSource = None
 	
 	# creation_time: datetime = field(default_factory=datetime.now)
@@ -26,7 +26,7 @@ class Message:
 
 @DATA
 class MessageSequence:
-	conversation: "Conversation"
+	conversation: "Conversation" = None
 	messages: List[Message] = field(default_factory=list)
 	
 	def add_message(self, message:Message):
@@ -35,8 +35,8 @@ class MessageSequence:
 	
 @DATA
 class Conversation:
-	name: str
-	description: str
+	name: str = None
+	description: str = None
 	
 	# creation_time: datetime = field(default_factory=datetime.now)
 	
@@ -60,16 +60,16 @@ class Conversation:
 
 @DATA
 class EditSource(MessageSource):
-	original: Message
+	original: Message = None
 	new: Message = None
 	new_message_source: MessageSource = None
 	pass
 	
 @DATA
 class ModelSource(MessageSource):
-	model_name: str
-	model_parameters: dict
-	message_sequence: MessageSequence
+	model_name: str = None
+	model_parameters: dict = field(default_factory=dict)
+	message_sequence: MessageSequence = None
 
 @DATA
 class UserSource(MessageSource):
