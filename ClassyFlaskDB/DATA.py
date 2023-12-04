@@ -1,10 +1,9 @@
 from sqlalchemy import Engine, create_engine, MetaData
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, joinedload
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Table, ForeignKey, Float
 from sqlalchemy.orm import registry, relationship, sessionmaker
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
-from sqlalchemy import inspect
 
 from ClassyFlaskDB.LazyDecorator import LazyDecorator
 from ClassyFlaskDB.capture_field_info import capture_field_info, FieldInfo, FieldsInfo
@@ -12,6 +11,7 @@ from ClassyFlaskDB.helpers.resolve_type import TypeResolver
 from ClassyFlaskDB.to_sql import to_sql
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 
 from typing import Any, Dict, List, Type
 import uuid
@@ -75,7 +75,25 @@ class DATADecorator:
                 cls.FieldsInfo.type_hints["uuid"] = str
             
         cls = self.lazy([to_sql()])(cls)
+    
+        # Define a custom __deepcopy__ method
+        def __deepcopy__(self, memo):
+            if id(self) in memo:
+                return memo[id(self)]
+            
+            cls_copy = self.__class__()
+            memo[id(self)] = cls_copy
 
+            for field_name in cls.FieldsInfo.field_names:
+                value = getattr(self, field_name, None)
+                if value is not None:
+                    setattr(cls_copy, field_name, deepcopy(value, memo))
+            
+            return cls_copy
+
+        # Attach the custom __deepcopy__ method to the class
+        setattr(cls, '__deepcopy__', __deepcopy__)
+        
         def to_json(cls_self):
             engine = create_engine('sqlite:///:memory:')
             self.mapper_registry.metadata.create_all(engine)
@@ -83,11 +101,14 @@ class DATADecorator:
             # Create a session
             Session = sessionmaker(bind=engine)
             session = Session()
-            from copy import deepcopy
-            session.add_all([deepcopy(cls_self)])
+            session.merge(deepcopy(cls_self))
             session.commit()
 
             json_data = self.dump_as_json(engine, session)
+            # session.expunge_all()
+            session.close()
+            engine.dispose()
+
             return json_data
         @staticmethod
         def from_json(json_data:dict):
@@ -99,7 +120,11 @@ class DATADecorator:
             session = Session()
 
             session = self.insert_json(json_data, session)
-            return session.query(cls).all()
+            objs = deepcopy( session.query(cls).options(joinedload('*')).all() )
+            # session.expunge_all()
+            session.close()
+            engine.dispose()
+            return objs
         setattr(cls, "to_json", to_json)
         setattr(cls, "from_json", from_json)
         return cls

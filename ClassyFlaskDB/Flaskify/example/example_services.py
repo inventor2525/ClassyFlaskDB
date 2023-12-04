@@ -56,6 +56,6 @@ class ConvService:
     @staticmethod
     def Talk(conv:Conversation) -> Message:
         m = Message(content="Hello from DA "+conv.message_sequence.messages[-1].content, source=ModelSource(model_name="MyModel", model_parameters={"hello":"world"}, message_sequence=conv.message_sequence))
-        return m
-        # conv.add_message(m)
-        # return conv
+        # return m
+        conv.add_message(m)
+        return conv
