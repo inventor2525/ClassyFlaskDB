@@ -48,4 +48,14 @@ class AnotherService:
     @staticmethod
     def repeat_text(text: str, times: int) -> str:
         return text * times
-print("Hello World")
+    
+from ClassyFlaskDB.ConversationModel import Conversation, Message, ModelSource, UserSource
+
+class ConvService:
+    @Route()
+    @staticmethod
+    def Talk(conv:Conversation) -> Message:
+        m = Message(content="Hello from DA "+conv.message_sequence.messages[-1].content, source=ModelSource(model_name="MyModel", model_parameters={"hello":"world"}, message_sequence=conv.message_sequence))
+        return m
+        # conv.add_message(m)
+        # return conv

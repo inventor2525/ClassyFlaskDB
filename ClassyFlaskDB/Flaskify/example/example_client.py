@@ -1,12 +1,14 @@
-from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService
+from copy import deepcopy
+from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService, ConvService, Conversation, Message, ModelSource, UserSource
 from ClassyFlaskDB.Flaskify.to_client import FlaskifyClientDecorator
-from ClassyFlaskDB.Flaskify.serialization import type_serializer_mapping
+from ClassyFlaskDB.Flaskify.serialization import TypeSerializationResolver
 
-flaskify_client = FlaskifyClientDecorator(type_serializer_mapping, base_url="http://localhost:8000")
+flaskify_client = FlaskifyClientDecorator(TypeSerializationResolver(), base_url="http://localhost:8000")
 
 # Flaskify services
 ClientifiedMyService = flaskify_client()(MyService)
 ClientifiedAnotherService = flaskify_client("another")(AnotherService)
+ClientifiedConvService = flaskify_client()(ConvService)
 
 from pydub import AudioSegment
 a_s = ClientifiedMyService.get_audio("hello.mp3")
@@ -19,3 +21,12 @@ print(ClientifiedAnotherService.add_numbers(1, 2))
 print(ClientifiedAnotherService.multiply_numbers(3, 4))
 print(ClientifiedAnotherService.upper_case_text("hello"))
 print(ClientifiedAnotherService.repeat_text("hello", 3))
+
+
+c = Conversation("Conversation 1", "First conversation")
+c.add_message(Message("Hello", UserSource("George")))
+c.add_message(Message("__World__", UserSource("Alice")))
+
+m = ClientifiedConvService.Talk(c)
+print(m.content)
+print(m.to_json())
