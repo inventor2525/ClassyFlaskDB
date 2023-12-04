@@ -27,10 +27,30 @@ class AudioSerializer(BaseSerializer):
     def deserialize(self, data: BytesIO) -> AudioSegment:
         return AudioSegment.from_file(data, format="wav")
 
+class DATA_Serializer(BaseSerializer):
+    def __init__(self, type:Type):
+        super().__init__(as_file=False, mime_type='application/json')
+        self.type = type
+    
+    def serialize(self, obj: Any) -> dict:
+        return obj.to_json()
+
+    def deserialize(self, data: dict) -> Any:
+        return self.type.from_json(data)[-1] #return the last because the json may contain multiple objects of the same type
+
 type_serializer_mapping = {
-    str: BaseSerializer(),
-    int: BaseSerializer(),
-    float: BaseSerializer(),
-    bool: BaseSerializer(),
-    AudioSegment: AudioSerializer()
-}
+        str: BaseSerializer(),
+        int: BaseSerializer(),
+        float: BaseSerializer(),
+        bool: BaseSerializer(),
+        AudioSegment: AudioSerializer()
+    }
+
+class TypeSerializationResolver:
+    def __init__(self, type_serializer_mapping: dict = type_serializer_mapping):
+        self.type_serializer_mapping = type_serializer_mapping
+    
+    def get(self, type: Type) -> BaseSerializer:
+        if hasattr(type, 'from_json') and hasattr(type, 'to_json'):
+            return DATA_Serializer(type)
+        return self.type_serializer_mapping.get(type, BaseSerializer())

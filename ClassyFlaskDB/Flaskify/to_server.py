@@ -1,7 +1,7 @@
 from typing import Any, Union, Dict, Type
 from flask import Flask, Response, request, jsonify, send_file
 from inspect import signature, _empty
-from ClassyFlaskDB.Flaskify.serialization import BaseSerializer
+from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from dataclasses import dataclass
 import json
@@ -14,7 +14,7 @@ class FlaskifyServerDecorator:
 	and auto registers the view with the flask app.
 	'''
 	app : Flask
-	type_serializer_mapping: Dict[Type, BaseSerializer]
+	type_resolver: TypeSerializationResolver
 	def create_view_method(self_decorator, original_method):
 		'''
 		Creates a view method that can be registered with Flask-Classful.
@@ -28,7 +28,7 @@ class FlaskifyServerDecorator:
 		sig = signature(original_method)
 		for param_name, param in sig.parameters.items():
 			param_type = param.annotation
-			serializer = self_decorator.type_serializer_mapping.get(param_type)
+			serializer = self_decorator.type_resolver.get(param_type)
 
 			if serializer:
 				if serializer.as_file:
@@ -60,7 +60,7 @@ class FlaskifyServerDecorator:
 			# Deserialize all arguments by name from the request, based on their typehint
 			for param_name, param in sig.parameters.items():
 				param_type = param.annotation
-				serializer = self_decorator.type_serializer_mapping.get(param_type)
+				serializer = self_decorator.type_resolver.get(param_type)
 
 				if serializer:
 					if serializer.as_file:
@@ -74,7 +74,7 @@ class FlaskifyServerDecorator:
 			return_type = sig.return_annotation if sig.return_annotation != _empty else type(result)
 
 			# Serialize the result based on the return type:
-			response_serializer = self_decorator.type_serializer_mapping.get(return_type)
+			response_serializer = self_decorator.type_resolver.get(return_type)
 
 			# Return the serialized result as a response:
 			if response_serializer:

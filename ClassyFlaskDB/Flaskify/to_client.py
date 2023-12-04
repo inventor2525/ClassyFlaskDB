@@ -1,7 +1,7 @@
 import requests
 from typing import Any, Dict, Type
 from inspect import signature, _empty
-from ClassyFlaskDB.Flaskify.serialization import BaseSerializer
+from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from ClassyFlaskDB.Flaskify.Route import Route
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ class FlaskifyClientDecorator:
 	Route decorated methods to create a client capable of making HTTP requests
 	to the corresponding server endpoints.
 	'''
-	type_serializer_mapping: Dict[Type, BaseSerializer]
+	type_resolver: TypeSerializationResolver
 	base_url: str
 
 	def create_request_method(self_decorator, original_method, route_info:Route, route_base:str):
@@ -41,7 +41,7 @@ class FlaskifyClientDecorator:
 			for param_name, param in sig.parameters.items():
 				value = kwargs.get(param_name)
 				param_type = param.annotation
-				serializer = self_decorator.type_serializer_mapping.get(param_type, BaseSerializer())
+				serializer = self_decorator.type_resolver.get(param_type)
 				serialized_arg = serializer.serialize(value)
 
 				if serializer.as_file:
@@ -69,7 +69,7 @@ class FlaskifyClientDecorator:
 
 			# Deserialize the response based on the return type of the original method
 			return_type = sig.return_annotation if sig.return_annotation != _empty else type(response.json())
-			return_serializer = self_decorator.type_serializer_mapping.get(return_type, BaseSerializer())
+			return_serializer = self_decorator.type_resolver.get(return_type)
 			if return_serializer.as_file:
 				return return_serializer.deserialize(BytesIO(response.content))
 			else:
