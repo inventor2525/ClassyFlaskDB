@@ -1,9 +1,9 @@
 from copy import deepcopy
 from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService, ConvService, Conversation, Message, ModelSource, UserSource
 from ClassyFlaskDB.Flaskify.to_client import FlaskifyClientDecorator
-from ClassyFlaskDB.Flaskify.serialization import TypeSerializationResolver, FlaskifyJSONEncoder
+from ClassyFlaskDB.Flaskify.serialization import FlaskifyJSONEncoder
 
-flaskify_client = FlaskifyClientDecorator(TypeSerializationResolver(), base_url="http://localhost:8000")
+flaskify_client = FlaskifyClientDecorator(base_url="http://localhost:8000")
 
 # Flaskify services
 ClientifiedMyService = flaskify_client()(MyService)

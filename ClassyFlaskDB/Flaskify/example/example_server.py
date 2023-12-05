@@ -4,7 +4,7 @@ from ClassyFlaskDB.Flaskify.to_server import FlaskifyServerDecorator
 from ClassyFlaskDB.Flaskify.serialization import TypeSerializationResolver
 
 app = Flask(__name__)
-flaskify_server = FlaskifyServerDecorator(app, TypeSerializationResolver())
+flaskify_server = FlaskifyServerDecorator(app)
 
 # Flaskify services
 FlaskifiedMyService = flaskify_server()(MyService)
@@ -19,4 +19,4 @@ with app.app_context():
         print(f"{rule.endpoint}: {rule.rule}")
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8000)
+    app.run(port=8000)

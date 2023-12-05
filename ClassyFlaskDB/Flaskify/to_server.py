@@ -3,7 +3,7 @@ from flask import Flask, Response, request, jsonify, send_file
 from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 
 def json_response(data):
@@ -19,7 +19,7 @@ class FlaskifyServerDecorator:
 	and auto registers the view with the flask app.
 	'''
 	app : Flask
-	type_resolver: TypeSerializationResolver
+	type_resolver: TypeSerializationResolver = field(default_factory=TypeSerializationResolver)
 	def create_view_method(self_decorator, original_method):
 		'''
 		Creates a view method that can be registered with Flask-Classful.

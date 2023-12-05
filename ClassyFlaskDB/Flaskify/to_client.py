@@ -4,7 +4,7 @@ from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from ClassyFlaskDB.Flaskify.Route import Route
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 import json
 
@@ -15,8 +15,8 @@ class FlaskifyClientDecorator:
 	Route decorated methods to create a client capable of making HTTP requests
 	to the corresponding server endpoints.
 	'''
-	type_resolver: TypeSerializationResolver
 	base_url: str
+	type_resolver: TypeSerializationResolver = field(default_factory=TypeSerializationResolver)
 
 	def create_request_method(self_decorator, original_method, route_info:Route, route_base:str):
 		'''
