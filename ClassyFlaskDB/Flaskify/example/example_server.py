@@ -1,7 +1,6 @@
 from flask import Flask
 from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService, ConvService
 from ClassyFlaskDB.Flaskify.to_server import FlaskifyServerDecorator
-from ClassyFlaskDB.Flaskify.serialization import TypeSerializationResolver
 
 app = Flask(__name__)
 flaskify_server = FlaskifyServerDecorator(app)

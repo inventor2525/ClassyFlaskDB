@@ -39,6 +39,7 @@ class DATADecorator:
         TypeResolver.append_globals(globals_return)
         self.mapper_registry = registry()
         self.lazy["default"](self.mapper_registry)
+        self.mapper_registry.metadata.create_all(engine)
         return self.mapper_registry
 
     def insert_json(self, json_data :dict, session :Session):

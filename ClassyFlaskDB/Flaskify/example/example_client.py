@@ -1,4 +1,3 @@
-from copy import deepcopy
 from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService, ConvService, Conversation, Message, ModelSource, UserSource
 from ClassyFlaskDB.Flaskify.to_client import FlaskifyClientDecorator
 from ClassyFlaskDB.Flaskify.serialization import FlaskifyJSONEncoder

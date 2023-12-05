@@ -1,14 +1,7 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from ClassyFlaskDB.DATA import DATA
-
-from dataclasses import field
+from ClassyFlaskDB.DATA import DATA, field
 from datetime import datetime
 from typing import List
-
-engine = create_engine('sqlite:///:memory:', echo=True)
-
-from datetime import datetime
 import tzlocal
 
 def get_local_time():
@@ -82,4 +75,5 @@ class ModelSource(MessageSource):
 class UserSource(MessageSource):
 	user_name: str = None
 
-DATA.finalize(engine, globals()).metadata.create_all(engine)
+engine = create_engine('sqlite:///:memory:')
+DATA.finalize(engine, globals())

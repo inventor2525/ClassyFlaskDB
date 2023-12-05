@@ -27,7 +27,7 @@ class DATA_Decorator2(unittest.TestCase):
 		engine = create_engine('sqlite:///:memory:')
 
 		# Finalize the mapping
-		DATA.finalize(engine, globals()).metadata.create_all(engine)
+		DATA.finalize(engine, globals())
 
 		# Create a session
 		Session = sessionmaker(bind=engine)
