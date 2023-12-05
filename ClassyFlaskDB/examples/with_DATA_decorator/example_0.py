@@ -1,4 +1,4 @@
-from ClassyFlaskDB.to_sql import to_sql
+from ClassyFlaskDB.Decorators.to_sql import to_sql
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,8 +10,8 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import mapper
 from sqlalchemy.orm import relationship
 
-from ClassyFlaskDB.LazyDecorator import LazyDecorator
-from ClassyFlaskDB.capture_field_info import capture_field_info, FieldInfo, FieldsInfo
+from ClassyFlaskDB.Decorators.LazyDecorator import LazyDecorator
+from ClassyFlaskDB.Decorators.capture_field_info import capture_field_info, FieldInfo, FieldsInfo
 from ClassyFlaskDB.DATA import DATA
 
 from dataclasses import dataclass, field

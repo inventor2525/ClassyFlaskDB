@@ -49,7 +49,7 @@ class AnotherService:
     def repeat_text(text: str, times: int) -> str:
         return text * times
     
-from ClassyFlaskDB.ConversationModel import Conversation, Message, ModelSource, UserSource
+from ClassyFlaskDB.Flaskify.example.ConversationModel import Conversation, Message, ModelSource, UserSource
 
 class ConvService:
     @Route()

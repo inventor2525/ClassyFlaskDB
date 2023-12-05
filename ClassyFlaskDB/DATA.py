@@ -5,10 +5,10 @@ from sqlalchemy import Column, Integer, String, Table, ForeignKey, Float
 from sqlalchemy.orm import registry, relationship, sessionmaker
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 
-from ClassyFlaskDB.LazyDecorator import LazyDecorator
-from ClassyFlaskDB.capture_field_info import capture_field_info, FieldInfo, FieldsInfo
+from ClassyFlaskDB.Decorators.LazyDecorator import LazyDecorator
+from ClassyFlaskDB.Decorators.capture_field_info import capture_field_info, FieldInfo, FieldsInfo
 from ClassyFlaskDB.helpers.resolve_type import TypeResolver
-from ClassyFlaskDB.to_sql import to_sql
+from ClassyFlaskDB.Decorators.to_sql import to_sql
 
 from dataclasses import dataclass, field
 from copy import deepcopy

@@ -2,7 +2,7 @@ from sqlalchemy import Table, Column, String, Integer, ForeignKey, DateTime, JSO
 from sqlalchemy.orm import declarative_base, relationship, registry
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 from datetime import datetime
-from ClassyFlaskDB.capture_field_info import FieldInfo
+from ClassyFlaskDB.Decorators.capture_field_info import FieldInfo
 from sqlalchemy.sql import expression
 from sqlalchemy import text
 
