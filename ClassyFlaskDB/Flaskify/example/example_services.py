@@ -1,6 +1,7 @@
 from pydub import AudioSegment
-from ClassyFlaskDB.Flaskify.Route import Route
+from ClassyFlaskDB.Flaskify.flaskify import Flaskify, Route
 
+@Flaskify()
 class MyService:
     @Route()
     @staticmethod
@@ -28,6 +29,7 @@ class MyService:
     def concatenate_texts(text1: str, text2: str) -> str:
         return text1 + text2
 
+@Flaskify("another")
 class AnotherService:
     @Route()
     @staticmethod
@@ -51,6 +53,7 @@ class AnotherService:
     
 from ClassyFlaskDB.Flaskify.example.ConversationModel import Conversation, Message, ModelSource, UserSource
 
+@Flaskify()
 class ConvService:
     @Route()
     @staticmethod
