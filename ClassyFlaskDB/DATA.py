@@ -15,7 +15,8 @@ from copy import deepcopy
 
 from typing import Any, Dict, List, Type
 import uuid
-
+from sqlalchemy.orm import class_mapper
+import sqlalchemy
 class DATADecorator:
     def __init__(self, *args, **kwargs):
         # Initialize any state or pass any parameters required
@@ -81,13 +82,26 @@ class DATADecorator:
             if id(self) in memo:
                 return memo[id(self)]
             
-            cls_copy = self.__class__()
+            mapper = class_mapper(self.__class__)
+            cls_copy = mapper.class_manager.new_instance()
+            # cls_copy = self.__class__()
             memo[id(self)] = cls_copy
+            
+            def fields(cls):
+                for field_name in cls.FieldsInfo.field_names:
+                    yield field_name
+                if hasattr(cls, "__cls_type__"):
+                    yield "__cls_type__"
 
-            for field_name in cls.FieldsInfo.field_names:
+            for field_name in fields(cls):
                 value = getattr(self, field_name, None)
                 if value is not None:
-                    setattr(cls_copy, field_name, deepcopy(value, memo))
+                    if isinstance(value, sqlalchemy.orm.collections.InstrumentedList):
+                        setattr(cls_copy, field_name, deepcopy(list(value), memo))
+                    # elif isinstance(value, dict):
+                    #     setattr(cls_copy, field_name, deepcopy(value, memo))
+                    else:
+                        setattr(cls_copy, field_name, deepcopy(value, memo))
             
             return cls_copy
 

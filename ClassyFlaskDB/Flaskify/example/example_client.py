@@ -29,4 +29,6 @@ c.add_message(Message("__World__", UserSource("Alice")))
 
 m = ClientifiedConvService.Talk(c)
 print(m.content)
-print(m.to_json())
+
+import json
+print(json.dumps(m.to_json(),indent=4))
