@@ -3,6 +3,18 @@ from io import BytesIO
 from typing import Any, Type, Union
 from dataclasses import dataclass
 
+from datetime import datetime
+from json import JSONEncoder
+
+class FlaskifyJSONEncoder(JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            if o.tzinfo is not None and o.tzinfo.utcoffset(o) is not None:
+                return o.strftime("%Y-%m-%d %H:%M:%S.%f %z")
+            else:
+                return o.strftime("%Y-%m-%d %H:%M:%S.%f")
+        return JSONEncoder.default(self, o)
+    
 @dataclass
 class BaseSerializer:
     as_file: bool = False

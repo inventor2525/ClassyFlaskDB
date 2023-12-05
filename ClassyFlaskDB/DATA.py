@@ -1,4 +1,4 @@
-from sqlalchemy import Engine, create_engine, MetaData
+from sqlalchemy import Engine, create_engine, MetaData, DateTime
 from sqlalchemy.orm import sessionmaker, Session, joinedload
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Table, ForeignKey, Float
@@ -17,6 +17,17 @@ from typing import Any, Dict, List, Type
 import uuid
 from sqlalchemy.orm import class_mapper
 import sqlalchemy
+from datetime import datetime
+
+def convert_to_column_type(value, column_type):
+    if isinstance(column_type, DateTime):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d %H:%M:%S.%f %z")
+        except ValueError:
+            # Try parsing without timezone
+            return datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S.%f")
+    return value
+
 class DATADecorator:
     def __init__(self, *args, **kwargs):
         # Initialize any state or pass any parameters required
@@ -36,8 +47,26 @@ class DATADecorator:
         
         for table_name, rows in json_data.items():
             table = metadata.tables[table_name]
+
+            # Identify columns that require conversion
+            columns_to_convert = {
+                column_name: column.type
+                for column_name, column in table.columns.items()
+                if isinstance(column.type, DateTime)
+            }
+
+            # Prepare and insert data for each row
             for row_data in rows:
-                session.execute(table.insert(), row_data)
+                if columns_to_convert:
+                    # Only copy and convert if necessary
+                    row_copy = row_data.copy()
+                    for column_name, column_type in columns_to_convert.items():
+                        if column_name in row_copy:
+                            row_copy[column_name] = convert_to_column_type(row_copy[column_name], column_type)
+                    session.execute(table.insert(), row_copy)
+                else:
+                    # Insert directly if no conversions are needed
+                    session.execute(table.insert(), row_data)
 
         session.commit()
         return session

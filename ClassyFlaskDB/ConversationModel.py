@@ -8,6 +8,13 @@ from typing import List
 
 engine = create_engine('sqlite:///:memory:', echo=True)
 
+from datetime import datetime
+import tzlocal
+
+def get_local_time():
+	local_tz = tzlocal.get_localzone()
+	return datetime.now(local_tz)
+
 @DATA
 class MessageSource:
 	pass
@@ -17,7 +24,7 @@ class Message:
 	content: str
 	source: MessageSource = None
 	
-	# creation_time: datetime = field(default_factory=datetime.now)
+	creation_time: datetime = field(default_factory=get_local_time)
 	
 	prev_message: "Message" = None
 	conversation: "Conversation" = None
@@ -38,7 +45,7 @@ class Conversation:
 	name: str
 	description: str
 	
-	# creation_time: datetime = field(default_factory=datetime.now)
+	creation_time: datetime = field(default_factory=get_local_time)
 	
 	message_sequence:MessageSequence = None
 	

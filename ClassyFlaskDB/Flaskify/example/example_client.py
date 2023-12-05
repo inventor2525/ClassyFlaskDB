@@ -1,7 +1,7 @@
 from copy import deepcopy
 from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService, ConvService, Conversation, Message, ModelSource, UserSource
 from ClassyFlaskDB.Flaskify.to_client import FlaskifyClientDecorator
-from ClassyFlaskDB.Flaskify.serialization import TypeSerializationResolver
+from ClassyFlaskDB.Flaskify.serialization import TypeSerializationResolver, FlaskifyJSONEncoder
 
 flaskify_client = FlaskifyClientDecorator(TypeSerializationResolver(), base_url="http://localhost:8000")
 
@@ -31,4 +31,4 @@ m = ClientifiedConvService.Talk(c)
 print(m.content)
 
 import json
-print(json.dumps(m.to_json(),indent=4))
+print(json.dumps(m.to_json(),indent=4, cls=FlaskifyJSONEncoder))

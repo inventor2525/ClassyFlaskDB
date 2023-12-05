@@ -1,7 +1,7 @@
 import requests
 from typing import Any, Dict, Type
 from inspect import signature, _empty
-from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver
+from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from ClassyFlaskDB.Flaskify.Route import Route
 from dataclasses import dataclass
@@ -59,11 +59,14 @@ class FlaskifyClientDecorator:
 			if http_method == 'POST':
 				if len(file_args)>0:
 					response = requests.post(url, files={
-						'__json_args__': json.dumps(json_args),
+						'__json_args__': json.dumps(json_args, cls=FlaskifyJSONEncoder),
 						**file_args
 					})
 				else:
-					response = requests.post(url, json=json_args)
+					# Manually serialize JSON with the custom encoder
+					json_str = json.dumps(json_args, cls=FlaskifyJSONEncoder)
+					response = requests.post(url, data=json_str, headers={'Content-Type': 'application/json'})
+					# response = requests.post(url, json=json_args)
 			else:
 				raise NotImplementedError(f"HTTP method {http_method} not implemented. Currently all Flaskify methods must be POST.")
 

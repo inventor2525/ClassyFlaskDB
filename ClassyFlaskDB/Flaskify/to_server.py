@@ -1,10 +1,15 @@
 from typing import Any, Union, Dict, Type
 from flask import Flask, Response, request, jsonify, send_file
 from inspect import signature, _empty
-from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver
+from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from dataclasses import dataclass
 import json
+
+def json_response(data):
+	'''Replacement for flask.jsonify that uses FlaskifyJSONEncoder'''
+	response_data = json.dumps(data, cls=FlaskifyJSONEncoder)
+	return Response(response_data, mimetype='application/json')
 
 @dataclass
 class FlaskifyServerDecorator:
@@ -83,9 +88,9 @@ class FlaskifyServerDecorator:
 					return send_file(file_data, mimetype=response_serializer.mime_type, as_attachment=True, download_name='file')
 				else:
 					json_data = response_serializer.serialize(result)
-					return jsonify(json_data)
+					return json_response(json_data)
 			else:
-				return jsonify(result)
+				return json_response(result)
 		return view_method
 	
 	def __call__(self_decorator, route_prefix: str = None):
