@@ -22,8 +22,8 @@ c = Conversation("Conversation 1", "First conversation")
 c.add_message(Message("Hello", UserSource("George")))
 c.add_message(Message("__World__", UserSource("Alice")))
 
-m = ConvService.Talk(c)
-print(m.content)
+c_ = ConvService.Talk(c)
+print(c_.message_sequence.messages[-1].content)
 
 import json
-print(json.dumps(m.to_json(),indent=4, cls=FlaskifyJSONEncoder))
+print(json.dumps(c_.to_json(),indent=4, cls=FlaskifyJSONEncoder))
