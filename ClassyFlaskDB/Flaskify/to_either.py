@@ -11,12 +11,14 @@ class FlaskifyDecorator:
     '''
     def __init__(self):
         self.decorator = None
+        self.app = None
     
     def make_client(self, base_url: str):
         self.decorator = FlaskifyClientDecorator(base_url=base_url)
         return self.decorator
     
     def make_server(self, app):
+        self.app = app
         self.decorator = FlaskifyServerDecorator(app=app)
         return self.decorator
     
@@ -27,5 +29,12 @@ class FlaskifyDecorator:
     def __call__(self, route_prefix: str = None):
         assert self.decorator is not None, "Flaskify must be initialized with make_client or make_server before it can be used as a decorator. Todo this you must make sure that either is called before any decorated models are first imported. This is because the decorator needs to be able to access the app or base_url for server or client respectively. If you prefer you can also use the FlaskifyClientDecorator or FlaskifyServerDecorator directly."
         return self.decorator(route_prefix=route_prefix)
+    
+    def debug_routes(self):
+        if self.app is not None:
+            with self.app.app_context():
+                print("Registered Routes:")
+                for rule in self.app.url_map.iter_rules():
+                    print(f"{rule.endpoint}: {rule.rule}")
 
 Flaskify = FlaskifyDecorator()
