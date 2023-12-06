@@ -92,11 +92,15 @@ class DATADecorator:
         cls = dataclass(cls)
         cls = capture_field_info(cls)
         if cls.FieldsInfo.primary_key_name is None:
+            def new_id(self):
+                self.uuid = str(uuid.uuid4())
+
+            setattr(cls, "new_id", new_id)
             setattr(cls, "uuid", None)
             cls.__annotations__["uuid"] = str
             init = cls.__init__
             def __init__(self, *args, **kwargs):
-                self.uuid = str(uuid.uuid4())
+                self.new_id()
                 init(self, *args, **kwargs)
             setattr(cls, "__init__", __init__)
             cls.FieldsInfo.primary_key_name = "uuid"
