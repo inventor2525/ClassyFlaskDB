@@ -34,9 +34,11 @@ class DATADecorator:
         self.args = args
         self.kwargs = kwargs
         self.lazy = LazyDecorator()
+        self.decorated_classes = {}
 
     def finalize(self, engine:Engine, globals_return:Dict[str, Any]=globals()) -> registry:
         TypeResolver.append_globals(globals_return)
+        TypeResolver.append_globals(self.decorated_classes)
         self.mapper_registry = registry()
         self.lazy["default"](self.mapper_registry)
         self.mapper_registry.metadata.create_all(engine)
@@ -89,6 +91,8 @@ class DATADecorator:
         return json_data
     
     def __call__(self, cls:Type[Any]):
+        self.decorated_classes[cls.__name__] = cls
+
         cls = dataclass(cls)
         cls = capture_field_info(cls)
         if cls.FieldsInfo.primary_key_name is None:
