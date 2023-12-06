@@ -1,4 +1,4 @@
-from ClassyFlaskDB.Flaskify.flaskify import Flaskify
+from ClassyFlaskDB.Flaskify import Flaskify
 Flaskify.make_client(base_url="http://localhost:8000")
 
 from ClassyFlaskDB.Flaskify.example.example_services import MyService, AnotherService, ConvService, Conversation, Message, ModelSource, UserSource
