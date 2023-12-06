@@ -8,14 +8,14 @@ from ClassyFlaskDB.Decorators.method_decorator import method_decorator
 class Route:
     path: str = None
     methods: Optional[List[str]] = None
-    endpoint: Optional[str] = None
-    defaults: Optional[dict] = None
-    host: Optional[str] = None
-    subdomain: Optional[str] = None
-    strict_slashes: Optional[bool] = None
-    redirect_to: Optional[str] = None
-    provide_automatic_options: Optional[bool] = None
-    merge_slashes: Optional[bool] = None
+    # endpoint: Optional[str] = None
+    # defaults: Optional[dict] = None
+    # host: Optional[str] = None
+    # subdomain: Optional[str] = None
+    # strict_slashes: Optional[bool] = None
+    # redirect_to: Optional[str] = None
+    # provide_automatic_options: Optional[bool] = None
+    # merge_slashes: Optional[bool] = None
 
     def __post_init__(self):
         if self.methods is None:

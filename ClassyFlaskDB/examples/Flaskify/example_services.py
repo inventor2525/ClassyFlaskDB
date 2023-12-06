@@ -1,5 +1,5 @@
 from pydub import AudioSegment
-from ClassyFlaskDB.Flaskify import Flaskify, Route
+from ClassyFlaskDB.Flaskify import Route, Flaskify
 
 @Flaskify()
 class MyService:
