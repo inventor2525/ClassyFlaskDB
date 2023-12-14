@@ -165,6 +165,9 @@ def to_sql():
 				elif hasattr(field_type, "__origin__") and field_type.__origin__ in [list, tuple, set]:
 					getter_setters.append(OneToMany_List(fi, mapper_registry))
 				else:
+					origin_type = get_origin(field_type)
+					if origin_type:
+						field_type = origin_type
 					create_col(fi, type_map[field_type])
 
 		columns = []
