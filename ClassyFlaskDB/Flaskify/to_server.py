@@ -79,11 +79,11 @@ class FlaskifyServerDecorator:
 					kwargs[param_name] = serializer.deserialize(data)
 
 			# Log the request:
-			if route_info.logger:
-				route_info.logger(request, **kwargs)
+			if route_info.logger_func:
+				route_info.logger_func(request, **kwargs)
 			elif self_decorator.logger:
 				self_decorator.logger(request, **kwargs)
-				
+
 			# Call the original method with the deserialized arguments
 			result = original_method(**kwargs)
 

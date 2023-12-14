@@ -28,10 +28,10 @@ class Logger:
                 method=request.method,
                 timestamp=now
             )
-            if self.log_json and request.json:
+            if self.log_json and request.content_type == 'application/json': #json
                 entry.json_data = request.json
             
-            if self.log_files and request.files:
+            if self.log_files and request.content_type.startswith('multipart/form-data'): #files
                 os.makedirs(self.files_folder, exist_ok=True)
                 for filename, file in request.files.items():
                     dir_path = os.path.join(self.files_folder, self.name, *request.path.strip('/').split('/'), request.method)
@@ -40,7 +40,7 @@ class Logger:
                     file_type = file.content_type  # MIME type
                     
                     # Derive the extension from the MIME type
-                    extension = mimetypes.guess_extension(file_type) or ''
+                    extension = '' if file_type is None else (mimetypes.guess_extension(file_type) or '')
 
                     # Construct the final file path with the appropriate extension
                     file_path = os.path.join(dir_path, f"{filename}_{now_str}{extension}")
