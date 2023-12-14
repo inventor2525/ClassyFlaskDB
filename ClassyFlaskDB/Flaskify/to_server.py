@@ -78,15 +78,17 @@ class FlaskifyServerDecorator:
 						data = r_json.get(param_name)
 					kwargs[param_name] = serializer.deserialize(data)
 
-			# Call the original method with the deserialized arguments
-			result = original_method(**kwargs)
+			# Log the request:
 			if route_info.logger:
 				route_info.logger(request, **kwargs)
 			elif self_decorator.logger:
 				self_decorator.logger(request, **kwargs)
-			return_type = sig.return_annotation if sig.return_annotation != _empty else type(result)
+				
+			# Call the original method with the deserialized arguments
+			result = original_method(**kwargs)
 
 			# Serialize the result based on the return type:
+			return_type = sig.return_annotation if sig.return_annotation != _empty else type(result)
 			response_serializer = self_decorator.type_resolver.get(return_type)
 
 			# Return the serialized result as a response:
