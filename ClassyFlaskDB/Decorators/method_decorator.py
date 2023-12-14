@@ -6,7 +6,12 @@ def method_decorator(model_attr_name):
 	methods that will add a instance of the class to the method as an attribute.
 	'''
 	def decorator(cls):
+		original_call = cls.__call__ if '__call__' in cls.__dict__ else None
+
 		def __call__(self, func):
+			if original_call:
+				return original_call(self, func)
+			
 			setattr(func, model_attr_name, self)
 			return func
 
