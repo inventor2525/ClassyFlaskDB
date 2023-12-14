@@ -1,7 +1,9 @@
 from typing import Any, Union, Dict, Type
 from flask import Flask, Response, request, jsonify, send_file
 from inspect import signature, _empty
+from ClassyFlaskDB.Flaskify.Route import Route
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
+from ClassyFlaskDB.Flaskify.Loggers.Logger import Logger
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from dataclasses import dataclass, field
 import json
@@ -20,7 +22,9 @@ class FlaskifyServerDecorator:
 	'''
 	app : Flask
 	type_resolver: TypeSerializationResolver = field(default_factory=TypeSerializationResolver)
-	def create_view_method(self_decorator, original_method):
+	logger: Logger = field(default_factory=Logger)
+
+	def create_view_method(self_decorator, original_method, route_info:Route):
 		'''
 		Creates a view method that can be registered with Flask-Classful.
 		
@@ -76,6 +80,10 @@ class FlaskifyServerDecorator:
 
 			# Call the original method with the deserialized arguments
 			result = original_method(**kwargs)
+			if route_info.logger:
+				route_info.logger(request, **kwargs)
+			elif self_decorator.logger:
+				self_decorator.logger(request, **kwargs)
 			return_type = sig.return_annotation if sig.return_annotation != _empty else type(result)
 
 			# Serialize the result based on the return type:
@@ -115,7 +123,7 @@ class FlaskifyServerDecorator:
 						if suffix.endswith('/'):
 							suffix = suffix[:-1]
 					route_path = f"/{prefix}/{suffix}".lower()
-					view_method = self_decorator.create_view_method(method)
+					view_method = self_decorator.create_view_method(method, route_info)
 					view_method.__name__ = f"{route_path.replace('_','').replace('-','__')}_view"
 					
 					flask_route_decorator = self_decorator.app.route(route_path, methods=route_info.methods)
