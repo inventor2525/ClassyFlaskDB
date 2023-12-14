@@ -74,6 +74,7 @@ class FlaskifyServerDecorator:
 				if serializer:
 					if serializer.as_file:
 						data = request.files.get(param_name)
+						data.seek(0)
 					else:
 						data = r_json.get(param_name)
 					kwargs[param_name] = serializer.deserialize(data)

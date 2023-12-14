@@ -19,7 +19,7 @@ class Logger:
     def __call__(self, request: request, *args, **kwargs):
         with self.session_factory() as session:
             now = datetime.now()
-            now_str = now.strftime("%Y-%m-%d_%H-%M-%S")
+            now_str = now.strftime("%Y-%m-%d_%H-%M-%S.%f")
 
             entry = Entry(
                 logger_name=self.name,
@@ -44,6 +44,7 @@ class Logger:
 
                     # Construct the final file path with the appropriate extension
                     file_path = os.path.join(dir_path, f"{filename}_{now_str}{extension}")
+                    file.seek(0)
                     file.save(file_path)
 
                     # Append the file reference to the entry
