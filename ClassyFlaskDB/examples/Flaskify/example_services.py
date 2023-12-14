@@ -1,5 +1,5 @@
 from pydub import AudioSegment
-from ClassyFlaskDB.Flaskify import Route, Flaskify
+from ClassyFlaskDB.Flaskify import Route, StaticRoute, Flaskify
 
 @Flaskify()
 class MyService:
@@ -14,13 +14,11 @@ class MyService:
         # Dummy implementation
         return f"Processed text: {text} and audio length: {len(audio)} ms"
 
-    @Route()
-    @staticmethod
+    @StaticRoute()
     def reverse_text(text: str) -> str:
         return text[::-1]
 
-    @Route("/text_length_______blaaaah")
-    @staticmethod
+    @StaticRoute("/text_length_______blaaaah")
     def text_length(text: str) -> int:
         return len(text)
 

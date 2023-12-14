@@ -25,3 +25,8 @@ class Route:
     def __post_init__(self):
         if self.methods is None:
             self.methods = ['POST']  # Default HTTP method
+
+class StaticRoute(Route):
+    def __call__(self, func):
+        static_func = staticmethod(func)
+        return super().__call__(static_func)
