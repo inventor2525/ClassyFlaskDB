@@ -112,7 +112,11 @@ class DATADecorator:
                 cls.FieldsInfo.field_names.append("uuid")
             if cls.FieldsInfo.type_hints is not None:
                 cls.FieldsInfo.type_hints["uuid"] = str
-            
+                
+        def get_primary_key(self):
+            return getattr(self, cls.FieldsInfo.primary_key_name)
+        setattr(cls, "get_primary_key", get_primary_key)
+        
         cls = self.lazy([to_sql()])(cls)
     
         # Define a custom __deepcopy__ method
@@ -149,19 +153,25 @@ class DATADecorator:
         def to_json(cls_self):
             engine = create_engine('sqlite:///:memory:')
             self.mapper_registry.metadata.create_all(engine)
-
+            
+            obj = deepcopy(cls_self)
             # Create a session
             Session = sessionmaker(bind=engine)
             session = Session()
-            session.merge(deepcopy(cls_self))
+            session.merge(obj)
             session.commit()
 
             json_data = self.dump_as_json(engine, session)
             # session.expunge_all()
             session.close()
             engine.dispose()
-
-            return json_data
+            
+            return {
+                "primary_key":obj.get_primary_key(),
+                "type":type(obj).__name__,
+                "obj":json_data
+            }
+            
         @staticmethod
         def from_json(json_data:dict):
             engine = create_engine('sqlite:///:memory:')
@@ -171,12 +181,13 @@ class DATADecorator:
             Session = sessionmaker(bind=engine)
             session = Session()
 
-            session = self.insert_json(json_data, session)
-            objs = deepcopy( session.query(cls).options(joinedload('*')).all() )
+            session = self.insert_json(json_data["obj"], session)
+            objs = deepcopy( session.query(cls).options(joinedload('*')).where(cls.get_primary_key()==json_data["primary_key"]).first() )
             # session.expunge_all()
             session.close()
             engine.dispose()
             return objs
+            
         setattr(cls, "to_json", to_json)
         setattr(cls, "from_json", from_json)
         return cls
