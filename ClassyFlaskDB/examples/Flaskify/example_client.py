@@ -1,3 +1,4 @@
+import json
 from ClassyFlaskDB.Flaskify import Flaskify
 Flaskify.make_client(base_url="http://localhost:8000")
 
@@ -19,11 +20,16 @@ print(AnotherService.repeat_text("hello", 3))
 
 
 c = Conversation("Conversation 1", "First conversation")
+print(c.message_sequence.hashid)
 c.add_message(Message("Hello", UserSource("George")))
+print(c.message_sequence.hashid)
 c.add_message(Message("__World__", UserSource("Alice")))
+print(c.message_sequence.hashid)
+c.message_sequence.new_id()
+print(c.message_sequence.hashid)
+print(json.dumps(c.to_json(),indent=4, cls=FlaskifyJSONEncoder))
 
 c_ = ConvService.Talk(c)
 print(c_.message_sequence.messages[-1].content)
 
-import json
 print(json.dumps(c_.to_json(),indent=4, cls=FlaskifyJSONEncoder))

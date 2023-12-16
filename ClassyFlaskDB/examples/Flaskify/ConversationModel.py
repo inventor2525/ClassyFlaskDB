@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from ClassyFlaskDB.DATA import DATA, field
+from ClassyFlaskDB.DATA import DATA, ID_Type, field
 from datetime import datetime
 from typing import List
 import tzlocal
@@ -24,7 +24,7 @@ class Message:
 	
 	_children: List["Message"] = field(default_factory=list)
 
-@DATA
+@DATA(generated_id_type=ID_Type.HASHID, hashed_fields=["messages"])
 class MessageSequence:
 	conversation: "Conversation"
 	messages: List[Message] = field(default_factory=list)
@@ -32,6 +32,7 @@ class MessageSequence:
 	def add_message(self, message:Message):
 		message.prev_message = None if len(self.messages) == 0 else self.messages[-1]
 		self.messages.append(message)
+		self.new_id()
 	
 @DATA
 class Conversation:
@@ -51,6 +52,9 @@ class Conversation:
 			
 	def add_message(self, message:Message):
 		# self._all_messages.append(message)
+		old_message_sequence = self.message_sequence.messages
+		self.message_sequence = MessageSequence(self)
+		self.message_sequence.messages.extend(old_message_sequence)
 		self.message_sequence.add_message(message)
 		# if message.prev_message is None:
 		# 	self._root_messages.append(message)

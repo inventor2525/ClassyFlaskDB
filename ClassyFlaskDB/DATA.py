@@ -18,6 +18,7 @@ import uuid
 from sqlalchemy.orm import class_mapper
 import sqlalchemy
 from datetime import datetime
+from enum import Enum
 
 def convert_to_column_type(value, column_type):
     if isinstance(column_type, DateTime):
@@ -27,6 +28,10 @@ def convert_to_column_type(value, column_type):
             # Try parsing without timezone
             return datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S.%f")
     return value
+
+class ID_Type(Enum):
+    UUID = "uuid"
+    HASHID = "hashid"
 
 class DATADecorator:
     def __init__(self, *args, **kwargs):
@@ -90,34 +95,97 @@ class DATADecorator:
 
         return json_data
     
-    def __call__(self, cls:Type[Any]):
+    def __call__(self, *args, **kwargs):
+        # Check if the decorator is being used with or without parenthesis
+        if len(args) == 1 and callable(args[0]):
+            # Without parenthesis
+            return self.decorate_cls(args[0])
+        else:
+            # With parenthesis
+            return lambda cls: self.decorate_cls(cls, *args, **kwargs)
+    
+    def decorate_cls(self, cls:Type[Any], generated_id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Type[Any]:
+        lazy_decorators = []
         self.decorated_classes[cls.__name__] = cls
 
         cls = dataclass(cls)
         cls = capture_field_info(cls)
         if cls.FieldsInfo.primary_key_name is None:
-            def new_id(self):
-                self.uuid = str(uuid.uuid4())
-
-            setattr(cls, "new_id", new_id)
-            setattr(cls, "uuid", None)
-            cls.__annotations__["uuid"] = str
+            def add_pk(pk_name:str, pk_type:Type):
+                setattr(cls, pk_name, None)
+                cls.__annotations__[pk_name] = pk_type
+                
+                cls.FieldsInfo.primary_key_name = pk_name
+                if pk_name not in cls.FieldsInfo.field_names:
+                    cls.FieldsInfo.field_names.append(pk_name)
+                    
+                if cls.FieldsInfo.type_hints is not None:
+                    cls.FieldsInfo.type_hints[pk_name] = pk_type
+            
+            if generated_id_type == ID_Type.UUID:
+                def new_id(self):
+                    self.uuid = str(uuid.uuid4())
+                setattr(cls, "new_id", new_id)
+                add_pk("uuid", str)
+                
+            elif generated_id_type == ID_Type.HASHID:
+                import hashlib
+                
+                if hashed_fields is None:
+                    hashed_fields = deepcopy(cls.FieldsInfo.field_names)
+                
+                def get_hash_field_getters(cls: Type) -> Type:
+                    field_getters = {}
+                    for field_name in hashed_fields:
+                        hashed_field_type = cls.FieldsInfo.get_field_type(field_name)
+                        
+                        if getattr(hashed_field_type, "FieldsInfo", None) is not None:
+                            def field_getter(self, field_name:str):
+                                obj = getattr(self, field_name)
+                                if obj is None:
+                                    return ""
+                                return str(obj.get_primary_key())
+                            field_getters[field_name] = field_getter
+                        elif hasattr(hashed_field_type, "__origin__") and hashed_field_type.__origin__ in [list, tuple]:
+                            list_type = hashed_field_type.__args__[0]
+                            if getattr(list_type, "FieldsInfo", None) is not None:
+                                def field_getter(self, field_name:str):
+                                    l = getattr(self, field_name)
+                                    if l is None:
+                                        return "[]"
+                                    l_str = ",".join([str(None if item is None else item.get_primary_key()) for item in l])
+                                    return f"[{l_str}]"
+                                field_getters[field_name] = field_getter
+                            else:
+                                def field_getter(self, field_name:str):
+                                    return str(getattr(self, field_name))
+                                field_getters[field_name] = field_getter
+                        else:
+                            def field_getter(self, field_name:str):
+                                return str(getattr(self, field_name))
+                            field_getters[field_name] = field_getter
+                    cls.__field_getters__ = field_getters
+                    return cls
+                    
+                lazy_decorators.append(get_hash_field_getters)
+                
+                def new_id(self) -> str:
+                    fields = [cls.__field_getters__[field_name](self,field_name) for field_name in hashed_fields]
+                    self.hashid = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
+                setattr(cls, "new_id", new_id)
+                add_pk("hashid", str)
+            
             init = cls.__init__
             def __init__(self, *args, **kwargs):
-                self.new_id()
                 init(self, *args, **kwargs)
+                self.new_id()
             setattr(cls, "__init__", __init__)
-            cls.FieldsInfo.primary_key_name = "uuid"
-            if "uuid" not in cls.FieldsInfo.field_names:
-                cls.FieldsInfo.field_names.append("uuid")
-            if cls.FieldsInfo.type_hints is not None:
-                cls.FieldsInfo.type_hints["uuid"] = str
                 
         def get_primary_key(self):
             return getattr(self, cls.FieldsInfo.primary_key_name)
         setattr(cls, "get_primary_key", get_primary_key)
         
-        cls = self.lazy([to_sql()])(cls)
+        cls = self.lazy([to_sql(), *lazy_decorators])(cls)
     
         # Define a custom __deepcopy__ method
         def __deepcopy__(self, memo):
