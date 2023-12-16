@@ -48,7 +48,7 @@ class DATA_Serializer(BaseSerializer):
         return obj.to_json()
 
     def deserialize(self, data: dict) -> Any:
-        return self.type.from_json(data)[-1] #return the last because the json may contain multiple objects of the same type
+        return self.type.from_json(data)
 
 type_serializer_mapping = {
         str: BaseSerializer(),
