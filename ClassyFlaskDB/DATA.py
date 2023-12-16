@@ -20,6 +20,8 @@ import sqlalchemy
 from datetime import datetime
 from enum import Enum
 
+from contextlib import contextmanager
+
 def convert_to_column_type(value, column_type):
     if isinstance(column_type, DateTime):
         try:
@@ -33,6 +35,86 @@ class ID_Type(Enum):
     UUID = "uuid"
     HASHID = "hashid"
 
+class DATAEngine:
+    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:"):
+        self.data_decorator = data_decorator
+        self.data_decorator.finalize()
+        
+        if engine is None:
+            self.engine = create_engine(engine_str)
+        else:
+            self.engine = engine
+        
+        self.data_decorator.mapper_registry.metadata.create_all(self.engine)
+        self.session_maker = sessionmaker(bind=self.engine)
+    
+    def add(self, obj:Any):
+        obj = deepcopy(obj)
+        with self.session_maker() as session:
+            session.add(obj)
+            session.commit()
+    
+    def merge(self, obj:Any):
+        obj = deepcopy(obj)
+        with self.session_maker() as session:
+            session.merge(obj)
+            session.commit()
+    
+    @contextmanager
+    def session(self):
+        session = self.session_maker()
+        try:
+            yield session
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+    
+    def to_json(self) -> dict:
+        with self.session_maker() as session:
+            metadata = MetaData()
+            metadata.reflect(bind=session.bind)
+            json_data = {}
+            
+            for table_name, table in metadata.tables.items():
+                json_data[table_name] = [row._asdict() for row in session.execute(table.select()).fetchall()]
+
+            return json_data
+    
+    def insert_json(self, json_data :dict) -> None:
+        with self.session_maker() as session:
+            metadata = MetaData()
+            metadata.reflect(bind=session.bind)
+            
+            for table_name, rows in json_data.items():
+                table = metadata.tables[table_name]
+
+                # Identify columns that require conversion
+                columns_to_convert = {
+                    column_name: column.type
+                    for column_name, column in table.columns.items()
+                    if isinstance(column.type, DateTime)
+                }
+
+                # Prepare and insert data for each row
+                for row_data in rows:
+                    if columns_to_convert:
+                        # Only copy and convert if necessary
+                        row_copy = row_data.copy()
+                        for column_name, column_type in columns_to_convert.items():
+                            if column_name in row_copy:
+                                row_copy[column_name] = convert_to_column_type(row_copy[column_name], column_type)
+                        session.execute(table.insert(), row_copy)
+                    else:
+                        # Insert directly if no conversions are needed
+                        session.execute(table.insert(), row_data)
+
+            session.commit()
+    
+    def dispose(self):
+        self.engine.dispose()
+
 class DATADecorator:
     def __init__(self, *args, **kwargs):
         # Initialize any state or pass any parameters required
@@ -40,60 +122,18 @@ class DATADecorator:
         self.kwargs = kwargs
         self.lazy = LazyDecorator()
         self.decorated_classes = {}
-
-    def finalize(self, engine:Engine, globals_return:Dict[str, Any]=globals()) -> registry:
+        
+        self._finalized = False
+    
+    def finalize(self, globals_return:Dict[str, Any]=globals()) -> None:
+        if self._finalized:
+            return
+            
         TypeResolver.append_globals(globals_return)
         TypeResolver.append_globals(self.decorated_classes)
         self.mapper_registry = registry()
         self.lazy["default"](self.mapper_registry)
-        self.mapper_registry.metadata.create_all(engine)
-        return self.mapper_registry
-
-    def insert_json(self, json_data :dict, session :Session):
-        metadata = MetaData()
-        metadata.reflect(bind=session.bind)
-        
-        for table_name, rows in json_data.items():
-            table = metadata.tables[table_name]
-
-            # Identify columns that require conversion
-            columns_to_convert = {
-                column_name: column.type
-                for column_name, column in table.columns.items()
-                if isinstance(column.type, DateTime)
-            }
-
-            # Prepare and insert data for each row
-            for row_data in rows:
-                if columns_to_convert:
-                    # Only copy and convert if necessary
-                    row_copy = row_data.copy()
-                    for column_name, column_type in columns_to_convert.items():
-                        if column_name in row_copy:
-                            row_copy[column_name] = convert_to_column_type(row_copy[column_name], column_type)
-                    session.execute(table.insert(), row_copy)
-                else:
-                    # Insert directly if no conversions are needed
-                    session.execute(table.insert(), row_data)
-
-        session.commit()
-        return session
-    
-    def dump_as_json(self, engine:Engine, session :Session) -> dict:
-        metadata = MetaData()
-        metadata.reflect(bind=session.bind)
-        json_data = {}
-        # db_dict = {}
-        # with engine.connect() as conn:
-        #     for table_name in metadata.tables.keys():
-        #         table = metadata.tables[table_name]
-        #         rows = conn.execute(table.select()).fetchall()
-        #         # Convert each row into a dictionary
-        #         # db_dict[table_name] = [dict(row) for row in rows]
-        for table_name, table in metadata.tables.items():
-            json_data[table_name] = [row._asdict() for row in session.execute(table.select()).fetchall()]
-
-        return json_data
+        self._finalized = True
     
     def __call__(self, *args, **kwargs):
         # Check if the decorator is being used with or without parenthesis
@@ -219,19 +259,13 @@ class DATADecorator:
         setattr(cls, '__deepcopy__', __deepcopy__)
         
         def to_json(cls_self):
-            engine = create_engine('sqlite:///:memory:')
-            self.mapper_registry.metadata.create_all(engine)
+            engine = DATAEngine(self)
             
             obj = deepcopy(cls_self)
-            # Create a session
-            Session = sessionmaker(bind=engine)
-            session = Session()
-            session.merge(obj)
-            session.commit()
+            
+            engine.merge(obj)
 
-            json_data = self.dump_as_json(engine, session)
-            # session.expunge_all()
-            session.close()
+            json_data = engine.to_json()
             engine.dispose()
             
             return {
@@ -242,19 +276,13 @@ class DATADecorator:
             
         @staticmethod
         def from_json(json_data:dict):
-            engine = create_engine('sqlite:///:memory:')
-            self.mapper_registry.metadata.create_all(engine)
-
-            # Create a session
-            Session = sessionmaker(bind=engine)
-            session = Session()
-
-            session = self.insert_json(json_data["obj"], session)
+            engine = DATAEngine(self)
+            engine.insert_json(json_data["obj"])
             
             pk_col = cls.__table__.c[cls.FieldsInfo.primary_key_name]
-            objs = deepcopy( session.query(cls).options(joinedload('*')).filter(pk_col==json_data["primary_key"]).first() )
-            # session.expunge_all()
-            session.close()
+            with engine.session() as session:
+                objs = deepcopy( session.query(cls).options(joinedload('*')).filter(pk_col==json_data["primary_key"]).first() )
+                
             engine.dispose()
             return objs
             

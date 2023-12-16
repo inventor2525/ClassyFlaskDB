@@ -79,5 +79,4 @@ class ModelSource(MessageSource):
 class UserSource(MessageSource):
 	user_name: str = None
 
-engine = create_engine('sqlite:///:memory:')
-DATA.finalize(engine, globals())
+DATA.finalize()

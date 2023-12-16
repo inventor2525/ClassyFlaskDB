@@ -1,14 +1,10 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from ClassyFlaskDB.DATA import DATA
+from ClassyFlaskDB.DATA import DATA, DATAEngine
 
 from dataclasses import field
 from datetime import datetime
 from typing import List
 
 from ClassyFlaskDB.helpers.resolve_type import TypeResolver
-
-engine = create_engine('sqlite:///my_database4.db', echo=True)
 
 @DATA
 class MessageSource:
@@ -78,26 +74,19 @@ class ModelSource(MessageSource):
 class UserSource(MessageSource):
 	user_name: str = None
 
-DATA.finalize(engine, globals()).metadata.create_all(engine)
-
-# Create a session
-Session = sessionmaker(bind=engine)
-session = Session()
+DATA.finalize()
+data_engine = DATAEngine(DATA, engine_str='sqlite:///my_database4.db')
 
 # Example usage
-
 m1 = Message(content='!', source=UserSource(user_name='Fred'))
-session.merge(m1)
-session.commit()
-
+data_engine.merge(m1)
 
 conversation = Conversation(name='Conversation 1', description='First conversation')
 conversation.add_message(Message(content='Hello', source=UserSource(user_name='George')))
 conversation.add_message(Message(content='World', source=UserSource(user_name='Alice')))
 conversation.add_message(Message(content='!', source=EditSource(original=m1, new_message_source=UserSource(user_name='Bob'))))
 conversation.message_sequence.messages[2].source.new = conversation.message_sequence.messages[2]
-session.merge(conversation)
-session.commit()
+data_engine.merge(conversation)
 
 import json
 from json import JSONEncoder
@@ -108,8 +97,9 @@ class DateTimeEncoder(JSONEncoder):
             return obj.isoformat()
         return JSONEncoder.default(self, obj)
 	
-print(json.dumps(DATA.dump_as_json(engine, session), indent=4, cls=DateTimeEncoder))
+print(json.dumps(data_engine.to_json(), indent=4, cls=DateTimeEncoder))
 
 # Query
-queried_conversation = session.query(Conversation).filter_by(name="Conversation 1").first()
-print("Conversation:", queried_conversation.name)
+with data_engine.session() as session:
+	queried_conversation = session.query(Conversation).filter_by(name="Conversation 1").first()
+	print("Conversation:", queried_conversation.name)

@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-from ClassyFlaskDB.DATA import DATADecorator
+from ClassyFlaskDB.DATA import DATADecorator, DATAEngine
 from dataclasses import field
 from typing import List
 import unittest
@@ -23,37 +23,26 @@ class Bar:
 
 class DATA_Decorator2(unittest.TestCase):
 	def test_list_relationship(self):
-		# Create an in-memory SQLite database
-		engine = create_engine('sqlite:///:memory:')
-
-		# Finalize the mapping
-		DATA.finalize(engine, globals())
-
-		# Create a session
-		Session = sessionmaker(bind=engine)
-		session = Session()
-
+		data_engine = DATAEngine(DATA)
+		
 		foe1 = Foe(name="Dragon1", strength=100)
 		foe2 = Foe(name="Dragon2", strength=200)
 		foe3 = Foe(name="Dragon2", strength=200)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foes=[foe1, foe2, foe3])
 
-		# Insert into database
-		session.add(bar)
-		session.commit()
-
+		data_engine.merge(bar)
+		
 		# Query from database
-		queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
+		with data_engine.session() as session:
+			queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
 
-		# Validate
-		self.assertEqual(queried_bar.name, bar.name)
-		self.assertEqual(queried_bar.location, bar.location)
+			# Validate
+			self.assertEqual(queried_bar.name, bar.name)
+			self.assertEqual(queried_bar.location, bar.location)
 
-		for i in range(3):
-			self.assertEqual(queried_bar.foes[i].name, bar.foes[i].name)
-			self.assertEqual(queried_bar.foes[i].strength, bar.foes[i].strength)
-
-		session.close()
+			for i in range(3):
+				self.assertEqual(queried_bar.foes[i].name, bar.foes[i].name)
+				self.assertEqual(queried_bar.foes[i].strength, bar.foes[i].strength)
 
 if __name__ == '__main__':
 	unittest.main()

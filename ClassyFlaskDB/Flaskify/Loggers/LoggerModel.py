@@ -1,4 +1,4 @@
-from ClassyFlaskDB.DATA import DATADecorator, field, create_engine
+from ClassyFlaskDB.DATA import DATADecorator, field, DATAEngine
 from datetime import datetime
 from typing import List, Dict
 
@@ -21,5 +21,4 @@ class Entry:
     files: List[FileReference] = field(default_factory=list)
     json_data: Dict = None
 
-logger_model_engine = create_engine('sqlite:///server_log.db')
-LoggerDATA.finalize(logger_model_engine)
+logger_engine = DATAEngine(LoggerDATA, engine_str='sqlite:///server_log.db')
