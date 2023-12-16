@@ -182,7 +182,9 @@ class DATADecorator:
             session = Session()
 
             session = self.insert_json(json_data["obj"], session)
-            objs = deepcopy( session.query(cls).options(joinedload('*')).where(cls.get_primary_key()==json_data["primary_key"]).first() )
+            
+            pk_col = cls.__table__.c[cls.FieldsInfo.primary_key_name]
+            objs = deepcopy( session.query(cls).options(joinedload('*')).filter(pk_col==json_data["primary_key"]).first() )
             # session.expunge_all()
             session.close()
             engine.dispose()
