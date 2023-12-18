@@ -1,9 +1,4 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime
-from ClassyFlaskDB.DATA import DATADecorator, DATAEngine
-from dataclasses import field
-from typing import List
+from ClassyFlaskDB.DATA import *
 import unittest
 
 class DATA_Decorator7(unittest.TestCase):

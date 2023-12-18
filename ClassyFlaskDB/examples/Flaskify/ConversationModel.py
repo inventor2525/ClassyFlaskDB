@@ -1,5 +1,4 @@
-from sqlalchemy import create_engine
-from ClassyFlaskDB.DATA import DATADecorator, ID_Type, field
+from ClassyFlaskDB.DATA import *
 from datetime import datetime
 from typing import List
 import tzlocal

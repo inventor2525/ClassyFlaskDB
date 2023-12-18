@@ -1,10 +1,9 @@
-from ClassyFlaskDB.DATA import DATA, DATAEngine
+from ClassyFlaskDB.DATA import *
 
-from dataclasses import field
 from datetime import datetime
 from typing import List
 
-from ClassyFlaskDB.helpers.resolve_type import TypeResolver
+DATA = DATADecorator()
 
 @DATA
 class MessageSource:

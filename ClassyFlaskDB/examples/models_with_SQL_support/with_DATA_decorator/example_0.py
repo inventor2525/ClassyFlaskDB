@@ -1,8 +1,7 @@
-from ClassyFlaskDB.DATA import DATA, DATAEngine
-
-from dataclasses import dataclass, field
-
+from ClassyFlaskDB.DATA import *
 from typing import List
+
+DATA = DATADecorator()
 
 @DATA
 class Bar:
