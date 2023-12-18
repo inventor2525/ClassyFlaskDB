@@ -3,7 +3,7 @@ from ClassyFlaskDB.Flaskify import Flaskify
 Flaskify.make_client(base_url="http://localhost:8000")
 
 # import our services after the make_client call so they become client classes:
-from ClassyFlaskDB.helpers.examples.example_services import MyService, AnotherService, ConvService, Conversation, Message, ModelSource, UserSource
+from ClassyFlaskDB.helpers.examples.example_services import MyService, AnotherService, ConvService
 
 # Use the services as if they were local code:
 a_s = MyService.get_audio("hello.mp3")
@@ -18,6 +18,7 @@ print(AnotherService.upper_case_text("hello"))
 print(AnotherService.repeat_text("hello", 3))
 
 # Create a conversation to send to the server:
+from ClassyFlaskDB.helpers.examples.ConversationModel import Conversation, Message, ModelSource, UserSource
 c = Conversation("Conversation 1", "First conversation")
 print(c.message_sequence.hashid)
 c.add_message(Message("Hello", UserSource("George")))

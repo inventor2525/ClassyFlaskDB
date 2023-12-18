@@ -1,12 +1,14 @@
-from flask import Flask
-from ClassyFlaskDB.Flaskify import Flaskify
+from ClassyFlaskDB.Flaskify import *
 
+# Create the server:
 app = Flask(__name__)
 Flaskify.make_server(app)
 
+# Populate the server with our services (must be done after make_server call):
 from ClassyFlaskDB.helpers.examples.example_services import MyService, AnotherService, ConvService
 
+# Debug the routes that were created:
 Flaskify.debug_routes()
 
-if __name__ == '__main__':
-    app.run(port=8000)
+# Run the server:
+app.run(port=8000)
