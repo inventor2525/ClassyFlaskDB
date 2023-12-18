@@ -1,15 +1,12 @@
 from ClassyFlaskDB.Flaskify.Loggers.LoggerModel import *
 import os
-import json
 from datetime import datetime
-from sqlalchemy.orm import sessionmaker
 from werkzeug.datastructures import FileStorage
 from flask import request
 import mimetypes
 
 class Logger:
     def __init__(self, log_json=True, log_files=True, name="DefaultLogger", files_folder="server_log_files"):
-        self.session_factory = sessionmaker(bind=logger_model_engine)
         self.log_json = log_json
         self.log_files = log_files
 
@@ -17,7 +14,7 @@ class Logger:
         self.files_folder = files_folder
 
     def __call__(self, request: request, *args, **kwargs):
-        with self.session_factory() as session:
+        with logger_engine.session() as session:
             now = datetime.now()
             now_str = now.strftime("%Y-%m-%d_%H-%M-%S.%f")
 
