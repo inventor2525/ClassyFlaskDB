@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
-from ClassyFlaskDB.helpers.Decorators.method_decorator import MethodDecorator
+from ClassyFlaskDB.helpers.Decorators.MethodDecorator import MethodDecorator
 
 @MethodDecorator('__route__')
 @dataclass

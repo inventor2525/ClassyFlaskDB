@@ -53,8 +53,7 @@ from .ConversationModel import Conversation, Message, ModelSource, UserSource
 
 @Flaskify
 class ConvService:
-    @Route()
-    @staticmethod
+    @StaticRoute
     def Talk(conv:Conversation) -> Conversation:
         m = Message(content="Hello from DA "+conv.message_sequence.messages[-1].content, source=ModelSource(model_name="MyModel", model_parameters={"hello":"world"}, message_sequence=conv.message_sequence))
         conv.add_message(m)
