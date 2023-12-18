@@ -280,5 +280,3 @@ class DATADecorator(AnyParam):
         setattr(cls, "to_json", to_json)
         setattr(cls, "from_json", from_json)
         return cls
-
-DATA = DATADecorator()
