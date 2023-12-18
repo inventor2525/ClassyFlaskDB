@@ -3,6 +3,7 @@ from flask import Flask, Response, request, jsonify, send_file
 from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.Route import Route
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
+from ClassyFlaskDB.Decorators.AnyParam import SplitAnyParam
 from ClassyFlaskDB.Flaskify.Loggers.Logger import Logger
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from dataclasses import dataclass, field
@@ -14,7 +15,7 @@ def json_response(data):
 	return Response(response_data, mimetype='application/json')
 
 @dataclass
-class FlaskifyServerDecorator:
+class FlaskifyServerDecorator(SplitAnyParam):
 	'''
 	This creates a FlaskifyServer decorator that can be applied to a class with
 	Route decorated methods to create a FlaskView that mirrors the decorated class
@@ -104,34 +105,30 @@ class FlaskifyServerDecorator:
 				return json_response(result)
 		return view_method
 	
-	def __call__(self_decorator, route_prefix: str = None):
-		'''Creates a FlaskifyServer decorator that can be applied to a class with Route decorated methods.'''
+	def __pre_decorate__(self, origional, *args, **kwargs):
+		return origional
+	
+	def __post_decorate__(self, origional_obj, output_obj, route_prefix: str = None) -> None:
+		prefix = route_prefix
+		if prefix is None:
+			prefix = underscoreify_uppercase(origional_obj.__name__)
 
-		def decorator(original_cls):
-			prefix = route_prefix
-			if prefix is None:
-				prefix = underscoreify_uppercase(original_cls.__name__)
-
-			# Add methods to FlaskifiedView and register with Flask routes
-			for attr_name, method in original_cls.__dict__.items():
-				if callable(method) and hasattr(method, '__route__'):
-					route_info = getattr(method, '__route__')
-					
-					suffix = route_info.path
-					if suffix is None:
-						suffix = underscoreify_uppercase(attr_name)
-					else:
-						if suffix.startswith('/'):
-							suffix = suffix[1:]
-						if suffix.endswith('/'):
-							suffix = suffix[:-1]
-					route_path = f"/{prefix}/{suffix}".lower()
-					view_method = self_decorator.create_view_method(method, route_info)
-					view_method.__name__ = f"{route_path.replace('_','').replace('-','__')}_view"
-					
-					flask_route_decorator = self_decorator.app.route(route_path, methods=route_info.methods)
-					route = flask_route_decorator(view_method)
-
-			return original_cls
-
-		return decorator
+		# Add methods to FlaskifiedView and register with Flask routes
+		for attr_name, method in origional_obj.__dict__.items():
+			if callable(method) and hasattr(method, '__route__'):
+				route_info = getattr(method, '__route__')
+				
+				suffix = route_info.path
+				if suffix is None:
+					suffix = underscoreify_uppercase(attr_name)
+				else:
+					if suffix.startswith('/'):
+						suffix = suffix[1:]
+					if suffix.endswith('/'):
+						suffix = suffix[:-1]
+				route_path = f"/{prefix}/{suffix}".lower()
+				view_method = self.create_view_method(method, route_info)
+				view_method.__name__ = f"{route_path.replace('_','').replace('-','__')}_view"
+				
+				flask_route_decorator = self.app.route(route_path, methods=route_info.methods)
+				route = flask_route_decorator(view_method)

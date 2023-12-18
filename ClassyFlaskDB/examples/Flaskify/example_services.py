@@ -1,7 +1,7 @@
 from pydub import AudioSegment
 from ClassyFlaskDB.Flaskify import Route, StaticRoute, Flaskify
 
-@Flaskify()
+@Flaskify
 class MyService:
     @Route()
     @staticmethod
@@ -51,7 +51,7 @@ class AnotherService:
     
 from ClassyFlaskDB.examples.Flaskify.ConversationModel import Conversation, Message, ModelSource, UserSource
 
-@Flaskify()
+@Flaskify
 class ConvService:
     @Route()
     @staticmethod

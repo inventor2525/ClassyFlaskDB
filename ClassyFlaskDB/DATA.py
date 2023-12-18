@@ -19,7 +19,7 @@ from sqlalchemy.orm import class_mapper
 import sqlalchemy
 from datetime import datetime
 from enum import Enum
-
+from ClassyFlaskDB.Decorators.AnyParam import AnyParam
 from contextlib import contextmanager
 
 def convert_to_column_type(value, column_type):
@@ -115,7 +115,7 @@ class DATAEngine:
     def dispose(self):
         self.engine.dispose()
 
-class DATADecorator:
+class DATADecorator(AnyParam):
     def __init__(self, *args, **kwargs):
         # Initialize any state or pass any parameters required
         self.args = args
@@ -135,16 +135,7 @@ class DATADecorator:
         self.lazy["default"](self.mapper_registry)
         self._finalized = True
     
-    def __call__(self, *args, **kwargs):
-        # Check if the decorator is being used with or without parenthesis
-        if len(args) == 1 and callable(args[0]):
-            # Without parenthesis
-            return self.decorate_cls(args[0])
-        else:
-            # With parenthesis
-            return lambda cls: self.decorate_cls(cls, *args, **kwargs)
-    
-    def decorate_cls(self, cls:Type[Any], generated_id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Type[Any]:
+    def decorate(self, cls:Type[Any], generated_id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Type[Any]:
         lazy_decorators = []
         self.decorated_classes[cls.__name__] = cls
 

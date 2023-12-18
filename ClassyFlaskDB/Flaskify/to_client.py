@@ -3,13 +3,14 @@ from typing import Any, Dict, Type
 from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
+from ClassyFlaskDB.Decorators.AnyParam import SplitAnyParam
 from ClassyFlaskDB.Flaskify.Route import Route
 from dataclasses import dataclass, field
 from io import BytesIO
 import json
 
 @dataclass
-class FlaskifyClientDecorator:
+class FlaskifyClientDecorator(SplitAnyParam):
 	'''
 	This creates a FlaskifyClient decorator that can be applied to a class with
 	Route decorated methods to create a client capable of making HTTP requests
@@ -80,32 +81,27 @@ class FlaskifyClientDecorator:
 
 		return request_method
 
-	def __call__(self_decorator, route_prefix: str = None):
-		'''
-		Creates a FlaskifyClient decorator that can be applied to a class with Route decorated methods.
-		'''
-		def decorator(original_cls):
-			class ClientifiedClass:
-				'''
-				This class will replace the original class as a client for making HTTP requests.
-				'''
-				def __init__(self_client, *args, **kwargs):
-					self_client.original_instance = original_cls(*args, **kwargs)
-
-			route_base :str
-			if route_prefix:
-				route_base = f"{self_decorator.base_url}/{route_prefix}"
-			else:
-				class_name = underscoreify_uppercase( original_cls.__name__ )
-				route_base = f"{self_decorator.base_url}/{class_name}"
-			
-			# Override methods in the original class with HTTP request methods
-			for attr_name, method in original_cls.__dict__.items():
-				if callable(method) and hasattr(method, '__route__'):
-					route_info = getattr(method, '__route__')
-					request_method = self_decorator.create_request_method(method, route_info, route_base)
-					setattr(ClientifiedClass, attr_name, request_method)
-
-			return ClientifiedClass
-
-		return decorator
+	def __pre_decorate__(self, origional, *args, **kwargs):
+		class ClientifiedClass:
+			'''
+			This class will replace the original class as a client for making HTTP requests.
+			'''
+			def __init__(self_client, *args, **kwargs):
+				self_client.original_instance = origional(*args, **kwargs)
+		
+		return ClientifiedClass
+	
+	def __post_decorate__(self, origional_obj, output_obj, route_prefix: str = None) -> None:
+		route_base :str
+		if route_prefix:
+			route_base = f"{self.base_url}/{route_prefix}"
+		else:
+			class_name = underscoreify_uppercase( origional_obj.__name__ )
+			route_base = f"{self.base_url}/{class_name}"
+		
+		# Override methods in the original class with HTTP request methods
+		for attr_name, method in origional_obj.__dict__.items():
+			if callable(method) and hasattr(method, '__route__'):
+				route_info = getattr(method, '__route__')
+				request_method = self.create_request_method(method, route_info, route_base)
+				setattr(output_obj, attr_name, request_method)
