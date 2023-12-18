@@ -1,7 +1,7 @@
 from ClassyFlaskDB.Flaskify.to_client import FlaskifyClientDecorator
 from ClassyFlaskDB.Flaskify.to_server import FlaskifyServerDecorator
 from ClassyFlaskDB.Flaskify.serialization import FlaskifyJSONEncoder, TypeSerializationResolver
-from ClassyFlaskDB.Decorators.AnyParam import AnyParam
+from ClassyFlaskDB.helpers.Decorators.AnyParam import AnyParam
 from ClassyFlaskDB.Flaskify.Route import Route
 from typing import List, Tuple, Any, Type
 

@@ -3,7 +3,7 @@ from flask import Flask, Response, request, jsonify, send_file
 from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.Route import Route
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
-from ClassyFlaskDB.Decorators.AnyParam import SplitAnyParam
+from ClassyFlaskDB.helpers.Decorators.AnyParam import SplitAnyParam
 from ClassyFlaskDB.Flaskify.Loggers.Logger import Logger
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from dataclasses import dataclass, field

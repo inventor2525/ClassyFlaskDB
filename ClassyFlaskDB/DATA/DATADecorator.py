@@ -1,12 +1,12 @@
 from sqlalchemy.orm import registry, joinedload, class_mapper
 from sqlalchemy.orm.collections import InstrumentedList
 
-from ClassyFlaskDB.Decorators.LazyDecorator import LazyDecorator
-from ClassyFlaskDB.Decorators.capture_field_info import capture_field_info
+from ClassyFlaskDB.helpers.Decorators.LazyDecorator import LazyDecorator
+from ClassyFlaskDB.helpers.Decorators.capture_field_info import capture_field_info
 from ClassyFlaskDB.helpers.resolve_type import TypeResolver
-from ClassyFlaskDB.Decorators.AnyParam import AnyParam
+from ClassyFlaskDB.helpers.Decorators.AnyParam import AnyParam
 from ClassyFlaskDB.DATA.DATAEngine import DATAEngine
-from ClassyFlaskDB.Decorators.to_sql import to_sql
+from ClassyFlaskDB.helpers.Decorators.to_sql import to_sql
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
 
 from dataclasses import dataclass

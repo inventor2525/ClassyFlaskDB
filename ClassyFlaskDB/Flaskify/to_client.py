@@ -3,7 +3,7 @@ from typing import Any, Dict, Type
 from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
-from ClassyFlaskDB.Decorators.AnyParam import SplitAnyParam
+from ClassyFlaskDB.helpers.Decorators.AnyParam import SplitAnyParam
 from ClassyFlaskDB.Flaskify.Route import Route
 from dataclasses import dataclass, field
 from io import BytesIO
