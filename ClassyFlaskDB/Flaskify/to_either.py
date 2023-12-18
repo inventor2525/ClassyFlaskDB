@@ -3,7 +3,7 @@ from ClassyFlaskDB.Flaskify.to_server import FlaskifyServerDecorator
 from ClassyFlaskDB.Flaskify.serialization import FlaskifyJSONEncoder, TypeSerializationResolver
 from ClassyFlaskDB.helpers.Decorators.AnyParam import AnyParam
 from ClassyFlaskDB.Flaskify.Route import Route
-from typing import List, Tuple, Any, Type
+from typing import Iterable, List, Tuple, Any, Type
 
 class FlaskifyDecorator(AnyParam):
     '''
@@ -52,11 +52,15 @@ class FlaskifyDecorator(AnyParam):
         assert self.decorator is not None, "Flaskify must be initialized with make_client or make_server before it can be used as a decorator. Todo this you must make sure that either is called before any decorated models are first imported or defined. This is because the decorator needs to be able to access the app or base_url for server or client respectively. If you prefer you can also use the FlaskifyClientDecorator or FlaskifyServerDecorator directly."
         return self.decorator(cls, route_prefix=route_prefix)
     
-    def debug_routes(self):
+    def debug_routes(self) -> Iterable[str]:
         if self.app is not None:
             with self.app.app_context():
-                print("Registered Routes:")
                 for rule in self.app.url_map.iter_rules():
-                    print(f"{rule.endpoint}: {rule.rule}")
+                    yield f"{rule.endpoint}: {rule.rule}"
+    
+    def print_debug_routes(self) -> None:
+        print("Registered Routes:")
+        for route in self.debug_routes():
+            print(route)
 
 Flaskify = FlaskifyDecorator()

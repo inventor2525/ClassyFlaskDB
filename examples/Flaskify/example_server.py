@@ -8,7 +8,10 @@ Flaskify.make_server(app)
 from ClassyFlaskDB.helpers.examples.example_services import MyService, AnotherService, ConvService
 
 # Debug the routes that were created:
-Flaskify.debug_routes()
+Flaskify.print_debug_routes()
 
 # Run the server:
-app.run(port=8000)
+try:
+    app.run(port=8000)
+except :
+    pass
