@@ -4,7 +4,7 @@ from ClassyFlaskDB.Flaskify import Flaskify
 app = Flask(__name__)
 Flaskify.make_server(app)
 
-from ClassyFlaskDB.examples.Flaskify.example_services import MyService, AnotherService, ConvService
+from ClassyFlaskDB.helpers.examples.example_services import MyService, AnotherService, ConvService
 
 Flaskify.debug_routes()
 
