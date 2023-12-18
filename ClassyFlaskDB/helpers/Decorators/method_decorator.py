@@ -1,40 +1,44 @@
-from copy import deepcopy
+from ClassyFlaskDB.helpers.Decorators.AnyParam import AnyParam
+from typing import Any, Callable, Type
 
-def method_decorator(model_attr_name):
-	'''
-	Decorator that creates a class that can be used as a decorator for
-	methods that will add a instance of the class to the method as an attribute.
-	'''
-	def decorator(cls):
-		original_call = cls.__call__ if '__call__' in cls.__dict__ else None
+class MethodDecorator(AnyParam):
+	def decorate(self, cls:Type[Any], model_attr_name:str) -> Type[Any]:
+		class InternalDecorator(AnyParam):
+			def decorate(self, method:Callable, *args, **kwargs) -> Callable:
+				instance = cls(*args, **kwargs)
+				setattr(method, model_attr_name, instance)
+				return method
+		return InternalDecorator
 
-		def __call__(self, func):
-			if original_call:
-				return original_call(self, func)
-			
-			setattr(func, model_attr_name, self)
-			return func
+MethodDecorator = MethodDecorator()
 
-		setattr(cls, '__call__', __call__)
-		return cls
-	return decorator
-
-if __name__ == '__main__':
-	from dataclasses import dataclass
-
-	@dataclass
-	@method_decorator('__route__')
+if __name__ == "__main__":
+	# Example usage:
+	
+	# Apply MethodDecorator to Route class
+	@MethodDecorator("__route__")
 	class Route:
-		name: str
-
+		def __init__(self, name=''):
+			self.name = name
+	Route = Route()
+	
 	class Faux:
 		@Route("ExampleModel")
 		def bar(self):
 			if hasattr(self.bar, '__route__'):
 				model = self.bar.__route__
 				print(f"Using model: {model.name}")
-			return "Method logic here"
-	
-	# Testing the decorated method
+			return "bar Method logic here"
+
+		@Route
+		def bla(self):
+			if hasattr(self.bla, '__route__'):
+				model = self.bla.__route__
+				print(f"Using model: {model.name}")
+			return "bla Method logic here"
+
+	# Testing the decorated methods
 	faux_instance = Faux()
-	print(faux_instance.bar())  # This will print the model info
+	print(faux_instance.bar())  # Should print model info and "Method logic here"
+	print("")
+	print(faux_instance.bla())  # Should print model info and "Method logic here"

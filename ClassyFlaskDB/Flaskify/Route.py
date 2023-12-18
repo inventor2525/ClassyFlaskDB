@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
-from ClassyFlaskDB.helpers.Decorators.method_decorator import method_decorator
+from ClassyFlaskDB.helpers.Decorators.method_decorator import MethodDecorator
 
+@MethodDecorator('__route__')
 @dataclass
-@method_decorator('__route__')
-class Route:
+class RouteDecorator:
     path: str = None
     methods: Optional[List[str]] = None
     # endpoint: Optional[str] = None
@@ -26,7 +26,10 @@ class Route:
         if self.methods is None:
             self.methods = ['POST']  # Default HTTP method
 
-class StaticRoute(Route):
-    def __call__(self, func):
+class StaticRouteDecorator(RouteDecorator):
+    def decorate(self, func, *args, **kwargs):
         static_func = staticmethod(func)
-        return super().__call__(static_func)
+        return super().decorate(static_func, *args, **kwargs)
+
+Route = RouteDecorator()
+StaticRoute = StaticRouteDecorator()

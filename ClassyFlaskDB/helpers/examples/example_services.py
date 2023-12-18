@@ -3,7 +3,7 @@ from ClassyFlaskDB.Flaskify import Route, StaticRoute, Flaskify
 
 @Flaskify
 class MyService:
-    @Route()
+    @Route
     @staticmethod
     def get_audio(path: str) -> AudioSegment:
         return AudioSegment.from_file(path, format="mp3")
@@ -14,7 +14,7 @@ class MyService:
         # Dummy implementation
         return f"Processed text: {text} and audio length: {len(audio)} ms"
 
-    @StaticRoute()
+    @StaticRoute
     def reverse_text(text: str) -> str:
         return text[::-1]
 
@@ -29,7 +29,7 @@ class MyService:
 
 @Flaskify("another")
 class AnotherService:
-    @Route()
+    @Route
     @staticmethod
     def add_numbers(num1: int, num2: int) -> int:
         return num1 + num2
@@ -39,7 +39,7 @@ class AnotherService:
     def multiply_numbers(num1: int, num2: int) -> int:
         return num1 * num2
 
-    @Route()
+    @Route
     @staticmethod
     def upper_case_text(text: str) -> str:
         return text.upper()
