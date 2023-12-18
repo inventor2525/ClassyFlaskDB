@@ -11,7 +11,4 @@ from ClassyFlaskDB.helpers.examples.example_services import MyService, AnotherSe
 Flaskify.print_debug_routes()
 
 # Run the server:
-try:
-    app.run(port=8000)
-except :
-    pass
+app.run(port=8000)
