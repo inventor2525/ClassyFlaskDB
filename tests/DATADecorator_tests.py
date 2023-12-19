@@ -189,7 +189,7 @@ class DATADecorator_tests(unittest.TestCase):
 
 			self.assertEqual(queried_bar.foe.bar.name, bar.name)
 			self.assertEqual(queried_bar.foe.bar.location, bar.location)
-			self.assertEqual(queried_bar.foe.bar.uuid, bar.uuid)
+			self.assertEqual(queried_bar.foe.bar.auto_id, bar.auto_id)
 	
 	def test_polymorphic_relationship(self):
 		DATA = DATADecorator()
@@ -219,7 +219,7 @@ class DATADecorator_tests(unittest.TestCase):
 		data_engine.merge(bar)
 
 		# merge 2 times again to test for a polymorphic relationship bug that was found that would
-		# cause a Unique key error for uuid of a held child class (foe1 in this case)
+		# cause a Unique key error for auto_id of a held child class (foe1 in this case)
 		foe1 = Foe1(name="Dragon", strength=100, hit_points=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe1)
 
@@ -237,7 +237,7 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_bar.name, bar.name)
 			self.assertEqual(queried_bar.location, bar.location)
 
-			# self.assertEqual(queried_bar.foe.uuid, foe1.uuid)
+			# self.assertEqual(queried_bar.foe.auto_id, foe1.auto_id)
 			self.assertEqual(queried_bar.foe.name, foe1.name)
 			self.assertEqual(queried_bar.foe.strength, foe1.strength)
 			print(json.dumps(data_engine.to_json(), indent=4, cls=FlaskifyJSONEncoder))

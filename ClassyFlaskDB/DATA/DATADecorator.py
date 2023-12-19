@@ -55,9 +55,9 @@ class DATADecorator(AnyParam):
             
             if generated_id_type == ID_Type.UUID:
                 def new_id(self):
-                    self.uuid = str(uuid.uuid4())
+                    self.auto_id = str(uuid.uuid4())
                 setattr(cls, "new_id", new_id)
-                add_pk("uuid", str)
+                add_pk("auto_id", str)
                 
             elif generated_id_type == ID_Type.HASHID:
                 import hashlib
@@ -102,9 +102,9 @@ class DATADecorator(AnyParam):
                 
                 def new_id(self) -> str:
                     fields = [cls.__field_getters__[field_name](self,field_name) for field_name in hashed_fields]
-                    self.hashid = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
+                    self.auto_id = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
                 setattr(cls, "new_id", new_id)
-                add_pk("hashid", str)
+                add_pk("auto_id", str)
             
             init = cls.__init__
             def __init__(self, *args, **kwargs):
