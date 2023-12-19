@@ -137,7 +137,8 @@ def to_sql():
 			create_column = False
 		def create_col(field_info:FieldInfo, col_type:type):
 			if not cls_is_base and field_info.is_primary_key:
-				add_column(field_info, Column(field_info.field_name, col_type, ForeignKey(f"{type_table_name(cls_parent_type)}.{field_info.field_name}"), primary_key=field_info.is_primary_key))
+				parent_primary_key_name = cls_parent_type.FieldsInfo.primary_key_name
+				add_column(field_info, Column(field_info.field_name, col_type, ForeignKey(f"{type_table_name(cls_parent_type)}.{parent_primary_key_name}"), primary_key=field_info.is_primary_key))
 			else:
 				add_column(field_info, Column(field_info.field_name, col_type, primary_key=field_info.is_primary_key))
 
