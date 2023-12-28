@@ -20,13 +20,13 @@ print(AnotherService.repeat_text("hello", 3))
 # Create a conversation to send to the server:
 from ClassyFlaskDB.helpers.examples.ConversationModel import Conversation, Message, ModelSource, UserSource
 c = Conversation("Conversation 1", "First conversation")
-print(c.message_sequence.hashid)
+print(c.message_sequence.get_primary_key())
 c.add_message(Message("Hello", UserSource("George")))
-print(c.message_sequence.hashid)
+print(c.message_sequence.get_primary_key())
 c.add_message(Message("__World__", UserSource("Alice")))
-print(c.message_sequence.hashid)
+print(c.message_sequence.get_primary_key())
 c.message_sequence.new_id()
-print(c.message_sequence.hashid)
+print(c.message_sequence.get_primary_key())
 
 # Debug it:
 import json
