@@ -8,6 +8,8 @@ from datetime import datetime
 
 def convert_to_column_type(value, column_type):
     if isinstance(column_type, DateTime):
+        if isinstance(value, datetime):
+            return value
         try:
             return datetime.strptime(value, "%Y-%m-%d %H:%M:%S.%f %z")
         except ValueError:
