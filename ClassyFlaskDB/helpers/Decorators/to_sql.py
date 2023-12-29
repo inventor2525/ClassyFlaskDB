@@ -7,6 +7,8 @@ from sqlalchemy.sql import expression
 from sqlalchemy import text
 
 from ClassyFlaskDB.helpers import *
+from dateutil import tz
+import pytz
 
 type_map = {
 	bool: Boolean,
@@ -15,7 +17,7 @@ type_map = {
 	str: Text,
 	dict: JSON,
 	
-	datetime: DateTime
+	# datetime: DateTime,
 }
 def type_table_name(cls):
 	return f"{cls.__name__}_Table"
@@ -88,7 +90,42 @@ class OneToMany_List(GetterSetter):
 				# secondaryjoin=self.fk_name_field == self.mapping_table.c[self.fk_name_field]
 			)
 		}
+def add_dynamic_datetime_property(cls, field_name):
+	"""Adds dynamic properties to handle datetime with timezone."""
+	def getter(self):
+		datetime_val = getattr(self, f"{field_name}__DateTimeObj")
+		timezone_str = getattr(self, f"{field_name}__TimeZone")
+		if datetime_val and timezone_str:
+			return datetime_val.replace(tzinfo=pytz.timezone(timezone_str))
+		return datetime_val
 
+	def setter(self, value):
+		if value:
+			setattr(self, f"{field_name}__DateTimeObj", value.replace(tzinfo=None))
+			if value.tzinfo:
+				# Store IANA timezone identifier if available
+				timezone = getattr(value.tzinfo, 'zone', None)
+				if timezone is None and hasattr(value.tzinfo, 'tzname'):
+					timezone = value.tzinfo.tzname(value)
+				setattr(self, f"{field_name}__TimeZone", timezone)
+			else:
+				setattr(self, f"{field_name}__TimeZone", None)
+		else:
+			setattr(self, f"{field_name}__DateTimeObj", None)
+			setattr(self, f"{field_name}__TimeZone", None)
+
+	setattr(cls, f"{field_name}__DateTimeObj", None)
+	setattr(cls, f"{field_name}__TimeZone", None)
+	setattr(cls, field_name, property(getter, setter))
+	
+class DateTimeGetterSetter(GetterSetter):
+	def __init__(self, field_info:FieldInfo):
+		super().__init__(field_info)
+
+		self.datetime_column = Column(f"{self.field_info.field_name}__DateTimeObj", DateTime)
+		self.timezone_column = Column(f"{self.field_info.field_name}__TimeZone", String, nullable=True)
+		self.columns = [self.datetime_column, self.timezone_column]
+		
 def to_sql():
 	'''
 	Creates an SQLAlchemy schema class equivalent of the decorated class.
@@ -165,6 +202,9 @@ def to_sql():
 				#figure out if field_type which might be like this "list[__main__.Bar]" is a list:
 				elif hasattr(field_type, "__origin__") and field_type.__origin__ in [list, tuple, set]:
 					getter_setters.append(OneToMany_List(fi, mapper_registry))
+				elif field_type is datetime:
+					getter_setters.append(DateTimeGetterSetter(fi))
+					add_dynamic_datetime_property(cls, fi.field_name)
 				else:
 					origin_type = get_origin(field_type)
 					if origin_type:
