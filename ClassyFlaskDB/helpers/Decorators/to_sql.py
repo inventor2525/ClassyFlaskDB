@@ -48,29 +48,16 @@ class OneToOneReference(GetterSetter):
 
 		self.columns = [fk_column]
 
-		# Check for self-referential relationship
-		if field_type == field_info.parent_type:
-			# Adjust for self-referential relationship
-			self.relationships = {
-				self.field_info.field_name: relationship(
-					field_type,
-					uselist=False,
-					foreign_keys=[fk_column],
-					post_update=True,
-					primaryjoin=lambda: fk_column == getattr(field_type, field_primary_key_name),
-					remote_side=lambda: getattr(field_type, field_primary_key_name)
-				)
-			}
-		else:
-			# Non self-referential relationship
-			self.relationships = {
-				self.field_info.field_name: relationship(
-					field_type,
-					uselist=False,
-					foreign_keys=[fk_column],
-					post_update=True
-				)
-			}
+		self.relationships = {
+			self.field_info.field_name: relationship(
+				field_type,
+				uselist=False,
+				foreign_keys=[fk_column],
+				post_update=True,
+				primaryjoin=lambda: fk_column == getattr(field_type, field_primary_key_name),
+				remote_side=lambda: getattr(field_type, field_primary_key_name)
+			)
+		}
 class OneToMany_List(GetterSetter):
 	def __init__(self, field_info:FieldInfo, mapper_registry:registry):
 		super().__init__(field_info)
