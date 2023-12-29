@@ -34,9 +34,8 @@ class SimpleOneToOne(GetterSetter):
 
 		column.name = self.field_info.field_name
 		self.columns = [column]
-
 class OneToOneReference(GetterSetter):
-	def __init__(self, field_info:FieldInfo):
+	def __init__(self, field_info: FieldInfo):
 		super().__init__(field_info)
 
 		field_type = self.field_info.field_type
@@ -49,10 +48,29 @@ class OneToOneReference(GetterSetter):
 
 		self.columns = [fk_column]
 
-		self.relationships = {
-			self.field_info.field_name : relationship(field_type, uselist=False, foreign_keys=[fk_column], post_update=True)
-		}
-
+		# Check for self-referential relationship
+		if field_type == field_info.parent_type:
+			# Adjust for self-referential relationship
+			self.relationships = {
+				self.field_info.field_name: relationship(
+					field_type,
+					uselist=False,
+					foreign_keys=[fk_column],
+					post_update=True,
+					primaryjoin=lambda: fk_column == getattr(field_type, field_primary_key_name),
+					remote_side=lambda: getattr(field_type, field_primary_key_name)
+				)
+			}
+		else:
+			# Non self-referential relationship
+			self.relationships = {
+				self.field_info.field_name: relationship(
+					field_type,
+					uselist=False,
+					foreign_keys=[fk_column],
+					post_update=True
+				)
+			}
 class OneToMany_List(GetterSetter):
 	def __init__(self, field_info:FieldInfo, mapper_registry:registry):
 		super().__init__(field_info)
@@ -216,6 +234,7 @@ def to_sql():
 		for gs in getter_setters:
 			columns.extend(gs.columns)
 			for relationship_name, relationship in gs.relationships.items():
+				# print(f"Setting up relationship for {cls.__name__}: {relationship_name} -> {relationship}")
 				relationships[relationship_name] = relationship
 		
 		if cls_is_base:
