@@ -214,7 +214,9 @@ def to_sql():
 					origin_type = get_origin(field_type)
 					if origin_type:
 						field_type = origin_type
-					create_col(fi, type_map[field_type])
+					mapped_type = type_map.get(field_type, None)
+					if mapped_type:
+						create_col(fi, mapped_type)
 
 		columns = []
 		relationships = {}
