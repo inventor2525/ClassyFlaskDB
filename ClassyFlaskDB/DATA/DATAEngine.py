@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import Any
 from contextlib import contextmanager
 from datetime import datetime
+#import logging
 
 def convert_to_column_type(value, column_type):
     if isinstance(column_type, DateTime):
@@ -29,6 +30,9 @@ class DATAEngine:
         
         self.data_decorator.mapper_registry.metadata.create_all(self.engine)
         self.session_maker = sessionmaker(bind=self.engine)
+        
+        # logging.basicConfig()
+        # logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
     
     def add(self, obj:Any):
         obj = deepcopy(obj)
