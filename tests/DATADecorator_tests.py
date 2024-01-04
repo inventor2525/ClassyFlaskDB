@@ -242,6 +242,111 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_bar.foe.strength, foe1.strength)
 			print(json.dumps(data_engine.to_json(), indent=4, cls=FlaskifyJSONEncoder))
 			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
+	
+	def test_to_json(self):
+		DATA = DATADecorator()
+
+		# Define the data classes
+		@DATA
+		class Foe:
+			name: str
+			strength: int
+
+		@DATA
+		class Bar:
+			name: str
+			location: str
+			foe: Foe = None
+		
+		@DATA
+		class ChainLink:
+			name: str
+			next_link: "ChainLink" = None
+			
+		@DATA
+		class Holder:
+			bar: Bar
+			chain_link: ChainLink
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///my_database_test.db')
+		
+		foe = Foe(name="Dragon", strength=100)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
+		
+		chain_link1 = ChainLink(name="Link 1")
+		chain_link2 = ChainLink(name="Link 2")
+		chain_link3 = ChainLink(name="Link 3")
+		chain_link1.next_link = chain_link2
+		chain_link2.next_link = chain_link3
+		
+		holder = Holder(bar=bar, chain_link=chain_link1)
+		data_engine.merge(holder)
+		
+		def print_holder(holder, step_name):
+			print(step_name)
+			print(holder.bar.name)
+			print(holder.chain_link.name)
+			print(holder.chain_link.next_link.name)
+			print(holder.chain_link.next_link.next_link.name)
+			print(holder.chain_link.next_link.next_link.next_link)
+		print_holder(holder, "Original")
+		holder_json = holder.to_json()
+		print_holder(holder, "After to_json")
+		
+		print_DATA_json(holder_json)
+		
+		holder2 = Holder.from_json(holder_json)
+		print_holder(holder2, "loaded from_json")
+		
+		self.assertEqual(holder2.bar.name, holder.bar.name)
+		self.assertEqual(holder2.bar.location, holder.bar.location)
+		self.assertEqual(holder2.bar.foe.name, holder.bar.foe.name)
+		self.assertEqual(holder2.bar.foe.strength, holder.bar.foe.strength)
+		
+		self.assertEqual(holder2.chain_link.name, holder.chain_link.name)
+		self.assertEqual(holder2.chain_link.next_link.name, holder.chain_link.next_link.name)
+		self.assertEqual(holder2.chain_link.next_link.next_link.name, holder.chain_link.next_link.next_link.name)
+		self.assertEqual(holder2.chain_link.next_link.next_link.next_link, None)
+		
+	def test_to_json_small(self):
+		DATA = DATADecorator()
+
+		@DATA
+		class ChainLink:
+			name: str
+			next_link: 'ChainLink' = None
+
+		@DATA
+		class Holder:
+			chain_link: ChainLink
+
+		data_engine = DATAEngine(DATA)
+		
+		chain_link1 = ChainLink(name='Link 1')
+		chain_link2 = ChainLink(name='Link 2')
+		chain_link3 = ChainLink(name='Link 3')
+		chain_link1.next_link = chain_link2
+		chain_link2.next_link = chain_link3
+		holder = Holder(chain_link=chain_link1)
+
+		holder_json = holder.to_json()
+		print_DATA_json(holder_json)
+		
+		self.assertEqual(holder_json['type'], 'Holder')
+		self.assertEqual(holder_json['primary_key'], holder.auto_id)
+		self.assertEqual(len(holder_json['obj']['Holder_Table']), 1)
+		self.assertEqual(len(holder_json['obj']['ChainLink_Table']), 3)
+		self.assertEqual(holder_json['obj']['Holder_Table'][0]['auto_id'], holder.auto_id)
+		self.assertEqual(holder_json['obj']['Holder_Table'][0]['chain_link_fk'], chain_link1.auto_id)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['auto_id'], chain_link1.auto_id)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['name'], chain_link1.name)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['next_link_fk'], chain_link2.auto_id)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['auto_id'], chain_link2.auto_id)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['name'], chain_link2.name)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['next_link_fk'], chain_link3.auto_id)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['auto_id'], chain_link3.auto_id)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['name'], chain_link3.name)
+		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['next_link_fk'], None)
+		
 			
 if __name__ == '__main__':
 	unittest.main()
