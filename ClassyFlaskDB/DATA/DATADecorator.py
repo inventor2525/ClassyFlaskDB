@@ -142,7 +142,10 @@ class DATADecorator(AnyParam):
                     # elif isinstance(value, dict):
                     #     setattr(cls_copy, field_name, deepcopy(value, memo))
                     else:
-                        setattr(cls_copy, field_name, deepcopy(value, memo))
+                        try:
+                            setattr(cls_copy, field_name, deepcopy(value, memo))
+                        except:
+                            setattr(cls_copy, field_name, None)
             
             return cls_copy
 
