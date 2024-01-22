@@ -35,6 +35,9 @@ class LazyDecorator:
                     
                     cls = decorator(cls, *filtered_args, **filtered_kwargs)
         return apply_group
+    
+    def clear_group(self, group_key: Any) -> None:
+        self.targets.pop(group_key, None)
 
 if __name__ == '__main__':
     # Decorators

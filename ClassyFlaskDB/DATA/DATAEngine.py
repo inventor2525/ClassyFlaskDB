@@ -99,4 +99,5 @@ class DATAEngine:
             session.commit()
     
     def dispose(self):
+        self.session_maker.close_all()
         self.engine.dispose()

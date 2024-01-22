@@ -22,17 +22,18 @@ class DATADecorator(AnyParam):
         self.kwargs = kwargs
         self.lazy = LazyDecorator()
         self.decorated_classes = {}
+        self.mapper_registry = registry()
+        TypeResolver.append_globals(globals())
         
         self._finalized = False
     
-    def finalize(self, globals_return:Dict[str, Any]=globals()) -> None:
-        if self._finalized:
-            return
-            
-        TypeResolver.append_globals(globals_return)
+    def finalize(self, globals_return:Dict[str, Any]=None) -> None:
+        if globals_return:
+            TypeResolver.append_globals(globals_return)
         TypeResolver.append_globals(self.decorated_classes)
-        self.mapper_registry = registry()
+        
         self.lazy["default"](self.mapper_registry)
+        self.lazy.clear_group("default")
         self._finalized = True
     
     def decorate(self, cls:Type[Any], generated_id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Type[Any]:

@@ -347,6 +347,118 @@ class DATADecorator_tests(unittest.TestCase):
 		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['name'], chain_link3.name)
 		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['next_link_fk'], None)
 		
+	def test_adding_a_table(self):
+		#Remove the test database if it exists
+		import os
+		if os.path.exists("test_adding_a_table.db"):
+			os.remove("test_adding_a_table.db")
 			
+		DATA = DATADecorator()
+
+		@DATA
+		class ChainLink:
+			name: str
+			next_link: 'ChainLink' = None
+
+		@DATA
+		class Holder:
+			chain_link: ChainLink
+
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_table.db')
+		
+		chain_link1 = ChainLink(name='Link 1')
+		chain_link2 = ChainLink(name='Link 2')
+		chain_link3 = ChainLink(name='Link 3')
+		chain_link1.next_link = chain_link2
+		chain_link2.next_link = chain_link3
+		holder = Holder(chain_link=chain_link1)
+		
+		data_engine.merge(holder)
+		j1 = data_engine.to_json()
+		data_engine.dispose()
+		
+		@DATA
+		class ANewTable:
+			name: str
+			holder: Holder = None
+		
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_table.db')
+		
+		thing = ANewTable(name='thing', holder=holder)
+		data_engine.merge(thing)
+		j2 = data_engine.to_json()
+		
+		self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
+		self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
+		
+		self.assertEqual("ANewTable_Table" in j2, True)
+		self.assertEqual("ANewTable_Table" in j1, False)
+		print_DATA_json(j1)
+		print_DATA_json(j2)
+		
+		with data_engine.session() as session:
+			queried_thing = session.query(ANewTable).filter_by(name='thing').first()
+			self.assertEqual(queried_thing.auto_id, thing.auto_id)
+			self.assertEqual(queried_thing.name, thing.name)
+			self.assertEqual(queried_thing.holder.auto_id, holder.auto_id)
+			self.assertEqual(queried_thing.holder.chain_link.auto_id, chain_link1.auto_id)
+			self.assertEqual(queried_thing.holder.chain_link.name, chain_link1.name)
+	
+	def test_adding_a_column(self):
+		#Remove the test database if it exists
+		import os
+		if os.path.exists("test_adding_a_column.db"):
+			os.remove("test_adding_a_column.db")
+			
+		DATA = DATADecorator()
+
+		@DATA
+		class ChainLink:
+			name: str
+			next_link: 'ChainLink' = None
+
+		@DATA
+		class Holder:
+			chain_link: ChainLink
+
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db')
+		
+		chain_link1 = ChainLink(name='Link 1')
+		chain_link2 = ChainLink(name='Link 2')
+		chain_link3 = ChainLink(name='Link 3')
+		chain_link1.next_link = chain_link2
+		chain_link2.next_link = chain_link3
+		holder = Holder(chain_link=chain_link1)
+		
+		data_engine.merge(holder)
+		j1 = data_engine.to_json()
+		data_engine.dispose()
+		
+		DATA = DATADecorator()
+
+		@DATA
+		class ChainLink:
+			name: str
+			next_link: 'ChainLink' = None
+
+		@DATA
+		class Holder:
+			chain_link: ChainLink
+			a_new_column: str
+		
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db')
+		
+		j2 = data_engine.to_json()
+		
+		self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
+		# self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
+		
+		print_DATA_json(j1)
+		print_DATA_json(j2)
+		
+		with data_engine.session() as session:
+			queried_holder = session.query(Holder).first()
+			self.assertEqual(holder.auto_id, queried_holder.auto_id)
+		
 if __name__ == '__main__':
 	unittest.main()
