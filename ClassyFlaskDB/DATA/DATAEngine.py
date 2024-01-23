@@ -58,10 +58,12 @@ class DATAEngine:
                     column = new_table.columns[column_name]
                     column_type = column.type.compile(dialect=self.engine.dialect)
                     fk_constraints = ", ".join(
-                        f"FOREIGN KEY ({column.name}) REFERENCES {fk._get_target_fullname()}"
+                        f"FOREIGN KEY ({column.name}) REFERENCES {fk.column.table.name}({fk.column.name})"
                         for fk in column.foreign_keys
                     ) if column.foreign_keys else ""
-                    alter_table_cmd = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type} {fk_constraints}"
+                    if fk_constraints:
+                        raise Exception(f"Added foreign key constraints are not yet supported. Please backup the database clear it so that the new schema can be created, then restore the data.")
+                    alter_table_cmd = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"# {fk_constraints}"
                     with self.engine.connect() as conn:
                         conn.execute(text(alter_table_cmd))
 
