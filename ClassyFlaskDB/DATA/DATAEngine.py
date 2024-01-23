@@ -1,6 +1,7 @@
-from sqlalchemy import Engine, create_engine, MetaData, DateTime
+from sqlalchemy import Engine, create_engine, MetaData, DateTime, text
 from sqlalchemy.orm import sessionmaker
 from copy import deepcopy
+import shutil
 
 from typing import Any
 from contextlib import contextmanager
@@ -20,7 +21,7 @@ def convert_to_column_type(value, column_type):
     return value
 
 class DATAEngine:
-    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:"):
+    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:", should_backup:bool=True):
         self.data_decorator = data_decorator
         self.data_decorator.finalize()
         
@@ -29,34 +30,7 @@ class DATAEngine:
         else:
             self.engine = engine
         
-        self.session_maker = sessionmaker(bind=self.engine)
-        
-        
-        # Check if any tables exist:
-        # if self.has_data():
-        #     if self.engine.name != 'sqlite':
-        #         raise Exception("Cannot initialize non sql lite DATAEngine with existing data")
-            
-        #     # If data exists, convert it to json and insert it into the database
-        #     json_data = self.to_json()
-        #     engine_str = str(self.engine.url)
-        #     original_database_file_path = self.engine.url.database
-        #     backup_file_path = original_database_file_path + datetime.now().strftime("%Y_%m_%d__%H_%M_%S") + ".backup"
-        #     self.engine.dispose()
-            
-        #     # Move the existing database file to a backup file:
-        #     os.rename(original_database_file_path, backup_file_path)
-            
-        #     # Create a new database file:
-        #     self.engine = create_engine(engine_str)
-        #     self.data_decorator.mapper_registry.metadata.create_all(self.engine)
-        #     self.session_maker = sessionmaker(bind=self.engine)
-            
-        #     # Insert the data into the new database file:
-        #     self.insert_json(json_data)
-        # else:
-        #     self.data_decorator.mapper_registry.metadata.create_all(self.engine)
-        
+        self.session_maker = sessionmaker(bind=self.engine)        
         
         oldMetaData = MetaData()
         oldMetaData.reflect(bind=self.engine)
@@ -75,24 +49,21 @@ class DATAEngine:
                 # Identify columns that are in the new model but not in the database
                 missing_columns = new_columns - old_columns
 
-                if missing_columns and not backup_performed:
+                if should_backup and missing_columns and not backup_performed:
                     if self.has_data():
                         self.backup_database()
                     backup_performed = True
 
                 for column_name in missing_columns:
                     column = new_table.columns[column_name]
+                    column_type = column.type.compile(dialect=self.engine.dialect)
                     fk_constraints = ", ".join(
                         f"FOREIGN KEY ({column.name}) REFERENCES {fk._get_target_fullname()}"
                         for fk in column.foreign_keys
                     ) if column.foreign_keys else ""
-                    alter_table_cmd = f"ALTER TABLE {table_name} ADD COLUMN {column.compile(dialect=self.engine.dialect)} {fk_constraints}"
-                    try:
-                        self.engine.execute(alter_table_cmd)
-                        # Consider adding logging here
-                    except Exception as e:
-                        # Handle or log the exception
-                        print(f"Error updating table {table_name}: {e}")
+                    alter_table_cmd = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type} {fk_constraints}"
+                    with self.engine.connect() as conn:
+                        conn.execute(text(alter_table_cmd))
 
         newMetaData.create_all(self.engine)
         
@@ -104,10 +75,7 @@ class DATAEngine:
         engine_str = str(self.engine.url)
         original_database_file_path = self.engine.url.database
         backup_file_path = original_database_file_path + datetime.now().strftime("%Y_%m_%d__%H_%M_%S") + ".backup"
-        self.engine.dispose()
-        os.rename(original_database_file_path, backup_file_path)
-        self.engine = create_engine(engine_str)
-        self.session_maker = sessionmaker(bind=self.engine)
+        shutil.copy(original_database_file_path, backup_file_path)
         
     def add(self, obj:Any):
         obj = deepcopy(obj)
