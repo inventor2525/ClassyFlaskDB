@@ -4,3 +4,4 @@ other/*
 *.db
 *.egg-info/*
 server_log_files/*
+*.backup

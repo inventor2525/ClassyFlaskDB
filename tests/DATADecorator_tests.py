@@ -446,7 +446,7 @@ class DATADecorator_tests(unittest.TestCase):
 			chain_link: ChainLink
 			a_new_column: str
 		
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db')
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db', should_backup=False)
 		
 		j2 = data_engine.to_json()
 		
@@ -463,8 +463,8 @@ class DATADecorator_tests(unittest.TestCase):
 	def test_adding_columns_with_fks(self):
 		#Remove the test database if it exists
 		import os
-		if os.path.exists("test_adding_a_column.db"):
-			os.remove("test_adding_a_column.db")
+		if os.path.exists("test_adding_columns_with_fks.db"):
+			os.remove("test_adding_columns_with_fks.db")
 			
 		DATA = DATADecorator()
 
@@ -477,7 +477,7 @@ class DATADecorator_tests(unittest.TestCase):
 		class Holder:
 			chain_link: ChainLink
 
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db')
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_columns_with_fks.db')
 		
 		chain_link1 = ChainLink(name='Link 1')
 		chain_link2 = ChainLink(name='Link 2')
@@ -503,7 +503,7 @@ class DATADecorator_tests(unittest.TestCase):
 			other: Holder = None
 			others: List[Holder] = field(default_factory=list)
 		
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db')
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db', should_backup=False)
 		
 		j2 = data_engine.to_json()
 		
