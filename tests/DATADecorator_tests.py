@@ -516,6 +516,39 @@ class DATADecorator_tests(unittest.TestCase):
 		with data_engine.session() as session:
 			queried_holder = session.query(Holder).first()
 			self.assertEqual(holder.auto_id, queried_holder.auto_id)
+	
+	def test_unmapped_dataclass_field_initialization(self):
+		DATA = DATADecorator()
+		
+		class UnmappedType:
+			def __init__(self, value="default"):
+				self.value = value
+		
+		@DATA
+		class Example:
+			mapped_field: str  # This field is mapped to the database
+			unmapped_field: UnmappedType = field(default_factory=lambda: UnmappedType("custom_default"), init=False)  # Unmapped custom type with a default factory
+
+		data_engine = DATAEngine(DATA)
+		
+		# Create an instance with only the mapped field
+		example = Example(mapped_field="Test")
+		self.assertEqual(example.mapped_field, "Test")
+		self.assertTrue(hasattr(example, 'unmapped_field'))
+		self.assertIsInstance(example.unmapped_field, UnmappedType)
+		self.assertEqual(example.unmapped_field.value, "custom_default")
+		
+		data_engine.merge(example)
+		
+		# Query from database
+		with data_engine.session() as session:
+			queried_example = session.query(Example).filter_by(mapped_field="Test").first()
+
+			# Validate that the unmapped field is initialized correctly
+			self.assertEqual(queried_example.mapped_field, example.mapped_field)
+			self.assertTrue(hasattr(queried_example, 'unmapped_field'))
+			self.assertIsInstance(queried_example.unmapped_field, UnmappedType)
+			self.assertEqual(queried_example.unmapped_field.value, "custom_default")
 		
 if __name__ == '__main__':
 	unittest.main()
