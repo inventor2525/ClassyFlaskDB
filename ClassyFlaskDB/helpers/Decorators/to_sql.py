@@ -10,6 +10,9 @@ from ClassyFlaskDB.helpers import *
 from dateutil import tz
 import pytz
 
+from dataclasses import fields, is_dataclass, MISSING
+from sqlalchemy import event
+
 type_map = {
 	bool: Boolean,
 	int: Integer,
@@ -165,6 +168,13 @@ def to_sql():
 	:param exclude_prefix: A prefix to exclude fields from the schema class.
 	:return: The decorated class.
 	'''
+	
+	
+	#Add this somewhere      https://chat.openai.com/c/ba9203f1-adc5-44e1-9099-df8c4cbba7c5
+	
+	
+	
+	
 	def decorator(cls:Type[Any], mapper_registry:registry):
 		getter_setters = []
 
@@ -246,6 +256,20 @@ def to_sql():
 				inherit_condition=(getattr(cls_table.c, cls.FieldsInfo.primary_key_name) == getattr(parent_table.c, cls_parent_type.FieldsInfo.primary_key_name)),
 				properties=relationships
 			)
+		
+		def initialize_missing_dataclass_fields(target, context):
+			for field in fields(target):
+				# Check if the field is not already set
+				if not hasattr(target, field.name):
+					value = MISSING
+					if field.default is not MISSING: # Handle default values
+						value = field.default
+					elif field.default_factory is not MISSING:  # Handle default factories
+						value = field.default_factory()
+
+					if value is not MISSING:
+						setattr(target, field.name, value)
+		event.listen(cls, 'load', initialize_missing_dataclass_fields)
 		setattr(cls, "__table__", cls_table)
 		return cls
 	return decorator
