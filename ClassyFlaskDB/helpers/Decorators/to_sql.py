@@ -269,7 +269,7 @@ def to_sql():
 
 					if value is not MISSING:
 						setattr(target, field.name, value)
-		event.listen(cls, 'load', initialize_missing_dataclass_fields)
+		event.listen(cls, 'load', initialize_missing_dataclass_fields, restore_load_context=True)
 		setattr(cls, "__table__", cls_table)
 		return cls
 	return decorator
