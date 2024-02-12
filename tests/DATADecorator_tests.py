@@ -550,5 +550,44 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertIsInstance(queried_example.unmapped_field, UnmappedType)
 			self.assertEqual(queried_example.unmapped_field.value, "custom_default")
 		
+	def test_enums(self):
+		DATA = DATADecorator()
+		
+		from enum import Enum
+		
+		class Color(Enum):
+			RED = 1
+			GREEN = 2
+			BLUE = 3
+		
+		class Size(Enum):
+			SMALL = "small"
+			MEDIUM = "medium"
+			LARGE = "large"
+			
+		# Define the data classes
+		@DATA
+		class Foe:
+			name: str
+			strength: int
+			color: Color
+			size: Size
+			
+		data_engine = DATAEngine(DATA)
+		
+		foe = Foe(name="Dragon", strength=100, color=Color.GREEN, size=Size.MEDIUM)
+
+		data_engine.merge(foe)
+		
+		# Query from database
+		with data_engine.session() as session:
+			queried_foe = session.query(Foe).filter_by(name="Dragon").first()
+
+			# Validate
+			self.assertEqual(queried_foe.name, foe.name)
+			self.assertEqual(queried_foe.strength, foe.strength)
+			self.assertEqual(queried_foe.color, foe.color)
+			self.assertEqual(queried_foe.size, foe.size)
+			
 if __name__ == '__main__':
 	unittest.main()
