@@ -587,7 +587,11 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_foe.name, foe.name)
 			self.assertEqual(queried_foe.strength, foe.strength)
 			self.assertEqual(queried_foe.color, foe.color)
+			self.assertEqual(type(queried_foe.color), type(foe.color))
 			self.assertEqual(queried_foe.size, foe.size)
+			self.assertEqual(type(queried_foe.size), type(foe.size))
+			#Notes on how to make this pass:
+			#dataclass type will have to be loaded first, then it's value populated by sql alchamy since it wont know the enum type
 			
 if __name__ == '__main__':
 	unittest.main()
