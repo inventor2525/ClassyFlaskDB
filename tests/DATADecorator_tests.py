@@ -1,6 +1,6 @@
 from typing import List
 from ClassyFlaskDB.DATA import *
-from ClassyFlaskDB.serialization import FlaskifyJSONEncoder
+from ClassyFlaskDB.serialization import JSONEncoder
 import unittest
 
 import json
@@ -240,7 +240,7 @@ class DATADecorator_tests(unittest.TestCase):
 			# self.assertEqual(queried_bar.foe.auto_id, foe1.auto_id)
 			self.assertEqual(queried_bar.foe.name, foe1.name)
 			self.assertEqual(queried_bar.foe.strength, foe1.strength)
-			print(json.dumps(data_engine.to_json(), indent=4, cls=FlaskifyJSONEncoder))
+			print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
 	
 	def test_to_json(self):

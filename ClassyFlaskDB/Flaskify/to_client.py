@@ -1,7 +1,7 @@
 import requests
 from typing import Any, Dict, Type
 from inspect import signature, _empty
-from ClassyFlaskDB.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
+from ClassyFlaskDB.serialization import BaseSerializer, TypeSerializationResolver, JSONEncoder
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
 from ClassyFlaskDB.helpers.Decorators.AnyParam import SplitAnyParam
 from ClassyFlaskDB.Flaskify.Route import Route
@@ -60,12 +60,12 @@ class FlaskifyClientDecorator(SplitAnyParam):
 			if http_method == 'POST':
 				if len(file_args)>0:
 					response = requests.post(url, files={
-						'__json_args__': json.dumps(json_args, cls=FlaskifyJSONEncoder),
+						'__json_args__': json.dumps(json_args, cls=JSONEncoder),
 						**file_args
 					})
 				else:
 					# Manually serialize JSON with the custom encoder
-					json_str = json.dumps(json_args, cls=FlaskifyJSONEncoder)
+					json_str = json.dumps(json_args, cls=JSONEncoder)
 					response = requests.post(url, data=json_str, headers={'Content-Type': 'application/json'})
 					# response = requests.post(url, json=json_args)
 			else:

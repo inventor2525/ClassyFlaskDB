@@ -1,20 +1,30 @@
 from pydub import AudioSegment
 from io import BytesIO
-from typing import Any, Type, Union
+from enum import Enum
+from typing import Any, Type, Union, Callable
 from dataclasses import dataclass
 
 from datetime import datetime
 from json import JSONEncoder
 
-#TODO: make this swappable and move serialization.py to the root of the package
-class FlaskifyJSONEncoder(JSONEncoder):
-    def default(self, o):
-        if isinstance(o, datetime):
-            if o.tzinfo is not None and o.tzinfo.utcoffset(o) is not None:
-                return o.strftime("%Y-%m-%d %H:%M:%S.%f %z")
+class JSONEncoder(JSONEncoder):
+    rules = {}
+    @staticmethod
+    def add_formatting_rule(condition:Callable[[Any], bool], serializer:Callable[[Any],str]):
+        JSONEncoder.rules[condition] = serializer
+        
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return f"<{type(obj).__name__}>.{obj.value}"
+        if isinstance(obj, datetime):
+            if obj.tzinfo is not None and obj.tzinfo.utcoffset(obj) is not None:
+                return obj.strftime("%Y-%m-%d %H:%M:%S.%f %z")
             else:
-                return o.strftime("%Y-%m-%d %H:%M:%S.%f")
-        return JSONEncoder.default(self, o)
+                return obj.strftime("%Y-%m-%d %H:%M:%S.%f")
+        for condition, serializer in JSONEncoder.rules.items():
+            if condition(obj):
+                return serializer(obj)
+        return JSONEncoder.default(self, obj)
     
 @dataclass
 class BaseSerializer:

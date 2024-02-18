@@ -30,12 +30,12 @@ print(c.message_sequence.get_primary_key())
 
 # Debug it:
 import json
-from ClassyFlaskDB.serialization import FlaskifyJSONEncoder
-print(json.dumps(c.to_json(),indent=4, cls=FlaskifyJSONEncoder))
+from ClassyFlaskDB.serialization import JSONEncoder
+print(json.dumps(c.to_json(),indent=4, cls=JSONEncoder))
 
 # Send it to the server:
 c_ = ConvService.Talk(c)
 
 # Debug the return:
 print(c_.message_sequence.messages[-1].content)
-print(json.dumps(c_.to_json(),indent=4, cls=FlaskifyJSONEncoder))
+print(json.dumps(c_.to_json(),indent=4, cls=JSONEncoder))

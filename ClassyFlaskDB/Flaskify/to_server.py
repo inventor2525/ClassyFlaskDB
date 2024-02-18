@@ -2,7 +2,7 @@ from typing import Any, Union, Dict, Type
 from flask import Flask, Response, request, jsonify, send_file
 from inspect import signature, _empty
 from ClassyFlaskDB.Flaskify.Route import Route
-from ClassyFlaskDB.serialization import BaseSerializer, TypeSerializationResolver, FlaskifyJSONEncoder
+from ClassyFlaskDB.serialization import BaseSerializer, TypeSerializationResolver, JSONEncoder
 from ClassyFlaskDB.helpers.Decorators.AnyParam import SplitAnyParam
 from ClassyFlaskDB.Flaskify.Loggers.Logger import Logger
 from ClassyFlaskDB.helpers.name_to_url import underscoreify_uppercase
@@ -11,7 +11,7 @@ import json
 
 def json_response(data):
 	'''Replacement for flask.jsonify that uses FlaskifyJSONEncoder'''
-	response_data = json.dumps(data, cls=FlaskifyJSONEncoder)
+	response_data = json.dumps(data, cls=JSONEncoder)
 	return Response(response_data, mimetype='application/json')
 
 @dataclass
