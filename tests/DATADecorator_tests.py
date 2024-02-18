@@ -1,6 +1,6 @@
 from typing import List
 from ClassyFlaskDB.DATA import *
-from ClassyFlaskDB.Flaskify.serialization import FlaskifyJSONEncoder
+from ClassyFlaskDB.serialization import FlaskifyJSONEncoder
 import unittest
 
 import json

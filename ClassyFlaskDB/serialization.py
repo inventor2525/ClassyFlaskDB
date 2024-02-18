@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from json import JSONEncoder
 
+#TODO: make this swappable and move serialization.py to the root of the package
 class FlaskifyJSONEncoder(JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime):

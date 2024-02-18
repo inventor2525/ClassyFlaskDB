@@ -30,7 +30,7 @@ print(c.message_sequence.get_primary_key())
 
 # Debug it:
 import json
-from ClassyFlaskDB.Flaskify.serialization import FlaskifyJSONEncoder
+from ClassyFlaskDB.serialization import FlaskifyJSONEncoder
 print(json.dumps(c.to_json(),indent=4, cls=FlaskifyJSONEncoder))
 
 # Send it to the server:
