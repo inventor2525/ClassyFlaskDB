@@ -6,7 +6,15 @@ setup(
     packages=find_packages(),
     install_requires=[
         "Flask",
-        "SQLAlchemy"
+        "SQLAlchemy",
+		
+        "six",
+		"pytz",
+		"urllib3",
+		"idna",
+		"certifi",
+		"pydub",
+		"tzlocal",
     ],
     author="Charlie Angela Mehlenbeck",
     author_email="charlie_inventor2003@yahoo.com",
