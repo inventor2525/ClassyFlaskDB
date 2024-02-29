@@ -14,12 +14,13 @@ def extract_property_type(cls: Any, property_name: str) -> Any:
 				return hints.get('return')
 	return None
 
-# Example usage
-class Example:
-	@property
-	def my_property(self) -> str:
-		return "example"
+if __name__ == "__main__":
+	# Example usage
+	class Example:
+		@property
+		def my_property(self) -> str:
+			return "example"
 
-# Extracting the type hint
-property_type = extract_property_type(Example, 'my_property')
-print(property_type)  # Output will be <class 'str'>
+	# Extracting the type hint
+	property_type = extract_property_type(Example, 'my_property')
+	print(property_type)  # Output will be <class 'str'>
