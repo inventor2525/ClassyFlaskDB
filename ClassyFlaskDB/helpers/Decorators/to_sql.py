@@ -8,7 +8,6 @@ from sqlalchemy import text
 
 from ClassyFlaskDB.helpers import *
 from dateutil import tz
-import pytz
 
 from dataclasses import fields, is_dataclass, MISSING
 from sqlalchemy import event
@@ -104,7 +103,7 @@ def add_dynamic_datetime_property(cls, field_name):
 		datetime_val = getattr(self, f"{field_name}__DateTimeObj")
 		timezone_str = getattr(self, f"{field_name}__TimeZone")
 		if datetime_val and timezone_str:
-			return datetime_val.replace(tzinfo=pytz.timezone(timezone_str))
+			return datetime_val.replace(tzinfo=tz.gettz(timezone_str))
 		return datetime_val
 
 	def setter(self, value):
