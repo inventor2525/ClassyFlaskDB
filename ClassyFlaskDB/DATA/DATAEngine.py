@@ -25,12 +25,14 @@ class DATAEngine:
         self.data_decorator = data_decorator
         self.data_decorator.finalize()
         
-        if engine is None:
-            self.engine = create_engine(engine_str)
-        else:
-            self.engine = engine
-        
-        self.session_maker = sessionmaker(bind=self.engine)        
+        if not self._init_engine(engine, engine_str):
+            old_db_values = self.to_json()
+            self.backup_database()
+            self.dispose()
+            
+            self._init_engine(engine, engine_str)
+            self.insert_json(old_db_values)
+            
         
         oldMetaData = MetaData()
         oldMetaData.reflect(bind=self.engine)
@@ -68,6 +70,19 @@ class DATAEngine:
                         conn.execute(text(alter_table_cmd))
 
         newMetaData.create_all(self.engine)
+
+    def _init_engine(self, engine, engine_str):
+        try:
+            if engine is None:
+                self.engine = create_engine(engine_str)
+            else:
+                self.engine = engine
+            
+            self.session_maker = sessionmaker(bind=self.engine)
+            return True
+        except Exception as e:
+            print(f"Error initializing database engine: {e}")
+            return False
         
     def backup_database(self):
         if self.engine.name != 'sqlite':
