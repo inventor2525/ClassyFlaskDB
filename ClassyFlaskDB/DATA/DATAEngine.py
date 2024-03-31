@@ -21,28 +21,44 @@ def convert_to_column_type(value, column_type):
     return value
 
 class DATAEngine:
-    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:", should_backup:bool=True):
+    @property
+    def engine_metadata(self):
+        return self._engine_metadata
+    
+    @property
+    def decorator_metadata(self):
+        return self.data_decorator.mapper_registry.metadata
+        
+    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:", should_backup:bool=True, backup_dir:str=None, auto_add_new_columns:bool=True, auto_replace_database_fallback:bool=True):
         self.data_decorator = data_decorator
+        self.backup_dir = backup_dir
+        
         self.data_decorator.finalize()
         
-        if not self._init_engine(engine, engine_str):
-            old_db_values = self.to_json()
-            self.backup_database()
+        try:
+            if auto_add_new_columns:
+                self._add_new_columns(should_backup)
+            
+            self.decorator_metadata.create_all(self.engine)
+        except Exception as e:
             self.dispose()
             
-            self._init_engine(engine, engine_str)
-            self.insert_json(old_db_values)
-            
-        
-        oldMetaData = MetaData()
-        oldMetaData.reflect(bind=self.engine)
-        newMetaData = self.data_decorator.mapper_registry.metadata
-
-        backup_performed = False
-
-        # Schema alteration logic
-        for table_name, new_table in newMetaData.tables.items():
-            old_table = oldMetaData.tables.get(table_name)
+            if auto_replace_database_fallback:
+                print(f"An error occurred while creating the database: {e}. Attempting to replace the database with the new schema.")
+                self._init_engine(engine, engine_str)
+                
+                old_db_values = self.to_json()
+                self.backup_database()
+                self.dispose()
+                
+                self._init_engine(engine, engine_str)
+                self.insert_json(old_db_values)
+            else:
+                raise e
+    
+    def _add_new_columns(self, should_backup:bool=True):
+        for table_name, new_table in self.decorator_metadata.tables.items():
+            old_table = self.engine_metadata.tables.get(table_name)
             if old_table is not None:
                 # Compare columns
                 new_columns = set(column.name for column in new_table.columns)
@@ -51,10 +67,10 @@ class DATAEngine:
                 # Identify columns that are in the new model but not in the database
                 missing_columns = new_columns - old_columns
 
-                if should_backup and missing_columns and not backup_performed:
+                if should_backup and missing_columns and not getattr(self, "backup_performed", False):
                     if self.has_data():
                         self.backup_database()
-                    backup_performed = True
+                    self.backup_performed = True
 
                 for column_name in missing_columns:
                     column = new_table.columns[column_name]
@@ -68,22 +84,19 @@ class DATAEngine:
                     alter_table_cmd = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"# {fk_constraints}"
                     with self.engine.connect() as conn:
                         conn.execute(text(alter_table_cmd))
-
-        newMetaData.create_all(self.engine)
-
+                        
     def _init_engine(self, engine, engine_str):
-        try:
-            if engine is None:
-                self.engine = create_engine(engine_str)
-            else:
-                self.engine = engine
-            
-            self.session_maker = sessionmaker(bind=self.engine)
-            return True
-        except Exception as e:
-            print(f"Error initializing database engine: {e}")
-            return False
+        if engine is None:
+            self.engine = create_engine(engine_str)
+        else:
+            self.engine = engine
         
+        self.session_maker = sessionmaker(bind=self.engine)
+        
+        self._engine_metadata = MetaData()
+        
+        self._engine_metadata.reflect(bind=self.engine)
+    
     def backup_database(self):
         if self.engine.name != 'sqlite':
             raise Exception("Database backups are only supported with SQLite. Please ensure backups are manually handled for other databases.")
@@ -91,7 +104,11 @@ class DATAEngine:
         # Backup the SQLite database
         engine_str = str(self.engine.url)
         original_database_file_path = self.engine.url.database
-        backup_file_path = original_database_file_path + datetime.now().strftime("%Y_%m_%d__%H_%M_%S") + ".backup"
+        backup_path = self.backup_dir or os.path.dirname(original_database_file_path)
+        name_prefix = os.path.basename(original_database_file_path)
+        
+        datetime_str = datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
+        backup_file_path = os.path.join(backup_path, f"{name_prefix} {datetime_str}.backup")
         shutil.copy(original_database_file_path, backup_file_path)
         
     def add(self, obj:Any):
@@ -176,3 +193,6 @@ class DATAEngine:
     def dispose(self):
         self.session_maker.close_all()
         self.engine.dispose()
+        
+        self._engine_metadata.clear()
+        self._engine_metadata = None
