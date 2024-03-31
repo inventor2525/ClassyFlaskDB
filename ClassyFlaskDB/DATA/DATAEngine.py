@@ -48,11 +48,17 @@ class DATAEngine:
                 self._init_engine(engine, engine_str)
                 
                 old_db_values = self.to_json()
-                self.backup_database()
+                if not getattr(self, "_backup_performed", False):
+                    self.backup_database()
+                
+                old_db_path = self.engine.url.database
                 self.dispose()
+                os.remove(old_db_path)
                 
                 self._init_engine(engine, engine_str)
+                self.decorator_metadata.create_all(self.engine)
                 self.insert_json(old_db_values)
+                self._bind_engine_metadata()
             else:
                 raise e
     
@@ -67,10 +73,8 @@ class DATAEngine:
                 # Identify columns that are in the new model but not in the database
                 missing_columns = new_columns - old_columns
 
-                if should_backup and missing_columns and not getattr(self, "backup_performed", False):
-                    if self.has_data():
-                        self.backup_database()
-                    self.backup_performed = True
+                if should_backup and missing_columns and not getattr(self, "_backup_performed", False):
+                    self.backup_database()
 
                 for column_name in missing_columns:
                     column = new_table.columns[column_name]
@@ -93,23 +97,36 @@ class DATAEngine:
         
         self.session_maker = sessionmaker(bind=self.engine)
         
+        self._bind_engine_metadata()
+    
+    def _bind_engine_metadata(self):
         self._engine_metadata = MetaData()
-        
         self._engine_metadata.reflect(bind=self.engine)
     
-    def backup_database(self):
+    def backup_database(self, backup_regardless:bool=False):
+        '''
+        Backup the database to a file named the same as the original database file,
+        but with the current date and time appended to the name. Places the backup
+        file in the same directory as the original database file. Unless self.backup_dir
+        is set to a different directory.
+        
+        :param backup_regardless: If True, the database will be backed up regardless of
+        whether it has data.
+        '''
         if self.engine.name != 'sqlite':
             raise Exception("Database backups are only supported with SQLite. Please ensure backups are manually handled for other databases.")
         
-        # Backup the SQLite database
-        engine_str = str(self.engine.url)
-        original_database_file_path = self.engine.url.database
-        backup_path = self.backup_dir or os.path.dirname(original_database_file_path)
-        name_prefix = os.path.basename(original_database_file_path)
-        
-        datetime_str = datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
-        backup_file_path = os.path.join(backup_path, f"{name_prefix} {datetime_str}.backup")
-        shutil.copy(original_database_file_path, backup_file_path)
+        if backup_regardless or self.has_data():
+            # Backup the SQLite database
+            engine_str = str(self.engine.url)
+            original_database_file_path = self.engine.url.database
+            backup_path = self.backup_dir or os.path.dirname(original_database_file_path)
+            name_prefix = os.path.basename(original_database_file_path)
+            
+            datetime_str = datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
+            backup_file_path = os.path.join(backup_path, f"{name_prefix} {datetime_str}.backup")
+            shutil.copy(original_database_file_path, backup_file_path)
+            self._backup_performed = True
         
     def add(self, obj:Any):
         obj = deepcopy(obj)
