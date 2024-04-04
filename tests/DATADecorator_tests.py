@@ -501,9 +501,9 @@ class DATADecorator_tests(unittest.TestCase):
 		class Holder:
 			chain_link: ChainLink
 			other: Holder = None
-			others: List[Holder] = field(default_factory=list)
+			others: List[ChainLink] = field(default_factory=list)
 		
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db', should_backup=False)
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_columns_with_fks.db', should_backup=False)
 		
 		j2 = data_engine.to_json()
 		
