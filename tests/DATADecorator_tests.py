@@ -501,9 +501,9 @@ class DATADecorator_tests(unittest.TestCase):
 		class Holder:
 			chain_link: ChainLink
 			other: Holder = None
-			others: List[Holder] = field(default_factory=list)
+			others: List[ChainLink] = field(default_factory=list)
 		
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db', should_backup=False)
+		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_columns_with_fks.db', should_backup=False)
 		
 		j2 = data_engine.to_json()
 		
@@ -516,6 +516,24 @@ class DATADecorator_tests(unittest.TestCase):
 		with data_engine.session() as session:
 			queried_holder = session.query(Holder).first()
 			self.assertEqual(holder.auto_id, queried_holder.auto_id)
+			self.assertEqual(queried_holder.chain_link.auto_id, chain_link1.auto_id)
+			self.assertEqual(queried_holder.chain_link.next_link.auto_id, chain_link2.auto_id)
+			self.assertEqual(queried_holder.chain_link.next_link.next_link.auto_id, chain_link3.auto_id)
+			self.assertEqual(queried_holder.other, None)
+			self.assertEqual(queried_holder.others, [])
+			
+			queried_holder.others.append(ChainLink(name='Link 4'))
+			queried_holder.others.append(ChainLink(name='Link 5'))
+			session.merge(queried_holder)
+			session.commit()
+		
+		j3 = data_engine.to_json()
+		print_DATA_json(j3)
+		
+		with data_engine.session() as session:
+			queried_holder = session.query(Holder).first()
+			self.assertEqual(queried_holder.others[0].name, 'Link 4')
+			self.assertEqual(queried_holder.others[1].name, 'Link 5')
 	
 	def test_unmapped_dataclass_field_initialization(self):
 		DATA = DATADecorator()
