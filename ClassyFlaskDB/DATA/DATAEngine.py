@@ -36,6 +36,7 @@ class DATAEngine:
         self.data_decorator.finalize()
         
         try:
+            self._init_engine(engine, engine_str)
             if auto_add_new_columns:
                 self._add_new_columns(should_backup)
             
