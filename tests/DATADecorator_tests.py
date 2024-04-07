@@ -610,6 +610,50 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(type(queried_foe.size), type(foe.size))
 			#Notes on how to make this pass:
 			#dataclass type will have to be loaded first, then it's value populated by sql alchamy since it wont know the enum type
-			
+	
+	def test_merge_with_shallow_update_and_nested_object_swap(self):
+		DATA = DATADecorator()
+
+		# Define the data classes
+		@DATA
+		class NestedObject:
+			name: str
+			value: int
+
+		@DATA
+		class ParentObject:
+			title: str
+			nested: NestedObject
+
+		data_engine = DATAEngine(DATA)
+
+		# Create and merge initial objects
+		nested_obj1 = NestedObject(name="Initial Nested", value=100)
+		parent_obj = ParentObject(title="Initial Parent", nested=nested_obj1)
+		data_engine.merge(parent_obj)
+
+		# Modify the parent object and merge with deeply=False
+		parent_obj.title = "Modified Parent"
+		data_engine.merge(parent_obj, deeply=False)
+
+		# Query from database to verify changes
+		with data_engine.session() as session:
+			queried_parent = session.query(ParentObject).filter_by(title="Modified Parent").first()
+			self.assertIsNotNone(queried_parent)
+			self.assertEqual(queried_parent.title, "Modified Parent")
+			self.assertEqual(queried_parent.nested.name, "Initial Nested")
+
+		# Swap the nested object and merge again
+		nested_obj2 = NestedObject(name="New Nested", value=200)
+		parent_obj.nested = nested_obj2
+		data_engine.add(nested_obj2)
+		data_engine.merge(parent_obj, deeply=False)
+
+		# Query from database to verify the swap
+		with data_engine.session() as session:
+			queried_parent = session.query(ParentObject).filter_by(title="Modified Parent").first()
+			self.assertIsNotNone(queried_parent)
+			self.assertEqual(queried_parent.nested.name, "New Nested")
+			self.assertEqual(queried_parent.nested.value, 200)
 if __name__ == '__main__':
 	unittest.main()

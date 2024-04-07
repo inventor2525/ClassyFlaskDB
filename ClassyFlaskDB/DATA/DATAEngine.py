@@ -1,4 +1,4 @@
-from sqlalchemy import Engine, create_engine, MetaData, DateTime, text
+from sqlalchemy import Engine, create_engine, MetaData, DateTime, text, update
 from sqlalchemy.orm import sessionmaker
 from copy import deepcopy
 import shutil
@@ -149,12 +149,50 @@ class DATAEngine:
             session.add(obj)
             session.commit()
     
-    def merge(self, obj:Any):
-        obj = deepcopy(obj)
-        with self.session_maker() as session:
-            session.merge(obj)
-            session.commit()
-    
+    def merge(self, obj:Any, deeply:bool=True):
+        if deeply:
+            obj = deepcopy(obj)
+            with self.session_maker() as session:
+                session.merge(obj)
+                session.commit()
+        else:
+            model_class = type(obj)
+            fields_info = getattr(model_class, 'FieldsInfo', None)
+            if not fields_info:
+                raise ValueError(f"No FieldsInfo found for class {model_class.__name__}")
+
+            primary_key_name = fields_info.primary_key_name
+            primary_key_value = getattr(obj, primary_key_name)
+
+            if primary_key_value is None:
+                raise ValueError(f"Object of type {model_class.__name__} lacks a primary key value.")
+
+            update_values = {}
+            for field_name in fields_info.field_names:
+                if field_name == primary_key_name:
+                    continue  # Skip the primary key field
+
+                field_info = fields_info.fields_dict.get(field_name)
+                if field_info:  # This includes both regular fields and foreign key fields
+                    field_value = getattr(obj, field_name, None)
+                    if hasattr(field_value, "FieldsInfo"):
+                        # For foreign key fields, get the primary key of the related object
+                        related_obj_primary_key = getattr(field_value, field_value.FieldsInfo.primary_key_name, None)
+                        field_name = field_name + "_fk"
+                        update_values[field_name] = related_obj_primary_key
+                    else:
+                        update_values[field_name] = field_value
+
+            if update_values:
+                stmt = (
+                    update(model_class).
+                    where(getattr(model_class, primary_key_name) == primary_key_value).
+                    values(**update_values)
+                )
+                with self.session_maker() as session:
+                    session.execute(stmt)
+                    session.commit()
+            
     @contextmanager
     def session(self):
         session = self.session_maker()
