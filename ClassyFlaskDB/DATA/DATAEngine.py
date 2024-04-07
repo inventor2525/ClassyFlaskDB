@@ -7,7 +7,8 @@ from typing import Any
 from contextlib import contextmanager
 from datetime import datetime
 import os
-#import logging
+import logging
+logging.basicConfig()
 
 def convert_to_column_type(value, column_type):
     if isinstance(column_type, DateTime):
@@ -28,8 +29,19 @@ class DATAEngine:
     @property
     def decorator_metadata(self):
         return self.data_decorator.mapper_registry.metadata
-        
-    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:", should_backup:bool=True, backup_dir:str=None, auto_add_new_columns:bool=True, auto_replace_database_fallback:bool=True):
+    
+    @property
+    def log_all(self):
+        return self._log_all
+    @log_all.setter
+    def log_all(self, value:bool):
+        self._log_all = value
+        if value:
+            logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+        else:
+            logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+    
+    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:", should_backup:bool=True, backup_dir:str=None, auto_add_new_columns:bool=True, auto_replace_database_fallback:bool=True):        
         self.data_decorator = data_decorator
         self.backup_dir = backup_dir
         
@@ -62,6 +74,8 @@ class DATAEngine:
                 self._bind_engine_metadata()
             else:
                 raise e
+        
+        # self.log_all = True
     
     def _add_new_columns(self, should_backup:bool=True):
         for table_name, new_table in self.decorator_metadata.tables.items():
