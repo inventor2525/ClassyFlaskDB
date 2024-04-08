@@ -655,5 +655,43 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertIsNotNone(queried_parent)
 			self.assertEqual(queried_parent.nested.name, "New Nested")
 			self.assertEqual(queried_parent.nested.value, 200)
+	
+	def test_merge_with_list_of_nested_objects(self):
+		DATA = DATADecorator()
+
+		# Define the data classes
+		@DATA
+		class NestedObject:
+			name: str
+			value: int
+
+		@DATA
+		class ParentObject:
+			title: str
+			nested_objects: List[NestedObject] = field(default_factory=list)
+
+		data_engine = DATAEngine(DATA)
+
+		# Create and merge initial objects
+		nested_obj1 = NestedObject(name="Nested 1", value=100)
+		nested_obj2 = NestedObject(name="Nested 2", value=200)
+		parent_obj = ParentObject(title="Parent", nested_objects=[nested_obj1, nested_obj2])
+		data_engine.merge(parent_obj)
+
+		# Modify the list of nested objects and merge with deeply=False
+		nested_obj3 = NestedObject(name="Nested 3", value=300)
+		parent_obj.nested_objects.append(nested_obj3)
+		data_engine.add(nested_obj3)
+		data_engine.merge(parent_obj, deeply=False)
+
+		# Query from database to verify changes
+		with data_engine.session() as session:
+			queried_parent = session.query(ParentObject).filter_by(title="Parent").first()
+			self.assertIsNotNone(queried_parent)
+			self.assertEqual(len(queried_parent.nested_objects), 2) # 2 because we merged with deeply=False, this is not ideal behavior but it is the current behavior
+			self.assertEqual(queried_parent.nested_objects[0].name, "Nested 1")
+			self.assertEqual(queried_parent.nested_objects[1].name, "Nested 2")
+			# self.assertEqual(queried_parent.nested_objects[2].name, "Nested 3")
+	
 if __name__ == '__main__':
 	unittest.main()

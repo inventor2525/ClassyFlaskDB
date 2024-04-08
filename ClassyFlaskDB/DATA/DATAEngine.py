@@ -171,10 +171,14 @@ class DATAEngine:
             for field_name in fields_info.field_names:
                 if field_name == primary_key_name:
                     continue  # Skip the primary key field
-
+                
+                field_value = getattr(obj, field_name, None)
+                if isinstance(field_value, list) or isinstance(field_value, dict):
+                    continue
+                
                 field_info = fields_info.fields_dict.get(field_name)
                 if field_info:  # This includes both regular fields and foreign key fields
-                    field_value = getattr(obj, field_name, None)
+                    
                     if hasattr(field_value, "FieldsInfo"):
                         # For foreign key fields, get the primary key of the related object
                         related_obj_primary_key = getattr(field_value, field_value.FieldsInfo.primary_key_name, None)
