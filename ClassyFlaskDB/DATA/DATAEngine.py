@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 import logging
 logging.basicConfig()
+from ClassyFlaskDB.helpers.Decorators.to_sql import type_map
 
 def convert_to_column_type(value, column_type):
     if isinstance(column_type, DateTime):
@@ -157,6 +158,7 @@ class DATAEngine:
                 session.commit()
         else:
             model_class = type(obj)
+            model_base_class = model_class.__bases__[0]
             fields_info = getattr(model_class, 'FieldsInfo', None)
             if not fields_info:
                 raise ValueError(f"No FieldsInfo found for class {model_class.__name__}")
@@ -173,12 +175,13 @@ class DATAEngine:
                     continue  # Skip the primary key field
                 
                 field_value = getattr(obj, field_name, None)
-                if isinstance(field_value, list) or isinstance(field_value, dict):
+                if isinstance(field_value, list):
+                    continue # Skip list fields (for now)
+                if hasattr(model_base_class, field_name):
                     continue
                 
                 field_info = fields_info.fields_dict.get(field_name)
                 if field_info:  # This includes both regular fields and foreign key fields
-                    
                     if hasattr(field_value, "FieldsInfo"):
                         # For foreign key fields, get the primary key of the related object
                         related_obj_primary_key = getattr(field_value, field_value.FieldsInfo.primary_key_name, None)
@@ -190,6 +193,8 @@ class DATAEngine:
                         timezone_value = getattr(obj, f"{field_name}__TimeZone", None)
                         update_values[f"{field_name}__DateTimeObj"] = datetime_value
                         update_values[f"{field_name}__TimeZone"] = timezone_value
+                    elif type(field_value) not in type_map:
+                        continue
                     else:
                         update_values[field_name] = field_value
 
