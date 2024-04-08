@@ -5,7 +5,8 @@ import unittest
 
 import json
 from copy import deepcopy
-	
+from datetime import datetime, timedelta
+
 class DATADecorator_tests(unittest.TestCase):
 	def test_relationship(self):
 		DATA = DATADecorator()
@@ -693,5 +694,32 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_parent.nested_objects[1].name, "Nested 2")
 			# self.assertEqual(queried_parent.nested_objects[2].name, "Nested 3")
 	
+	def test_merge_with_date_field(self):
+		DATA = DATADecorator()
+
+		# Define the data classes
+		@DATA
+		class ParentObject:
+			title: str
+			created_at: datetime
+
+		data_engine = DATAEngine(DATA)
+
+		# Create and merge initial object with a specific datetime
+		initial_datetime = datetime.now()
+		parent_obj = ParentObject(title="Initial Parent", created_at=initial_datetime)
+		data_engine.merge(parent_obj)  # Deep merge to add the object initially
+
+		# Modify the datetime field and merge with deeply=False
+		updated_datetime = initial_datetime + timedelta(days=1)
+		parent_obj.created_at = updated_datetime
+		data_engine.merge(parent_obj, deeply=False)
+
+		# Query from database to verify the datetime update
+		with data_engine.session() as session:
+			queried_parent = session.query(ParentObject).filter_by(title="Initial Parent").first()
+			self.assertIsNotNone(queried_parent)
+			self.assertEqual(queried_parent.created_at, updated_datetime)
+			
 if __name__ == '__main__':
 	unittest.main()

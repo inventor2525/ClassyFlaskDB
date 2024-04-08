@@ -184,6 +184,12 @@ class DATAEngine:
                         related_obj_primary_key = getattr(field_value, field_value.FieldsInfo.primary_key_name, None)
                         field_name = field_name + "_fk"
                         update_values[field_name] = related_obj_primary_key
+                    elif hasattr(obj, f"{field_name}__DateTimeObj") and hasattr(obj, f"{field_name}__TimeZone"):
+                        # Custom handling for split datetime fields
+                        datetime_value = getattr(obj, f"{field_name}__DateTimeObj", None)
+                        timezone_value = getattr(obj, f"{field_name}__TimeZone", None)
+                        update_values[f"{field_name}__DateTimeObj"] = datetime_value
+                        update_values[f"{field_name}__TimeZone"] = timezone_value
                     else:
                         update_values[field_name] = field_value
 
