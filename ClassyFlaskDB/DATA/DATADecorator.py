@@ -152,7 +152,10 @@ class DATADecorator(AnyParam):
                         try:
                             setattr(cls_copy, field_name, deepcopy(value, memo))
                         except:
-                            setattr(cls_copy, field_name, None)
+                            try:
+                                setattr(cls_copy, field_name, None)
+                            except:
+                                pass
             
             return cls_copy
 
