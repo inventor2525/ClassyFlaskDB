@@ -251,8 +251,11 @@ class DATAEngine:
             metadata.reflect(bind=session.bind)
             
             for table_name, rows in json_data.items():
-                table = metadata.tables[table_name]
-
+                table = metadata.tables.get(table_name, None)
+                if table is None:
+                    print(f"Could not insert json into table '{table_name}' as it does not exist. This might be due to a model change, check your data, know your model and revert to backups if you need to. This table will simply be ignored for now.")
+                    continue
+                
                 # Identify columns that require conversion
                 columns_to_convert = {
                     column_name: column.type
