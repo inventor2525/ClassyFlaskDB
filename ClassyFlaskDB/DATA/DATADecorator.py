@@ -101,9 +101,15 @@ class DATADecorator(AnyParam):
                     
                 lazy_decorators.append(get_hash_field_getters)
                 
+                supplied_new_id = getattr(cls, "new_id", None)
                 def new_id(self) -> str:
-                    fields = [cls.__field_getters__[field_name](self,field_name) for field_name in hashed_fields]
-                    self.auto_id = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
+                    try:
+                        if supplied_new_id is not None:
+                            supplied_new_id(self)
+                        fields = [cls.__field_getters__[field_name](self,field_name) for field_name in hashed_fields]
+                        self.auto_id = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
+                    except:
+                        self.auto_id = f"hash id failed {str(uuid.uuid4())}"
                 setattr(cls, "new_id", new_id)
                 add_pk("auto_id", str)
             
