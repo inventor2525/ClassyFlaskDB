@@ -68,6 +68,7 @@ class DATADecorator(AnyParam):
                 
                 def get_hash_field_getters(cls: Type) -> Type:
                     field_getters = {}
+                    hash_regenerators = {}
                     for field_name in hashed_fields:
                         hashed_field_type = cls.FieldsInfo.get_field_type(field_name)
                         
@@ -78,6 +79,7 @@ class DATADecorator(AnyParam):
                                     return ""
                                 return str(obj.get_primary_key())
                             field_getters[field_name] = field_getter
+                            hash_regenerators[field_name] = lambda self, field_name=field_name: getattr(self, field_name).new_id(True)
                         elif hasattr(hashed_field_type, "__origin__") and hashed_field_type.__origin__ in [list, tuple]:
                             list_type = hashed_field_type.__args__[0]
                             if getattr(list_type, "FieldsInfo", None) is not None:
@@ -87,7 +89,14 @@ class DATADecorator(AnyParam):
                                         return "[]"
                                     l_str = ",".join([str(None if item is None else item.get_primary_key()) for item in l])
                                     return f"[{l_str}]"
+                                def hash_regenerator(self, field_name:str=field_name):
+                                    l = getattr(self, field_name)
+                                    if l is None:
+                                        return
+                                    for item in l:
+                                        item.new_id(True)
                                 field_getters[field_name] = field_getter
+                                hash_regenerators[field_name] = hash_regenerator
                             else:
                                 def field_getter(self, field_name:str):
                                     return str(getattr(self, field_name))
@@ -97,18 +106,23 @@ class DATADecorator(AnyParam):
                                 return str(getattr(self, field_name))
                             field_getters[field_name] = field_getter
                     cls.__field_getters__ = field_getters
+                    cls.__hash_regenerators__ = hash_regenerators
                     return cls
                     
                 lazy_decorators.append(get_hash_field_getters)
                 
                 supplied_new_id = getattr(cls, "new_id", None)
-                def new_id(self) -> str:
+                def new_id(self, deeply=False):
                     try:
+                        if deeply:
+                            for field_name in hashed_fields:
+                                if field_name in cls.__hash_regenerators__:
+                                    cls.__hash_regenerators__[field_name](self)
                         if supplied_new_id is not None:
                             supplied_new_id(self)
                         fields = [cls.__field_getters__[field_name](self,field_name) for field_name in hashed_fields]
                         self.auto_id = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
-                    except:
+                    except Exception as e:
                         self.auto_id = f"hash id failed {str(uuid.uuid4())}"
                 setattr(cls, "new_id", new_id)
                 add_pk("auto_id", str)

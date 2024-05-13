@@ -720,6 +720,73 @@ class DATADecorator_tests(unittest.TestCase):
 			queried_parent = session.query(ParentObject).filter_by(title="Initial Parent").first()
 			self.assertIsNotNone(queried_parent)
 			self.assertEqual(queried_parent.created_at, updated_datetime)
-			
+	
+	def test_hash_id_cascade(self):
+		DATA = DATADecorator()
+
+		@DATA(generated_id_type=ID_Type.HASHID)
+		class InnerObject:
+			value: str
+
+		@DATA(generated_id_type=ID_Type.HASHID)
+		class MiddleObject:
+			inner: InnerObject
+			value: str
+
+		@DATA(generated_id_type=ID_Type.HASHID)
+		class TopObject:
+			middle: MiddleObject
+			value: str
+
+		data_engine = DATAEngine(DATA)
+
+		inner_obj = InnerObject(value="Inner Value")
+		middle_obj = MiddleObject(inner=inner_obj, value="Middle Value")
+		top_obj = TopObject(middle=middle_obj, value="Top Value")
+		
+		inner_obj.new_id()
+		middle_obj.new_id()
+		top_obj.new_id()
+
+		# Initial IDs
+		initial_top_id = top_obj.auto_id
+		initial_middle_id = middle_obj.auto_id
+		initial_inner_id = inner_obj.auto_id
+
+		# Change a field on the innermost object
+		inner_obj.value = "New Inner Value"
+
+		# Call new_id() on the topmost object
+		top_obj.new_id()
+		new_top_id = top_obj.auto_id
+		new_middle_id = middle_obj.auto_id
+		new_inner_id = inner_obj.auto_id
+
+		# Verify that all IDs have stayed the same
+		self.assertEqual(initial_top_id, new_top_id)
+		self.assertEqual(initial_middle_id, new_middle_id)
+		self.assertEqual(initial_inner_id, new_inner_id)
+		
+		# Call new_id(True) on the topmost object
+		top_obj.new_id(True)
+		new_top_id = top_obj.auto_id
+		new_middle_id = middle_obj.auto_id
+		new_inner_id = inner_obj.auto_id
+
+		# Verify that all IDs have changed
+		self.assertNotEqual(initial_top_id, new_top_id)
+		self.assertNotEqual(initial_middle_id, new_middle_id)
+		self.assertNotEqual(initial_inner_id, new_inner_id)
+
+		# Call new_id() again on the topmost object
+		top_obj.new_id(True)
+		same_top_id = top_obj.auto_id
+		same_middle_id = middle_obj.auto_id
+		same_inner_id = inner_obj.auto_id
+
+		# Verify that the IDs haven't changed
+		self.assertEqual(new_top_id, same_top_id)
+		self.assertEqual(new_middle_id, same_middle_id)
+		self.assertEqual(new_inner_id, same_inner_id)
 if __name__ == '__main__':
 	unittest.main()
