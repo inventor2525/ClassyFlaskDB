@@ -123,6 +123,7 @@ class DATADecorator(AnyParam):
                         fields = [cls.__field_getters__[field_name](self,field_name) for field_name in hashed_fields]
                         self.auto_id = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
                     except Exception as e:
+                        print(f"new_id of type hash id failed with: {str(e)}")
                         self.auto_id = f"hash id failed {str(uuid.uuid4())}"
                 setattr(cls, "new_id", new_id)
                 add_pk("auto_id", str)
