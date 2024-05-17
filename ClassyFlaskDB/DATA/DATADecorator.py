@@ -16,10 +16,8 @@ from typing import Any, Dict, Iterable, List, Type
 import uuid
 
 class DATADecorator(AnyParam):
-    def __init__(self, *args, **kwargs):
-        # Initialize any state or pass any parameters required
-        self.args = args
-        self.kwargs = kwargs
+    def __init__(self, auto_decorate_as_dataclass=True):
+        self.auto_decorate_as_dataclass = auto_decorate_as_dataclass
         self.lazy = LazyDecorator()
         self.decorated_classes = {}
         self.mapper_registry = registry()
@@ -40,7 +38,8 @@ class DATADecorator(AnyParam):
         lazy_decorators = []
         self.decorated_classes[cls.__name__] = cls
         
-        cls = dataclass(cls)
+        if self.auto_decorate_as_dataclass:
+            cls = dataclass(cls)
         cls = capture_field_info(cls, excluded_fields=excluded_fields, included_fields=included_fields, auto_include_fields=auto_include_fields, exclude_prefix=exclude_prefix)
         if cls.FieldsInfo.primary_key_name is None:
             def add_pk(pk_name:str, pk_type:Type):

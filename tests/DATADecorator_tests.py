@@ -41,7 +41,7 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_bar.foe.strength, foe.strength)
 			
 	def test_relationship_with_manual_dataclass(self):
-		DATA = DATADecorator()
+		DATA = DATADecorator(auto_decorate_as_dataclass = False)
 
 		# Define the data classes
 		@DATA
@@ -54,7 +54,7 @@ class DATADecorator_tests(unittest.TestCase):
 		@dataclass
 		class Bar:
 			name: str
-			location: str
+			location: str = field(default_factory=lambda:"hello world")
 			foe: Foe = None
 			
 		data_engine = DATAEngine(DATA)
@@ -279,7 +279,7 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
 	
 	def test_relationship_with_manual_dataclass(self):
-		DATA = DATADecorator()
+		DATA = DATADecorator(auto_decorate_as_dataclass = False)
 
 		# Define the data classes
 		@DATA
