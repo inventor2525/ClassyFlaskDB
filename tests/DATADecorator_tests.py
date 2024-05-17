@@ -40,6 +40,40 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_bar.foe.name, foe.name)
 			self.assertEqual(queried_bar.foe.strength, foe.strength)
 			
+	def test_relationship_with_manual_dataclass(self):
+		DATA = DATADecorator()
+
+		# Define the data classes
+		@DATA
+		@dataclass
+		class Foe:
+			name: str
+			strength: int
+
+		@DATA
+		@dataclass
+		class Bar:
+			name: str
+			location: str
+			foe: Foe = None
+			
+		data_engine = DATAEngine(DATA)
+		
+		foe = Foe(name="Dragon", strength=100)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
+
+		data_engine.merge(bar)
+		
+		# Query from database
+		with data_engine.session() as session:
+			queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
+
+			# Validate
+			self.assertEqual(queried_bar.name, bar.name)
+			self.assertEqual(queried_bar.location, bar.location)
+			self.assertEqual(queried_bar.foe.name, foe.name)
+			self.assertEqual(queried_bar.foe.strength, foe.strength)
+			
 	def test_list_relationship(self):
 		DATA = DATADecorator()
 
@@ -206,6 +240,61 @@ class DATADecorator_tests(unittest.TestCase):
 			hit_points: int
 			
 		@DATA
+		class Bar:
+			name: str
+			location: str
+			foe: Foe = None
+			
+		data_engine = DATAEngine(DATA)
+		
+		foe1 = Foe1(name="Dragon", strength=100, hit_points=100)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe1)
+
+		# Insert into database
+		data_engine.merge(bar)
+
+		# merge 2 times again to test for a polymorphic relationship bug that was found that would
+		# cause a Unique key error for auto_id of a held child class (foe1 in this case)
+		foe1 = Foe1(name="Dragon", strength=100, hit_points=100)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe1)
+
+		# Insert into database
+		data_engine.merge(deepcopy(bar))
+		
+		# Insert into database
+		data_engine.merge(deepcopy(bar))
+
+		# Query from database
+		with data_engine.session() as session:
+			queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
+
+			# Validate
+			self.assertEqual(queried_bar.name, bar.name)
+			self.assertEqual(queried_bar.location, bar.location)
+
+			# self.assertEqual(queried_bar.foe.auto_id, foe1.auto_id)
+			self.assertEqual(queried_bar.foe.name, foe1.name)
+			self.assertEqual(queried_bar.foe.strength, foe1.strength)
+			print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
+			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
+	
+	def test_relationship_with_manual_dataclass(self):
+		DATA = DATADecorator()
+
+		# Define the data classes
+		@DATA
+		@dataclass
+		class Foe:
+			name: str
+			strength: int
+
+		@DATA
+		@dataclass
+		class Foe1(Foe):
+			hit_points: int
+			
+		@DATA
+		@dataclass
 		class Bar:
 			name: str
 			location: str

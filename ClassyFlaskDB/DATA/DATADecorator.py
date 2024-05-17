@@ -40,8 +40,7 @@ class DATADecorator(AnyParam):
         lazy_decorators = []
         self.decorated_classes[cls.__name__] = cls
         
-        if not is_dataclass(cls):
-            cls = dataclass(cls)
+        cls = dataclass(cls)
         cls = capture_field_info(cls, excluded_fields=excluded_fields, included_fields=included_fields, auto_include_fields=auto_include_fields, exclude_prefix=exclude_prefix)
         if cls.FieldsInfo.primary_key_name is None:
             def add_pk(pk_name:str, pk_type:Type):
