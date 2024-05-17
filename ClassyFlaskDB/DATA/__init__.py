@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from dataclasses import field
+from dataclasses import field, dataclass
 
 from .DATADecorator import DATADecorator, ID_Type
 from .DATAEngine import DATAEngine
