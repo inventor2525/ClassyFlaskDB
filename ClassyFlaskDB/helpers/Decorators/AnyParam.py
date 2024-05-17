@@ -13,7 +13,7 @@ class AnyParam(ABC):
 			return lambda obj: self.decorate(obj, *args, **kwargs)
 		
 	@abstractmethod
-	def decorate(self, cls, *args, **kwargs) -> Type[Any]:
+	def decorate(self, cls:Type[T], *args, **kwargs) -> Type[T]:
 		pass
 
 class SplitAnyParam(AnyParam):

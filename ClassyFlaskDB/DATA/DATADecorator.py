@@ -12,9 +12,10 @@ from ClassyFlaskDB.DATA.ID_Type import ID_Type
 from dataclasses import dataclass, is_dataclass
 from copy import deepcopy
 
-from typing import Any, Dict, Iterable, List, Type
+from typing import Any, Dict, Iterable, List, Type, TypeVar
 import uuid
 
+clsType = TypeVar('clsType')
 class DATADecorator(AnyParam):
     def __init__(self, auto_decorate_as_dataclass=True):
         self.auto_decorate_as_dataclass = auto_decorate_as_dataclass
@@ -34,7 +35,7 @@ class DATADecorator(AnyParam):
         self.lazy.clear_group("default")
         self._finalized = True
     
-    def decorate(self, cls:Type[Any], generated_id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None, excluded_fields:Iterable[str]=[], included_fields:Iterable[str]=[], auto_include_fields=True, exclude_prefix:str="_") -> Type[Any]:
+    def decorate(self, cls:Type[clsType], generated_id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None, excluded_fields:Iterable[str]=[], included_fields:Iterable[str]=[], auto_include_fields=True, exclude_prefix:str="_") -> Type[clsType]:
         lazy_decorators = []
         self.decorated_classes[cls.__name__] = cls
         
