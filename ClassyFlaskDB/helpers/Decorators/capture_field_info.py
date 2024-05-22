@@ -34,6 +34,13 @@ class FieldsInfo:
 		return self._type_hints
 	
 	def get_field_type(self, field_name:str) -> Type[Any]:
+		if not hasattr(self, "_field_types"):
+			self._field_types = {}
+			
+		field_type = self._field_types.get(field_name, None)
+		if field_type:
+			return field_type
+		
 		# Get field type:
 		if field_name in self.fields_dict:
 			field_type = self.fields_dict[field_name].type
@@ -47,7 +54,20 @@ class FieldsInfo:
 				field_type = extract_property_type(self.model_class, field_name)
 			else:
 				field_type = type(attr)
+		self._field_types[field_name] = field_type
 		return field_type
+	
+	@property
+	def fields_with_FieldsInfo(self) -> List[str]:
+		if hasattr(self, "_fields_with_FieldsInfo"):
+			return self._fields_with_FieldsInfo
+		
+		self._fields_with_FieldsInfo = []
+		for field_name in self.field_names:
+			field_type = self.get_field_type(field_name)
+			if hasattr(field_type, "FieldsInfo"):
+				self._fields_with_FieldsInfo.append(field_name)
+		return self._fields_with_FieldsInfo
 	
 	def iterate(self, max_depth: int=-1) -> Iterable[FieldInfo]:
 		"""Iterate through __model_class__'S fields and their types in a BFS manner, up to max_depth."""

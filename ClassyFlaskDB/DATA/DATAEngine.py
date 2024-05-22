@@ -26,13 +26,34 @@ def convert_to_column_type(value, column_type):
 class Session(AlchemySession):
     def merge(self, instance, load=True, **kwargs):
         if hasattr(instance, 'FieldsInfo'):
-            fields_info = getattr(instance, 'FieldsInfo')
-            existing = self.get(instance.__class__, instance.get_primary_key())
-            if existing:
-                for attr_name in fields_info.no_update_fields:
-                    preserved_value = getattr(existing, attr_name, None)
-                    setattr(instance, attr_name, preserved_value)
-
+            def preserve_locked_fields_of(obj):
+                fields_info = getattr(obj, 'FieldsInfo')
+                existing = self.get(obj.__class__, obj.get_primary_key())
+                if existing:
+                    for attr_name in fields_info.no_update_fields:
+                        preserved_value = getattr(existing, attr_name, None)
+                        setattr(obj, attr_name, preserved_value)
+            
+            def process_crawled(obj):
+                '''
+                A function we can extend latter to apply some logic to
+                every data decorator decorated class type field.
+                '''
+                preserve_locked_fields_of(obj)
+            
+            closed_set = set()
+            open_list = [instance]
+            closed_set.add(id(instance))
+            while len(open_list)>0:
+                obj = open_list.pop()
+                process_crawled(obj)
+            
+                for child_name in obj.FieldsInfo.fields_with_FieldsInfo:
+                    child = getattr(obj, child_name)
+                    if child and id(child) not in closed_set:
+                        open_list.append(child)
+                        closed_set.add(id(child))
+            
         return super(Session, self).merge(instance, load=load, **kwargs)
     
 class DATAEngine:

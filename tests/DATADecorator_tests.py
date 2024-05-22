@@ -979,7 +979,7 @@ class DATADecorator_tests(unittest.TestCase):
 		class Tag(Object):
 			key: str
 
-		@DATA
+		@DATA(generated_id_type=ID_Type.HASHID, hashed_fields=["class_name"])
 		@dataclass
 		class Source(Object):
 			class_name: str
@@ -1004,6 +1004,7 @@ class DATADecorator_tests(unittest.TestCase):
 			queried_hk:HashedKeyObj = session.query(HashedKeyObj).first()
 			self.assertEquals(queried_hk.source.class_name, source_name)
 			self.assertEquals(queried_hk.date_created, hk_obj.date_created)
+			self.assertEquals(queried_hk.source.date_created, hk_obj.source.date_created)
 			self.assertEquals(len(queried_hk.tags), 2)
 			self.assertEquals(queried_hk.tags[0].source.class_name, source_name)
 			self.assertEquals(queried_hk.tags[0].key, "A first tag")
@@ -1014,22 +1015,27 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEquals(queried_hk.tags[1].date_created, tag2.date_created)
 		
 		#Create new objects with id's that should be the same as the originals:
-		new_tag1 = Tag(key="A first tag", source=source)
-		new_tag2 = Tag(key="A second tag", source=source)
-		new_hk = HashedKeyObj(name="My HK Obj", source=source, tags=[new_tag1, new_tag2])
+		new_source = Source(source_name)
+		new_tag1 = Tag(key="A first tag", source=new_source)
+		new_tag2 = Tag(key="A second tag", source=new_source)
+		new_hk = HashedKeyObj(name="My HK Obj", source=new_source, tags=[new_tag1, new_tag2])
 		
 		#Test that they have the same id's:
 		self.assertEquals(new_hk.get_primary_key(), hk_obj.get_primary_key())
 		self.assertEquals(new_tag1.get_primary_key(), tag1.get_primary_key())
 		self.assertEquals(new_tag2.get_primary_key(), tag2.get_primary_key())
 		
+		print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 		data_engine.merge(new_hk)
+		print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 		
 		# Verify that no_update took effect and that the dates
 		# have not been changed, even though we merged new objects:
 		with data_engine.session() as session:
 			queried_hk2:HashedKeyObj = session.query(HashedKeyObj).first()
 			self.assertEquals(queried_hk2.date_created, hk_obj.date_created)
+			self.assertEquals(queried_hk2.source.get_primary_key(), hk_obj.source.get_primary_key())
+			self.assertEquals(queried_hk2.source.date_created, hk_obj.source.date_created)
 			self.assertEquals(queried_hk2.tags[0].date_created, tag1.date_created)
 			self.assertEquals(queried_hk2.tags[1].date_created, tag2.date_created)
 		
