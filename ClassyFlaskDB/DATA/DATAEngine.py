@@ -1,4 +1,5 @@
 from sqlalchemy import Engine, create_engine, MetaData, DateTime, text, update
+from sqlalchemy.orm import Session as AlchemySession
 from sqlalchemy.orm import sessionmaker
 from copy import deepcopy
 import shutil
@@ -22,6 +23,18 @@ def convert_to_column_type(value, column_type):
             return datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S.%f")
     return value
 
+class Session(AlchemySession):
+    def merge(self, instance, load=True, **kwargs):
+        if hasattr(instance, 'FieldsInfo'):
+            fields_info = getattr(instance, 'FieldsInfo')
+            existing = self.get(instance.__class__, instance.get_primary_key())
+            if existing:
+                for attr_name in fields_info.no_update_fields:
+                    preserved_value = getattr(existing, attr_name, None)
+                    setattr(instance, attr_name, preserved_value)
+
+        return super(Session, self).merge(instance, load=load, **kwargs)
+    
 class DATAEngine:
     @property
     def engine_metadata(self):
@@ -111,7 +124,7 @@ class DATAEngine:
         else:
             self.engine = engine
         
-        self.session_maker = sessionmaker(bind=self.engine)
+        self.session_maker = sessionmaker(bind=self.engine, class_=Session)
         
         self._bind_engine_metadata()
     
@@ -209,7 +222,7 @@ class DATAEngine:
                     session.commit()
             
     @contextmanager
-    def session(self):
+    def session(self) -> Session:
         session = self.session_maker()
         try:
             yield session

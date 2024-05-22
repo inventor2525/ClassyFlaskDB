@@ -23,9 +23,10 @@ class FieldsInfo:
 	model_class : Type[Any]
 	field_names : List[str]
 	fields_dict : Dict[str, field]
-	primary_key_name : str
+	primary_key_name : str = None
 	_type_hints : Dict[str, Type[Any]] = field(init=False, repr=False, default_factory=dict)
-
+	no_update_fields : List[str] = field(default_factory=list) #names of fields that have no_update=True in metadata
+	
 	@property
 	def type_hints(self) -> Dict[str, Type[Any]]:
 		if self._type_hints is None:
@@ -100,24 +101,26 @@ def capture_field_info(cls:Type[Any], excluded_fields:Iterable[str]=[], included
 	])
 	
 	field_names, fields_dict = get_fields_matching(cls, excluded_fields, included_fields, auto_include_fields, exclude_prefix)
+	fi = FieldsInfo(cls, field_names, fields_dict)
 	
 	#Get the primary key name:
-	primary_key_name = None
 	if hasattr(cls, "__primary_key_name__"):
-		primary_key_name = cls.__primary_key_name__
-		if primary_key_name not in field_names:
-			field_names.append(primary_key_name)
+		fi.primary_key_name = cls.__primary_key_name__
+		if fi.primary_key_name not in field_names:
+			field_names.append(fi.primary_key_name)
 		
 	for field_name in fields_dict:
 		field = fields_dict[field_name]
 		if "primary_key" in field.metadata and field.metadata["primary_key"]:
-			if primary_key_name is not None:
+			if fi.primary_key_name is not None:
 				raise ValueError(f"Multiple primary keys specified in {cls}.")
-			primary_key_name = field_name
+			fi.primary_key_name = field_name
+		if field.metadata.get("no_update",False):
+			fi.no_update_fields.append(field_name)
 
-	if primary_key_name is None:
+	if fi.primary_key_name is None:
 		if 'id' in field_names:
-			primary_key_name = 'id'
+			fi.primary_key_name = 'id'
 	
-	setattr(cls, 'FieldsInfo', FieldsInfo(cls, field_names, fields_dict, primary_key_name))
+	setattr(cls, 'FieldsInfo', fi)
 	return cls

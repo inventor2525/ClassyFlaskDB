@@ -877,5 +877,162 @@ class DATADecorator_tests(unittest.TestCase):
 		self.assertEqual(new_top_id, same_top_id)
 		self.assertEqual(new_middle_id, same_middle_id)
 		self.assertEqual(new_inner_id, same_inner_id)
+		
+	def test_object_source_sourced_object(self):
+		DATA = DATADecorator()
+
+		@DATA
+		class Object:
+			created_at: datetime = field(default_factory=datetime.utcnow, kw_only=True)
+
+		@DATA
+		class Source(Object):
+			tag: str = field(default=None, kw_only=True)  # Making tag a non-default field while keeping the dataclass happy
+
+		@DATA
+		class SourcedObject(Object):
+			source: Source = field(default=None, kw_only=True)  # Including source as an optional field
+
+		data_engine = DATAEngine(DATA)
+
+		# Create some fake data
+		source1 = Source(tag="Source 1")
+		source2 = Source(tag="Source 2")
+
+		obj1 = SourcedObject(created_at=datetime(2022, 1, 1), source=source1)
+		obj2 = SourcedObject(created_at=datetime(2022, 1, 15), source=source2)
+		obj3 = SourcedObject(created_at=datetime(2022, 2, 1), source=source1)
+
+		data_engine.merge(obj1)
+		data_engine.merge(obj2)
+		data_engine.merge(obj3)
+
+		# Query from database
+		with data_engine.session() as session:
+			queried_objects = session.query(SourcedObject).all()
+
+			self.assertEqual(len(queried_objects), 3)
+
+			for obj in queried_objects:
+				if obj.created_at == datetime(2022, 1, 1):
+					self.assertEqual(obj.source.tag, "Source 1")
+				elif obj.created_at == datetime(2022, 1, 15):
+					self.assertEqual(obj.source.tag, "Source 2")
+				elif obj.created_at == datetime(2022, 2, 1):
+					self.assertEqual(obj.source.tag, "Source 1")
+					
+	def test_sourced_objects(self):
+		DATA = DATADecorator()
+
+		@DATA
+		class Object:
+			date_created: datetime = field(default_factory=datetime.utcnow, kw_only=True)
+			
+		@DATA
+		class Tag(Object):
+			key: str = field(kw_only=True)
+
+		@DATA
+		class Source(Object):
+			source_name: str = field(kw_only=True)
+
+		@DATA
+		class SourcedObject(Object):
+			source: Source = field(kw_only=True)
+			tags: List[Tag] = field(default_factory=list, kw_only=True)
+
+		data_engine = DATAEngine(DATA)
+
+		# Create some fake data
+		source = Source(source_name="Fake Source")
+		tag1 = Tag(key="tag1")
+		tag2 = Tag(key="tag2")
+		sourced_object = SourcedObject(source=source, tags=[tag1, tag2])
+
+		data_engine.merge(sourced_object)
+
+		# Query from database
+		with data_engine.session() as session:
+			queried_object = session.query(SourcedObject).first()
+
+			self.assertIsNotNone(queried_object)
+			self.assertEqual(queried_object.source.source_name, "Fake Source")
+			self.assertEqual(len(queried_object.tags), 2)
+			self.assertEqual(queried_object.tags[0].key, "tag1")
+			self.assertEqual(queried_object.tags[1].key, "tag2")
+			
+	def test_frozen_dates_with_forward_ref_sourced_objects(self):
+		DATA = DATADecorator(auto_decorate_as_dataclass=False)
+
+		@DATA
+		@dataclass
+		class Object:
+			date_created: datetime = field(
+				default_factory=datetime.utcnow, kw_only=True, 
+				metadata={"no_update":True}
+			)
+			source: "Object" = field(default=None, kw_only=True)
+			tags: List["Tag"] = field(default_factory=list, kw_only=True)
+			
+		@DATA(generated_id_type=ID_Type.HASHID, hashed_fields=["key"])
+		@dataclass
+		class Tag(Object):
+			key: str
+
+		@DATA
+		@dataclass
+		class Source(Object):
+			class_name: str
+			
+		@DATA(generated_id_type=ID_Type.HASHID, hashed_fields=["name"])
+		@dataclass
+		class HashedKeyObj(Object):
+			name: str = field(kw_only=True)
+
+		data_engine = DATAEngine(DATA)
+		
+		source_name = "DATA class unit test"
+		source = Source(source_name)
+		tag1 = Tag(key="A first tag", source=source)
+		tag2 = Tag(key="A second tag", source=source)
+		hk_obj = HashedKeyObj(name="My HK Obj", source=source, tags=[tag1, tag2])
+		
+		data_engine.merge(hk_obj)
+		
+		#Ensure we're querying correctly:
+		with data_engine.session() as session:
+			queried_hk:HashedKeyObj = session.query(HashedKeyObj).first()
+			self.assertEquals(queried_hk.source.class_name, source_name)
+			self.assertEquals(queried_hk.date_created, hk_obj.date_created)
+			self.assertEquals(len(queried_hk.tags), 2)
+			self.assertEquals(queried_hk.tags[0].source.class_name, source_name)
+			self.assertEquals(queried_hk.tags[0].key, "A first tag")
+			self.assertEquals(queried_hk.tags[0].date_created, tag1.date_created)
+			
+			self.assertEquals(queried_hk.tags[1].source.class_name, source_name)
+			self.assertEquals(queried_hk.tags[1].key, "A second tag")
+			self.assertEquals(queried_hk.tags[1].date_created, tag2.date_created)
+		
+		#Create new objects with id's that should be the same as the originals:
+		new_tag1 = Tag(key="A first tag", source=source)
+		new_tag2 = Tag(key="A second tag", source=source)
+		new_hk = HashedKeyObj(name="My HK Obj", source=source, tags=[new_tag1, new_tag2])
+		
+		#Test that they have the same id's:
+		self.assertEquals(new_hk.get_primary_key(), hk_obj.get_primary_key())
+		self.assertEquals(new_tag1.get_primary_key(), tag1.get_primary_key())
+		self.assertEquals(new_tag2.get_primary_key(), tag2.get_primary_key())
+		
+		data_engine.merge(new_hk)
+		
+		# Verify that no_update took effect and that the dates
+		# have not been changed, even though we merged new objects:
+		with data_engine.session() as session:
+			queried_hk2:HashedKeyObj = session.query(HashedKeyObj).first()
+			self.assertEquals(queried_hk2.date_created, hk_obj.date_created)
+			self.assertEquals(queried_hk2.tags[0].date_created, tag1.date_created)
+			self.assertEquals(queried_hk2.tags[1].date_created, tag2.date_created)
+		
+			
 if __name__ == '__main__':
 	unittest.main()
