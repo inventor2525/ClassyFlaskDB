@@ -11,6 +11,7 @@ from dateutil import tz
 
 from dataclasses import fields, is_dataclass, MISSING
 from sqlalchemy import event
+import enum
 
 type_map = {
 	bool: Boolean,
@@ -124,7 +125,21 @@ def add_dynamic_datetime_property(cls, field_name):
 	setattr(cls, f"{field_name}__DateTimeObj", None)
 	setattr(cls, f"{field_name}__TimeZone", None)
 	setattr(cls, field_name, property(getter, setter))
-	
+
+def add_enum_property(cls, field_name, field_type):
+	"""Adds dynamic properties to handle datetime with timezone."""
+	backing_field_name = f"_{field_name}_enum_value"
+	enum_mapping = {str(v.value): v for v in field_type.__members__.values()}
+	def getter(self):
+		backing_field_value = getattr(self, backing_field_name)
+		return enum_mapping.get(backing_field_value, None)
+
+	def setter(self, value):
+		setattr(self, backing_field_name, str(value.value))
+
+	setattr(cls, backing_field_name, None)
+	setattr(cls, field_name, property(getter, setter))
+
 class DateTimeGetterSetter(GetterSetter):
 	def __init__(self, field_info:FieldInfo):
 		super().__init__(field_info)
@@ -132,6 +147,13 @@ class DateTimeGetterSetter(GetterSetter):
 		self.datetime_column = Column(f"{self.field_info.field_name}__DateTimeObj", DateTime)
 		self.timezone_column = Column(f"{self.field_info.field_name}__TimeZone", String, nullable=True)
 		self.columns = [self.datetime_column, self.timezone_column]
+
+class EnumGetterSetter(GetterSetter):
+	def __init__(self, field_info:FieldInfo):
+		super().__init__(field_info)
+
+		self._column = Column(f"_{field_info.field_name}_enum_value", String)
+		self.columns = [self._column]
 		
 def to_sql():
 	'''
@@ -219,6 +241,9 @@ def to_sql():
 				elif field_type is datetime:
 					getter_setters.append(DateTimeGetterSetter(fi))
 					add_dynamic_datetime_property(cls, fi.field_name)
+				elif isinstance(field_type, enum.EnumMeta):
+					getter_setters.append(EnumGetterSetter(fi))
+					add_enum_property(cls, field_name, field_type)
 				else:
 					origin_type = get_origin(field_type)
 					if origin_type:
