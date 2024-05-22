@@ -53,6 +53,13 @@ class Session(AlchemySession):
                     if child and id(child) not in closed_set:
                         open_list.append(child)
                         closed_set.add(id(child))
+                for child_name in obj.FieldsInfo.list_fields_with_FieldsInfo:
+                    child = getattr(obj, child_name)
+                    if child and id(child) not in closed_set:
+                        closed_set.add(id(child))
+                        for child_item in child:
+                            if child_item and id(child_item) not in closed_set:
+                                open_list.append(child_item)
             
         return super(Session, self).merge(instance, load=load, **kwargs)
     

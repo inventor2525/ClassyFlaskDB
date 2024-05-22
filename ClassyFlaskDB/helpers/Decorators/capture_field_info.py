@@ -57,17 +57,31 @@ class FieldsInfo:
 		self._field_types[field_name] = field_type
 		return field_type
 	
+	def _gen_fields_with(self):
+		self._fields_with_FieldsInfo = []
+		self._list_fields_with_FieldsInfo = []
+		for field_name in self.field_names:
+			field_type = self.get_field_type(field_name)
+			if hasattr(field_type, "FieldsInfo"):
+				self._fields_with_FieldsInfo.append(field_name)
+			elif hasattr(field_type, "__origin__") and field_type.__origin__ in [list, tuple, set]:
+				self._list_fields_with_FieldsInfo.append(field_name)
+	
 	@property
 	def fields_with_FieldsInfo(self) -> List[str]:
 		if hasattr(self, "_fields_with_FieldsInfo"):
 			return self._fields_with_FieldsInfo
 		
-		self._fields_with_FieldsInfo = []
-		for field_name in self.field_names:
-			field_type = self.get_field_type(field_name)
-			if hasattr(field_type, "FieldsInfo"):
-				self._fields_with_FieldsInfo.append(field_name)
+		self._gen_fields_with()
 		return self._fields_with_FieldsInfo
+	
+	@property
+	def list_fields_with_FieldsInfo(self) -> List[str]:
+		if hasattr(self, "_list_fields_with_FieldsInfo"):
+			return self._list_fields_with_FieldsInfo
+		
+		self._gen_fields_with()
+		return self._list_fields_with_FieldsInfo
 	
 	def iterate(self, max_depth: int=-1) -> Iterable[FieldInfo]:
 		"""Iterate through __model_class__'S fields and their types in a BFS manner, up to max_depth."""
