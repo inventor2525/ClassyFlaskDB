@@ -279,6 +279,12 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
 	
 	def test_relationship_with_polymorphic_circular_ref(self):
+		#This test will fail until the need for foreign keys simply
+		#to create relationships is removed. Data integrity does not
+		#need to be enforced at the db level so far with this.
+		#
+		#Or another method of circular dependance is added.
+		
 		import warnings
 		from sqlalchemy.exc import SAWarning
 		# Convert the specific SAWarning into an exception
@@ -1073,7 +1079,7 @@ class DATADecorator_tests(unittest.TestCase):
 				default_factory=datetime.utcnow, kw_only=True, 
 				metadata={"no_update":True}
 			)
-			source: "Object" = field(default=None, kw_only=True)
+			source: "Source" = field(default=None, kw_only=True)
 			tags: List["Tag"] = field(default_factory=list, kw_only=True)
 			
 		@DATA(generated_id_type=ID_Type.HASHID, hashed_fields=["key"])
@@ -1140,7 +1146,81 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEquals(queried_hk2.source.date_created, hk_obj.source.date_created)
 			self.assertEquals(queried_hk2.tags[0].date_created, tag1.date_created)
 			self.assertEquals(queried_hk2.tags[1].date_created, tag2.date_created)
+	
+	def test_default_model(self):
+		from ClassyFlaskDB.DefaultModel import DATA, DATAEngine, Object, Tag, Source
 		
+		@DATA
+		@dataclass
+		class Message(Object):
+			content:str
+			conversation:"Conversation"
+		
+		@DATA(generated_id_type=ID_Type.HASHID, hashed_fields=["messages"])
+		@dataclass
+		class MessageSequence(Object):
+			messages:List["Message"] = field(default_factory=list)
+			conversation:"Conversation" = None
 			
+		@DATA
+		@dataclass
+		class Conversation(Object):
+			name:str
+			message_sequence:MessageSequence = field(default_factory=MessageSequence)
+		
+		@DATA
+		@dataclass
+		class MessageSource(Source):
+			name:str = field(default="", kw_only=True)
+		
+		@DATA
+		@dataclass
+		class ModelSource(MessageSource):
+			model_name:str
+			
+		@DATA
+		@dataclass
+		class UserSource(MessageSource):
+			user_name:str
+		
+		engine = DATAEngine(DATA)
+		
+		model_source = ModelSource("My Great Model")
+		user_source = UserSource("A Person")
+		
+		conv = Conversation("A great conversation")
+		conv.message_sequence.conversation = conv
+		
+		good_tag = Tag("A good Message")
+		bad_tag = Tag("A bad Message")
+		msg0 = Message("Hello how can I assist you today?", conv, source=model_source, tags=[bad_tag])
+		msg1 = Message("Hello computer", conv, source=user_source)
+		msg2 = Message("Hello!", conv, source=model_source, tags=[good_tag])
+		conv.message_sequence.messages.append(msg0)
+		conv.message_sequence.messages.append(msg1)
+		conv.message_sequence.messages.append(msg2)
+		
+		engine.merge(conv)
+		
+		to_from_json_conv = Conversation.from_json(conv.to_json())
+		
+		
+		#Test chaining sources:
+		source1 = ModelSource("Source 1")
+		source2 = ModelSource("Source 2")
+		source3 = ModelSource("Source 3")
+
+		msg = Object()
+		msg | source1 | source2 | source3
+
+		self.assertIsNotNone(msg.source)
+		self.assertIsNotNone(source1.source)
+		self.assertIsNotNone(source2.source)
+
+		self.assertEquals(msg.source, source1)
+		self.assertEquals(source1.source, source2)
+		self.assertEquals(source2.source, source3)
+		self.assertIsNone(source3.source)
+		
 if __name__ == '__main__':
 	unittest.main()
