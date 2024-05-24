@@ -278,6 +278,64 @@ class DATADecorator_tests(unittest.TestCase):
 			print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
 	
+	def test_relationship_with_polymorphic_circular_ref(self):
+		import warnings
+		from sqlalchemy.exc import SAWarning
+		# Convert the specific SAWarning into an exception
+		with warnings.catch_warnings():
+			warnings.simplefilter("error", SAWarning)
+
+			DATA = DATADecorator()
+			current_number = -1
+			def new_number() -> int:
+				nonlocal current_number
+				current_number += 1
+				return current_number
+
+			@DATA
+			class CommonBase:
+				val: int = field(default_factory=new_number, kw_only=True)
+
+			@DATA
+			class Foe(CommonBase):
+				name: str
+				strength: int
+				bar: "Bar" = None
+
+			@DATA
+			class Bar(CommonBase):
+				name: str
+				location: str
+				foe: "Foe" = None
+
+			data_engine = DATAEngine(DATA ,suppress_fk_warnings=False)
+
+			foe = Foe(name="Dragon1", strength=100)
+			bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
+
+			foe.bar = bar
+
+			# Insert into database
+			data_engine.add(bar)
+
+			# Query from database
+			with data_engine.session() as session:
+				queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
+
+				# Validate
+				self.assertEqual(queried_bar.name, bar.name)
+				self.assertEqual(queried_bar.location, bar.location)
+				self.assertEqual(queried_bar.foe.name, bar.foe.name)
+				self.assertEqual(queried_bar.foe.strength, bar.foe.strength)
+				self.assertEqual(queried_bar.foe.bar.name, bar.name)
+				self.assertEqual(queried_bar.foe.bar.location, bar.location)
+				self.assertEqual(queried_bar.foe.bar.auto_id, bar.auto_id)
+				
+				self.assertEqual(foe.val, 0)
+				self.assertEqual(bar.val, 1)
+				self.assertEqual(queried_bar.val, bar.val)
+				self.assertEqual(queried_bar.foe.val, foe.val)
+			
 	def test_relationship_with_manual_dataclass(self):
 		DATA = DATADecorator(auto_decorate_as_dataclass = False)
 

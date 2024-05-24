@@ -83,7 +83,13 @@ class DATAEngine:
         else:
             logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
     
-    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:", should_backup:bool=True, backup_dir:str=None, auto_add_new_columns:bool=True, auto_replace_database_fallback:bool=True):        
+    def __init__(self, data_decorator:"DATADecorator", engine:Engine=None, engine_str:str="sqlite:///:memory:", should_backup:bool=True, backup_dir:str=None, auto_add_new_columns:bool=True, auto_replace_database_fallback:bool=True, suppress_fk_warnings:bool=True):        
+        if suppress_fk_warnings:
+            import warnings
+            from sqlalchemy.exc import SAWarning
+            warnings.filterwarnings('ignore', '.*there are unresolvable cycles between tables.*', SAWarning)
+
+        
         self.data_decorator = data_decorator
         self.backup_dir = backup_dir
         
