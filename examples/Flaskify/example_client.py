@@ -1,5 +1,8 @@
 # import the Flaskify decorator and make it a client:
 from ClassyFlaskDB.Flaskify import Flaskify
+from ClassyFlaskDB.DefaultModel import DATA, DATAEngine
+from ClassyFlaskDB.helpers.examples.ConversationModel import Conversation, Message, ModelSource, UserSource
+DATAEngine(DATA)
 Flaskify.make_client(base_url="http://localhost:8000")
 
 # import our services after the make_client call so they become client classes:
@@ -18,7 +21,6 @@ print(AnotherService.upper_case_text("hello"))
 print(AnotherService.repeat_text("hello", 3))
 
 # Create a conversation to send to the server:
-from ClassyFlaskDB.helpers.examples.ConversationModel import Conversation, Message, ModelSource, UserSource
 c = Conversation("Conversation 1", "First conversation")
 print(c.message_sequence.get_primary_key())
 c.add_message(Message("Hello", UserSource("George")))

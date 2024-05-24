@@ -1,4 +1,7 @@
 from ClassyFlaskDB.Flaskify import *
+from ClassyFlaskDB.DefaultModel import DATA,DATAEngine
+from ClassyFlaskDB.helpers.examples.ConversationModel import Conversation, Message, ModelSource, UserSource
+DATAEngine(DATA)
 
 # Create the server:
 app = Flask(__name__)

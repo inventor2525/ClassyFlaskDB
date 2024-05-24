@@ -1,20 +1,23 @@
 from ClassyFlaskDB.Flaskify.Loggers.LoggerModel import *
 import os
 from datetime import datetime
-from werkzeug.datastructures import FileStorage
 from flask import request
 import mimetypes
 
 class Logger:
-    def __init__(self, log_json=True, log_files=True, name="DefaultLogger", files_folder="server_log_files"):
+    def __init__(self, log_json=True, log_files=True, name="DefaultLogger", files_folder="server_log_files", logger_engine:DATAEngine=None):
         self.log_json = log_json
         self.log_files = log_files
 
         self.name = name
         self.files_folder = files_folder
+        if logger_engine:
+            self.logger_engine = logger_engine
+        else:
+            self.logger_engine = DATAEngine(DATA, engine_str='sqlite:///server_log.db')
 
     def __call__(self, request: request, *args, **kwargs):
-        with logger_engine.session() as session:
+        with self.logger_engine.session() as session:
             now = datetime.now()
             now_str = now.strftime("%Y-%m-%d_%H-%M-%S.%f")
 

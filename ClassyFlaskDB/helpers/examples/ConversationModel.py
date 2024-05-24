@@ -1,31 +1,26 @@
-from ClassyFlaskDB.DATA import *
+from ClassyFlaskDB.DefaultModel import *
 from datetime import datetime
 from typing import List
 import tzlocal
 
-def get_local_time():
-	local_tz = tzlocal.get_localzone()
-	return datetime.now(local_tz)
-
-ConversationDATA = DATADecorator()
-@ConversationDATA
-class MessageSource:
+@DATA
+@dataclass
+class MessageSource(Source):
 	pass
 	
-@ConversationDATA
-class Message:
+@DATA
+@dataclass
+class Message(Object):
 	content: str
-	source: MessageSource = None
-	
-	creation_time: datetime = field(default_factory=get_local_time)
 	
 	prev_message: "Message" = None
 	conversation: "Conversation" = None
 	
 	_children: List["Message"] = field(default_factory=list)
 
-@ConversationDATA(generated_id_type=ID_Type.HASHID, hashed_fields=["messages"])
-class MessageSequence:
+@DATA(generated_id_type=ID_Type.HASHID, hashed_fields=["messages"])
+@dataclass
+class MessageSequence(Object):
 	conversation: "Conversation"
 	messages: List[Message] = field(default_factory=list)
 	
@@ -34,12 +29,11 @@ class MessageSequence:
 		self.messages.append(message)
 		self.new_id()
 	
-@ConversationDATA
-class Conversation:
+@DATA
+@dataclass
+class Conversation(Object):
 	name: str
 	description: str
-	
-	creation_time: datetime = field(default_factory=get_local_time)
 	
 	message_sequence:MessageSequence = None
 	
@@ -62,21 +56,22 @@ class Conversation:
 		# 	message.prev_message._children.append(message)
 		message.conversation = self
 
-@ConversationDATA
-class EditSource(MessageSource):
+@DATA
+@dataclass
+class EditSource(Source):
 	original: Message
 	new: Message = None
 	new_message_source: MessageSource = None
 	pass
 	
-@ConversationDATA
-class ModelSource(MessageSource):
+@DATA
+@dataclass
+class ModelSource(Source):
 	model_name: str
 	model_parameters: dict
 	message_sequence: MessageSequence
 
-@ConversationDATA
-class UserSource(MessageSource):
+@DATA
+@dataclass
+class UserSource(Source):
 	user_name: str = None
-
-ConversationDATA.finalize()
