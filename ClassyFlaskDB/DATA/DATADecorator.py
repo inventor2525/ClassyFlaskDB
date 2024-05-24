@@ -200,7 +200,7 @@ class DATADecorator(AnyParam):
             
             pk_col = cls.__table__.c[cls.FieldsInfo.primary_key_name]
             with engine.session() as session:
-                objs = deepcopy( session.query(cls).options(joinedload('*')).filter(pk_col==json_data["primary_key"]).first() )
+                objs = deepcopy( session.query(cls).filter(pk_col==json_data["primary_key"]).first() )
                 
             engine.dispose()
             return objs
