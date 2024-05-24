@@ -921,6 +921,50 @@ class DATADecorator_tests(unittest.TestCase):
 				elif obj.created_at == datetime(2022, 2, 1):
 					self.assertEqual(obj.source.tag, "Source 1")
 					
+	def test_datetime_fields_with_inheritance(self):
+		DATA = DATADecorator(auto_decorate_as_dataclass=False)
+		
+		@DATA
+		@dataclass
+		class Object:
+			date_created: datetime = field(
+				default_factory=datetime.utcnow, kw_only=True, 
+				metadata={"no_update":True}
+			)
+		
+		@DATA
+		@dataclass
+		class SubClass(Object):
+			name:str
+			
+		@DATA
+		@dataclass
+		class SubSubClass(SubClass):
+			description:str
+			
+		@DATA
+		@dataclass
+		class SubSubSubClass(SubSubClass):
+			something:str
+		
+		engine = DATAEngine(DATA)
+		
+		sc1 = SubSubSubClass("hello", "Why do", "How are")
+		sc2 = SubSubSubClass("world!", "this?", "You?")
+		
+		self.assertEqual(SubClass.from_json(sc1.to_json()).name, sc1.name)
+		self.assertEqual(SubClass.from_json(sc2.to_json()).name, sc2.name)
+		
+		for table_name, table_contents in sc1.to_json()['obj'].items():
+			if len(table_contents)==0:
+				continue
+			if table_name == "Object_Table":
+				self.assertTrue("date_created__DateTimeObj" in table_contents[0])
+				self.assertTrue("date_created__TimeZone" in table_contents[0])
+			else:
+				self.assertTrue("date_created__DateTimeObj" not in table_contents[0])
+				self.assertTrue("date_created__TimeZone" not in table_contents[0])
+						
 	def test_sourced_objects(self):
 		DATA = DATADecorator()
 

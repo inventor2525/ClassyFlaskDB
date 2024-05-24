@@ -214,16 +214,20 @@ def to_sql():
 				add_column(field_info, Column(field_info.field_name, col_type, ForeignKey(f"{type_table_name(cls_parent_type)}.{parent_primary_key_name}"), primary_key=field_info.is_primary_key))
 			else:
 				add_column(field_info, Column(field_info.field_name, col_type, primary_key=field_info.is_primary_key))
-
+		
+		def a_parent_has_field(field_name, cls):
+			for parent_class in cls.__mro__[1:]:
+				if hasattr(parent_class, field_name):
+					return True
+			return False
 		for fi in cls.FieldsInfo.iterate(0):
 			field_name = fi.field_name
 			field_type = fi.field_type
 			create_column = True
 			
-			if not cls_is_base:
-				if field_name in cls_parent_type.__dict__:
-					if not fi.is_primary_key:
-						continue
+			if a_parent_has_field(field_name, cls):
+				if not fi.is_primary_key:
+					continue
 			
 			if field_name in fi.parent_type.FieldsInfo.fields_dict:
 				field = fi.parent_type.FieldsInfo.fields_dict[field_name]
