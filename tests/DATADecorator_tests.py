@@ -1148,7 +1148,7 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEquals(queried_hk2.tags[1].date_created, tag2.date_created)
 	
 	def test_default_model(self):
-		from ClassyFlaskDB.DefaultModel import DATA, DATAEngine, Object, Tag, Source
+		from ClassyFlaskDB.DefaultModel import DATA, DATAEngine, Object, Tag
 		
 		@DATA
 		@dataclass
@@ -1170,7 +1170,7 @@ class DATADecorator_tests(unittest.TestCase):
 		
 		@DATA
 		@dataclass
-		class MessageSource(Source):
+		class MessageSource(Object):
 			name:str = field(default="", kw_only=True)
 		
 		@DATA
@@ -1211,7 +1211,7 @@ class DATADecorator_tests(unittest.TestCase):
 		source3 = ModelSource("Source 3")
 
 		msg = Object()
-		msg | source1 | source2 | source3
+		msg_or_out = msg | source1 | source2 | source3
 
 		self.assertIsNotNone(msg.source)
 		self.assertIsNotNone(source1.source)
@@ -1221,6 +1221,8 @@ class DATADecorator_tests(unittest.TestCase):
 		self.assertEquals(source1.source, source2)
 		self.assertEquals(source2.source, source3)
 		self.assertIsNone(source3.source)
+		
+		self.assertEqual(msg_or_out, msg)
 		
 if __name__ == '__main__':
 	unittest.main()

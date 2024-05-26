@@ -19,21 +19,14 @@ class Object:
 	source: "Object" = field(default=None, kw_only=True)
 	tags: List["Tag"] = field(default_factory=list, kw_only=True)
 
-	def __or__(self, other):
-		if hasattr(self, 'source'):
-			self.source = other
-		else:
-			self.source = other
-		if other.source is not None:
-			other.source | other
-		return other
+	def __or__(self, other:"Object") -> "Object":
+		s = self
+		while s.source:
+			s = s.source
+		s.source = other
+		return self
 	
 @DATA
 @dataclass
 class Tag(Object):
 	key: str
-	
-@DATA
-@dataclass
-class Source(Object):
-	pass
