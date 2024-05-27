@@ -1204,7 +1204,6 @@ class DATADecorator_tests(unittest.TestCase):
 		
 		to_from_json_conv = Conversation.from_json(conv.to_json())
 		
-		
 		#Test chaining sources:
 		source1 = ModelSource("Source 1")
 		source2 = ModelSource("Source 2")
@@ -1223,6 +1222,26 @@ class DATADecorator_tests(unittest.TestCase):
 		self.assertIsNone(source3.source)
 		
 		self.assertEqual(msg_or_out, msg)
+	
+	def test_object_property_access(self):
+		from ClassyFlaskDB.DefaultModel import DATA, DATAEngine, Object, Tag
+		engine = DATAEngine(DATA)
+		
+		obj = Object(tags=[Tag(key="thing", obj="initial_value")])
+		self.assertEqual(obj.props.thing, "initial_value")
+
+		obj.props.thing = "new_value"
+		self.assertEqual(obj.tags[0].obj, "new_value")
+
+		obj.props.thing = "another_value"
+		self.assertEqual(obj.tags[0].obj, "another_value")
+
+		obj.tags[0].obj = "directly_set_value"
+		self.assertEqual(obj.props.thing, "directly_set_value")
+		
+		obj.props.my_thing2 = "hello computer"
+		self.assertEqual(obj.tags[1].key, "my_thing2")
+		self.assertEqual(obj.tags[1].obj, "hello computer")
 		
 if __name__ == '__main__':
 	unittest.main()
