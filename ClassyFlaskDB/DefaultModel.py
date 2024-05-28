@@ -19,10 +19,10 @@ class ObjectTagsProxy():
 	Obj.props.my_tag = someObj
 	Obj.props.my_tag == someObj
 	'''
-	def __init__(self, proxy_for:"Object", tags: List["Tag"]):
+	def __init__(self, proxy_for:"Object"):
 		self._proxy_for = proxy_for
-		self._tags = tags
-		self._tags_by_key = {tag.key: tag for tag in tags}
+		self._tags = proxy_for.tags
+		self._tags_by_key = {tag.key: tag for tag in proxy_for.tags}
 
 	def __getattribute__(self, name: str) -> Any:
 		if name.startswith("_"):
@@ -55,17 +55,53 @@ class Object:
 	tags: List["Tag"] = field(default_factory=list, kw_only=True)
 	
 	def __post_init__(self):
-		self.props = ObjectTagsProxy(self.tags)
+		self.props = ObjectTagsProxy(self)
 		
-	def __or__(self:T, other:"Object") -> T:
+	def add_source(self:T, other:"Object") -> T:
 		s = self
 		while s.source:
 			s = s.source
 		s.source = other
 		return self
-
+	
+	def create_edit(self, new:"Object") -> "EditSource":
+		edit = EditSource(self, new)
+		new.add_source(edit)
+		return new
+		
+	def __or__(self:T, other:"Object") -> T:
+		return self.add_source(other)
+	def __and__(self, new:"Object") -> "EditSource":
+		return self.create_edit(new)
+	
 @DATA
 @dataclass
 class Tag(Object):
 	key: str
 	obj: Object = None
+
+@DATA
+@dataclass
+class EditSource(Object):
+	"""Describes the source of an object as an edit of another."""
+	original: Object
+	new: Object
+	
+	def original_object(self) -> Object:
+		"""
+		Returns the most original object in the edit chain.
+		"""
+		prev = self.original
+		while prev is not None and prev.source is not None:
+			if isinstance(prev.source, EditSource):
+				prev = prev.source.original
+			else:
+				break
+			
+		return prev
+	
+	def original_source(self) -> Object:
+		"""
+		Returns the most original object source in the edit chain.
+		"""
+		return self.original_object().source
