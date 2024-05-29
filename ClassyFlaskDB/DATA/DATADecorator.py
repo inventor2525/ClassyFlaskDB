@@ -79,7 +79,11 @@ class DATADecorator(AnyParam):
                                     return ""
                                 return str(obj.get_primary_key())
                             field_getters[field_name] = field_getter
-                            hash_regenerators[field_name] = lambda self, field_name=field_name: getattr(self, field_name).new_id(True)
+                            def hash_regenerator(self, field_name=field_name):
+                                attr = getattr(self, field_name)
+                                if attr is not None:
+                                    attr.new_id(True)
+                            hash_regenerators[field_name] = hash_regenerator
                         elif hasattr(hashed_field_type, "__origin__") and hashed_field_type.__origin__ in [list, tuple]:
                             list_type = hashed_field_type.__args__[0]
                             if getattr(list_type, "FieldsInfo", None) is not None:
@@ -123,7 +127,7 @@ class DATADecorator(AnyParam):
                         fields = [cls.__field_getters__[field_name](self,field_name) for field_name in hashed_fields]
                         self.auto_id = hashlib.sha256(",".join(fields).encode("utf-8")).hexdigest()
                     except Exception as e:
-                        print(f"new_id of type hash id failed with: {str(e)}")
+                        print(f"new_id of type hash id on {self} failed with: {str(e)}. Likely cause we were trying to re-hash '{field_name}'.")
                         self.auto_id = f"hash id failed {str(uuid.uuid4())}"
                 setattr(cls, "new_id", new_id)
                 add_pk("auto_id", str)
