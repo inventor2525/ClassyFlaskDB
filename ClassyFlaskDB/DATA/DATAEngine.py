@@ -11,6 +11,7 @@ import os
 import logging
 logging.basicConfig()
 from ClassyFlaskDB.helpers.Decorators.to_sql import type_map
+from ClassyFlaskDB.DATA.ID_Type import ID_Type
 
 def convert_to_column_type(value, column_type):
     if isinstance(column_type, DateTime):
@@ -27,6 +28,9 @@ class Session(AlchemySession):
     def merge(self, instance, load=True, **kwargs):
         if hasattr(instance, 'FieldsInfo'):
             def preserve_locked_fields_of(obj):
+                if obj.__class__._id_type_ is not ID_Type.HASHID:
+                    return #For performance, we don't really need to lock anything but
+                           #for the classes with a HashIDs
                 fields_info = getattr(obj, 'FieldsInfo')
                 existing = self.get(obj.__class__, obj.get_primary_key())
                 if existing:

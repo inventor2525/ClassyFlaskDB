@@ -42,7 +42,10 @@ class DATADecorator(AnyParam):
         if self.auto_decorate_as_dataclass:
             cls = dataclass(cls)
         cls = capture_field_info(cls, excluded_fields=excluded_fields, included_fields=included_fields, auto_include_fields=auto_include_fields, exclude_prefix=exclude_prefix)
-        if cls.FieldsInfo.primary_key_name is None:
+        if cls.FieldsInfo.primary_key_name is not None:
+            cls._id_type_ = ID_Type.USER_SUPPLIED
+        else:
+            cls._id_type_ = generated_id_type
             def add_pk(pk_name:str, pk_type:Type):
                 setattr(cls, pk_name, None)
                 cls.__annotations__[pk_name] = pk_type
