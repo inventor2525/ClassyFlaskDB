@@ -1,5 +1,5 @@
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
-from .ClassInfo import *
+from .InfoDecorator import *
 from .Transcoder import *
 from .StorageEngine import *
 from .AutoID import *
