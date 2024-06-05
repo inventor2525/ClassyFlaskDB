@@ -1,4 +1,5 @@
-from dataclasses import dataclass, fields, field
+from ClassyFlaskDB.DATA.ID_Type import ID_Type
+from dataclasses import dataclass, fields, field, Field
 from typing import Dict, Any, Type, List, Union, ForwardRef, Tuple, Set, Iterable, overload, TypeVar, Callable
 import re
 
@@ -23,22 +24,18 @@ class ClassInfo:
 		
 		if len(included_fields)==0:
 			included_fields = set([f.name for f in self.all_fields])
-		self.fields = [f for f in self.all_fields if f.name in included_fields and f.name not in excluded_fields]
+		self.fields = {f.name:f for f in self.all_fields if f.name in included_fields and f.name not in excluded_fields}
 		'''
 		Fields that will be serialized and deserialized.
 		'''
 		
 		# Get the name of the primary key:
+		self.id_type = ID_Type.USER_SUPPLIED
 		self.primary_key_name = getattr(cls, "__primary_key_name__", None)
 		if self.primary_key_name is None:
-			for f in self.fields:
+			for f in self.fields.values():
 				if getattr(f.metadata, "primary_key", False):
 					self.primary_key_name = f.name
-	
-	@property
-	def field_types(self) -> Dict[str, type]:
-		self.semi_qualname
-		return {f.name: f.type for f in self.fields}
 	
 	@property
 	def parent_classes(self) -> 'ClassInfo':
@@ -47,15 +44,43 @@ class ClassInfo:
 			for base in self.cls.__bases__ 
 			if hasattr(base, ClassInfo.field_name)
 		]
+	
+	@staticmethod
+	def has_ClassInfo(field:Field) -> bool:
+		'''
+		Checks if the type of field is itself also a InfoDecorator decorated class.
+		
+		In other worlds, most commonly, should we drill into it when iterating, or treat
+		it as it's own separate type with a custom serializer like a datetime.
+		'''
+		return hasattr(field.type, ClassInfo.field_name)
+	
+	@staticmethod
+	def get(cls:type) -> 'ClassInfo':
+		'''
+		Gets the existing ClassInfo on cls.
+		'''
+		return getattr(cls, ClassInfo.field_name, None)
+	
+	@staticmethod
+	def is_list(field:Field) -> Union[type, bool]:
+		'''Returns the type of list if it is one, and False if it's not a list.'''
+		if getattr(field.type, "__origin__", None) is list:
+			return getattr(field.type, "__args__", [None])[0]
+		return False
+	
+	@staticmethod
+	def is_dict(field:Field) -> Union[Tuple[type,type], bool]:
+		'''Returns the types of key and value for the dict if it is one, and False if it's not a dict.'''
+		if getattr(field.type, "__origin__", None) is dict:
+			return getattr(field.type, "__args__", [None,None])
+		return False
 
 T = TypeVar('T')
 @dataclass
 class InfoDecorator:
-	decorated_classes:List[type] = field(default_factory=list)
-	registry:Dict[str, type] = field(default_factory=dict)
-
-	def __init__(self):
-		self.registry = {}
+	decorated_classes:List[type] = field(default_factory=list, kw_only=True)
+	registry:Dict[str, type] = field(default_factory=dict, kw_only=True)
 	
 	@overload
 	def __call__(self, cls:Type[T]) -> Type[T]:
@@ -79,7 +104,7 @@ class InfoDecorator:
 		open_list = []
 		for cls in self.registry.values():
 			classInfo = getattr(cls, ClassInfo.field_name)
-			for f in classInfo.fields:
+			for f in classInfo.fields.values():
 				f.type = self._resolve_type(f.type)
 				open_list.append(f.type)
 
