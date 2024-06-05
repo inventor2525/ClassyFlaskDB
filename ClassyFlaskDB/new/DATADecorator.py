@@ -25,6 +25,7 @@ class DATADecorator(InfoDecorator):
 			Lazily creates a transcoder if it doesn't already exist and returns it if it does.
 			Also calls set on the transcoder if default is passed, before returning.
 			'''
+			pass
 		
 	@overload
 	def __call__(self, cls:Type[T]) -> Union[Type[T], Type[AutoID.Interface]]:
@@ -63,18 +64,19 @@ class DATADecorator(InfoDecorator):
 			no_default = object()
 			
 			transcoders_name = "__transcoders__"
-			def get_transcoder(obj_self, name, default=no_default):
+			def get_transcoder(obj_self, name:str, default=no_default):
 				objs_transcoders = getattr(obj_self, transcoders_name, {})
 				if len(objs_transcoders)==0:
 					setattr(obj_self, transcoders_name, objs_transcoders)
 				if name in objs_transcoders:
 					return objs_transcoders[name]
 				
-				transcoder = Transcoder.get_transcoder(self.storageEngine.transcoders, classInfo, classInfo.fields[name])
+				transcoder = StorageEngine.get_transcoder(classInfo, classInfo.fields[name])
 				if default is not no_default:
 					transcoder.set(default)
 				objs_transcoders[name] = transcoder
 				return transcoder
+			setattr(cls, "__get_transcoder__", get_transcoder)
 				
 			def getattr(self, name:str, default=no_default):
 				if name in classInfo.fields:
@@ -84,12 +86,12 @@ class DATADecorator(InfoDecorator):
 					return old_getattr(self, name)
 				else:
 					return old_getattr(self, name, default)
+			setattr(cls, "__getattr__", getattr)
+			
 			def setattr(self, name:str, value):
 				if name in classInfo.fields:
 					transcoder = get_transcoder(self, name)
 					transcoder.set(value)
 				else:
 					old_setattr(self, name, value)
-					
-			setattr(cls, "__getattr__", getattr)
 			setattr(cls, "__setattr__", setattr)

@@ -1,4 +1,5 @@
 from .ClassInfo import *
+from .StorageEngineContext import *
 from dataclasses import dataclass, Field
 from typing import TypeVar, Generic, Any
 from abc import ABC, abstractmethod, abstractclassmethod
@@ -12,6 +13,8 @@ class Transcoder(Generic[T], ABC):
 	Stores state information and what is needed for a field
 	to be lazily loaded from a storage engine
 	'''
+	context:StorageEngineContext
+	'''Any state information about the storage engine we need to... not load the same thing over again and such.'''
 	classInfo:ClassInfo
 	'''Info about the type of object who's field we manage is on.'''
 	field:Field
@@ -48,6 +51,14 @@ class Transcoder(Generic[T], ABC):
 	def validate(cls, classInfo:ClassInfo, field:Field) -> bool:
 		'''
 		Returns true if this Transcoder type can be used with this Field.
+		'''
+		pass
+	
+	@abstractclassmethod
+	def setup(cls, classInfo:ClassInfo, field:Field):
+		'''
+		Creates anything needed, like columns in a table, or relationships
+		between them (or what ever makes sense in the case of this storage engine).
 		'''
 		pass
 	
