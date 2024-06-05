@@ -3,6 +3,12 @@ from .ClassInfo import *
 T = TypeVar('T')
 @dataclass
 class InfoDecorator:
+	'''
+	A class decorator that attaches a ClassInfo instance to any decorated class,
+	tracks which classes have been decorated, and provides a finalize function
+	which can be used to resolve forward references after everything that
+	is decorated with this has been imported.
+	'''
 	decorated_classes:List[type] = field(default_factory=list, kw_only=True)
 	registry:Dict[str, type] = field(default_factory=dict, kw_only=True)
 	
@@ -25,6 +31,12 @@ class InfoDecorator:
 		return cls
 
 	def finalize(self):
+		'''
+		Resolve forward references.
+		
+		Note: only call this once every class this instance of InfoDecorator
+		is decorating is either fully defined or imported.
+		'''
 		open_list = []
 		for cls in self.registry.values():
 			classInfo = getattr(cls, ClassInfo.field_name)

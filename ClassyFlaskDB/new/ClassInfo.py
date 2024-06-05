@@ -4,7 +4,13 @@ from typing import Dict, Any, Type, List, Union, ForwardRef, Tuple, Set, Iterabl
 import re
 
 class ClassInfo:
+	'''
+	Info about a class, useful for knowing what the developer wants
+	to be serialized on that class.
+	'''
+	
 	field_name = "__class_info__"
+	'''The name of the variable a ClassInfo is expected to be stored as on a class type.'''
 	
 	def __init__(self, cls:type, included_fields:Set[str], excluded_fields:Set[str]):
 		self.cls = cls

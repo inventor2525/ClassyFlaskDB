@@ -8,6 +8,10 @@ T = TypeVar('T')
 
 @dataclass
 class Transcoder(Generic[T], ABC):
+	'''
+	Stores state information and what is needed for a field
+	to be lazily loaded from a storage engine
+	'''
 	classInfo:ClassInfo
 	'''Info about the type of object who's field we manage is on.'''
 	field:Field
@@ -45,4 +49,16 @@ class Transcoder(Generic[T], ABC):
 		'''
 		Returns true if this Transcoder type can be used with this Field.
 		'''
+		pass
+	
+	@abstractclassmethod
+	def encode(cls, value:T) -> Any:
+		pass
+	
+	@abstractclassmethod
+	def decode(cls, encoded:Any) -> T:
+		pass
+	
+	@abstractclassmethod
+	def get_hashing_value(cls, value:T) -> Any:
 		pass

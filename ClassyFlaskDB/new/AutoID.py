@@ -7,6 +7,12 @@ import uuid
 T = TypeVar('T')
 @dataclass
 class AutoID:
+	'''
+	A class decorator that populates an automatically generated ID field
+	and new_id method given a specified id type, if it wasn't user supplied.
+	
+	This also modifies the init to create an initial id.
+	'''
 	id_type:ID_Type
 	
 	class Interface(Protocol):
