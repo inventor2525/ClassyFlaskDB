@@ -13,10 +13,10 @@ class InfoDecorator:
 	registry:Dict[str, type] = field(default_factory=dict, kw_only=True)
 	
 	@overload
-	def __call__(self, cls:Type[T]) -> Type[T]:
+	def __call__(self, cls:Type[T]) -> Union[Type[T], Type[ClassInfo.Interface]]:
 		pass
 	@overload
-	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = []) -> Callable[[Type[T]], Type[T]]:
+	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = []) -> Callable[[Type[T]], Union[Type[T], Type[ClassInfo.Interface]]]:
 		pass
 	def __call__(self, *args, **kwargs):
 		if len(args) == 1 and isinstance(args[0], type):
@@ -24,7 +24,7 @@ class InfoDecorator:
 		else:
 			return lambda cls: self.decorate(cls, *args, **kwargs)
 
-	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[]) -> Type[T]:
+	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[]) -> Union[Type[T], Type[ClassInfo.Interface]]:
 		class_info = ClassInfo(cls, set(included_fields), set(excluded_fields))
 		setattr(cls, ClassInfo.field_name, class_info)
 		self.registry[class_info.semi_qualname] = cls

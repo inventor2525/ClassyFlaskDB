@@ -15,7 +15,7 @@ class AutoID:
 	'''
 	id_type:ID_Type
 	
-	class Interface(Protocol):
+	class Interface(ClassInfo.Interface):
 		auto_id:str
 		def new_id(self):
 			pass

@@ -1,6 +1,6 @@
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
 from dataclasses import dataclass, fields, field, Field
-from typing import Dict, Any, Type, List, Union, ForwardRef, Tuple, Set, Iterable, overload, TypeVar, Callable
+from typing import Protocol, Dict, Any, Type, List, Union, ForwardRef, Tuple, Set, Iterable, overload, TypeVar, Callable
 import re
 
 class ClassInfo:
@@ -12,6 +12,15 @@ class ClassInfo:
 	field_name = "__class_info__"
 	'''The name of the variable a ClassInfo is expected to be stored as on a class type.'''
 	
+	class Interface(Protocol):
+		'''
+		Used to document for the IDE what things will be added
+		to a class when it has a ClassInfo assigned to it.
+		
+		Nothing will ever actually be this type.
+		'''
+		__class_info__:"ClassInfo"
+		
 	def __init__(self, cls:type, included_fields:Set[str], excluded_fields:Set[str]):
 		self.cls = cls
 		self.qualname = cls.__qualname__
