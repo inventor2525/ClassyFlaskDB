@@ -1,6 +1,6 @@
 from .ClassInfo import *
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
-from typing import TypeVar, Type, Protocol
+from typing import TypeVar, Type, Protocol, Any
 from dataclasses import dataclass, Field
 import uuid
 
@@ -19,7 +19,7 @@ class AutoID:
 		auto_id:str
 		def new_id(self):
 			pass
-		def get_primary_key(self) -> str:
+		def get_primary_key(self) -> Any:
 			pass
 			
 	def __call__(self, cls:Type[T]) -> Union[Type[T], Type['AutoID.Interface']]:

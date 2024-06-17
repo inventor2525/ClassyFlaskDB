@@ -69,15 +69,19 @@ class ClassInfo:
 		return getattr(cls, ClassInfo.field_name, None)
 	
 	@staticmethod
-	def is_list(field:Field) -> Union[type, bool]:
-		'''Returns the type of list if it is one, and False if it's not a list.'''
-		if getattr(field.type, "__origin__", None) is list:
-			return getattr(field.type, "__args__", [None])[0]
-		return False
+	def is_list(field:Field) -> bool:
+		'''Returns if this field is a list.'''
+		return getattr(field.type, "__origin__", None) is list
 	
 	@staticmethod
 	def is_dict(field:Field) -> Union[Tuple[type,type], bool]:
-		'''Returns the types of key and value for the dict if it is one, and False if it's not a dict.'''
-		if getattr(field.type, "__origin__", None) is dict:
-			return getattr(field.type, "__args__", [None,None])
-		return False
+		'''Returns if this field is a dictionary.'''
+		return getattr(field.type, "__origin__", None) is dict
+	
+	@staticmethod
+	def get_list_type(field:Field) -> type:
+		return getattr(field.type, "__args__", [None])[0]
+	
+	@staticmethod
+	def get_dict_types(field:Field) -> Tuple[type,type]:
+		return getattr(field.type, "__args__", [None,None])

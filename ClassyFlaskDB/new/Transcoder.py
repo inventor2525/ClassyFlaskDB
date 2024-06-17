@@ -52,9 +52,8 @@ class Transcoder(Generic[T], ABC):
 		'''
 		Returns true if this Transcoder type can be used with this Field.
 		'''
-		pass
+		return False
 	
-	@abstractclassmethod
 	def setup(cls, classInfo:ClassInfo, field:Field):
 		'''
 		Creates anything needed, like columns in a table, or relationships
@@ -62,14 +61,11 @@ class Transcoder(Generic[T], ABC):
 		'''
 		pass
 	
-	@abstractclassmethod
 	def encode(cls, value:T) -> Any:
-		pass
+		return value
 	
-	@abstractclassmethod
 	def decode(cls, encoded:Any) -> T:
-		pass
+		return encoded
 	
-	@abstractclassmethod
 	def get_hashing_value(cls, value:T) -> Any:
-		pass
+		return value

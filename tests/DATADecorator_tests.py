@@ -1061,7 +1061,9 @@ class DATADecorator_tests(unittest.TestCase):
 
 		# Query from database
 		with data_engine.session() as session:
-			queried_object = session.query(SourcedObject).first()
+			session:Session = session
+			q = session.query(SourcedObject)
+			queried_object = q.first()
 
 			self.assertIsNotNone(queried_object)
 			self.assertEqual(queried_object.source.source_name, "Fake Source")
