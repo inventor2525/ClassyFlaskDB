@@ -1,5 +1,6 @@
 # from ClassyFlaskDB.new.DATADecorator import *
-from typing import List, Dict
+from typing import List, Dict, Any, TypeVar, Generic
+from itertools import chain
 from datetime import datetime
 from dataclasses import dataclass
 from ClassyFlaskDB.new.InfoDecorator import *
@@ -138,7 +139,8 @@ class objects_new_methods(AutoID.Interface, MyObj, DirtyInterface):
 class DateTimeTranscoder(Transcoder):
 	can_merge = False
 	pass
-
+def row():
+	pass
 class ObjTranscoder(Transcoder):
 	def _merge(context, obj:objects_new_methods, parent=None):
 		encodeds = {}
@@ -150,6 +152,138 @@ class ObjTranscoder(Transcoder):
 		
 		#TODO: engine specific merge logic
 
+	# basics:
+	def _merge(context, obj:objects_new_methods):
+		encodeds = {}
+		for f in obj.__class_info__.fields.values():
+			val = obj.original_get_attr(f.name)
+			transcoder = obj.__transcoders__[f.name]
+			transcoder.encode_into(val, f.name, encodeds)
+		#TODO: engine specific merge logic
+		#for sql:create row, primary key from auto id
+		#for json: get context at type of object, append encodeds
+	
+	#date time:
+	def _merge(context, obj:objects_new_methods):
+		encodeds = {}
+		for f in obj.__class_info__.fields.values():
+			val = obj.original_get_attr(f.name)
+			transcoder = obj.__transcoders__[f.name]
+			transcoder.encode_into(val, f.name, encodeds) #creates multiple columns in sql, 1 string with optional time zone in json
+		#TODO: engine specific merge logic
+		#for sql:create row, primary key from auto id
+		#for json: get context at type of object, append encodeds
+	
+	# #List[str]
+	# def _merge(context, obj:objects_new_methods):
+	# 	encodeds = {}
+	# 	for f in obj.__class_info__.fields.values():
+	# 		val = obj.original_get_attr(f.name)
+	# 		transcoder = obj.__transcoders__[f.name]
+	# 		if transcoder.can_merge:
+	# 			transcoder.merge(val) # ??? Difference here between encode? in json the list string can simply be in the object string can return not merge for json, but for sql alchemy? return true
+	# 		transcoder.encode_into(val, f.name, encodeds)
+	
+	#List[str] json
+	def _merge(context, obj:objects_new_methods):
+		encodeds = {}
+		for f in obj.__class_info__.fields.values():
+			val = obj.original_get_attr(f.name)
+			transcoder = obj.__transcoders__[f.name]
+			transcoder.encode_into(val, f.name, encodeds)
+			
+	#List[str] sql alchemy
+	def _merge(context, path:list, obj:objects_new_methods):
+		'''added 'path' path could be objID coming in or something else, be set to objID for object transcoders, and then be appended to for things like Dict[str,List[Obj2]] to include things like objID.dictKey.listIndex to get to Obj2's row in sql or it's id in json where 'objects' cut the circular refs in json and in sql, but sql might need additional tables for the list and dict'''
+		path = [obj.get_primary_key()]
+		encodeds = row()
+		for i, f in enumerate(obj.__class_info__.fields.values()):
+			val = obj.original_get_attr(f.name)
+			transcoder = obj.__transcoders__[f.name]
+			
+			p = path.copy()
+			p.append(i)
+			transcoder.encode_into(p, val, f, encodeds)
+			#thinking by here that the signature should be:
+			#all transcoders get a 'merge' (not encode), and
+			#it's:
+			#
+			#merge(context, path, field, value, encodes)
+			#
+			#Where:
+			#
+			#Context is the upper most context that finds things like object by id/primary_key
+			#Path is the path from the first object up the ownership chain, through all the dicts and lists to the lower most basic type or object(s)
+			#field? should be removed, and be a part of path, path should be objID,field,<list or dict keys in order>
+			#encodes is then any row or column that the prev object is adding to
+
+BasicType = Union[bool,int,float,str]
+
+@dataclass
+class MergePath:
+	parentObj:objects_new_methods
+	fieldOnParent:Field
+	otherPath:List[BasicType] = field(default_factory=list)
+	
+	def new(self, path_element:BasicType):
+		path = list(self.otherPath)
+		path.append(path_element)
+		return MergePath(self.parentObj, self.fieldOnParent, path)
+		
+	def __str__(self):
+		fieldStr = "" if self.fieldOnParent is None else self.fieldOnParent.name
+		if self.parentObj is None:
+			path = fieldStr
+		else:
+			path = f"{self.parentObj.get_primary_key()}.{fieldStr}"
+		if len(self.otherPath)==0:
+			return path
+		
+		inner = ">.<".join(self.otherPath)
+		return f"{path}.<{inner}>"
+	
+@dataclass
+class MergeArgs:
+	context:Dict[BasicType, objects_new_methods]
+	path:MergePath
+	encodes:Dict[str, Any]
+	is_dirty:dict
+	
+	def new(self, path_element:BasicType, encodes:Any):
+		return MergeArgs(self.context, self.path.new(path_element), encodes, self.is_dirty)
+	
+class ObjTranscoder2(ObjTranscoder):
+	#date time:
+	def _merge(merge:MergeArgs, obj:objects_new_methods):
+		encodes = {}
+		for f in obj.__class_info__.fields.values():
+			val = obj.original_get_attr(f.name)
+			transcoder = obj.__transcoders__[f.name]
+			transcoder.merge(merge.new(f, encodes), val)
+		
+		#obj key is "id"
+		#obj1.obj2 key is type(obj1).fields[fieldName].name
+		#obj1.list[0]:obj2 key is f"{obj1.get_primary_key()}.{type(obj1).fields[fieldName].name}"
+		
+		#obj1.dict['hi'][0]:obj2 is f"{obj1.get_primary_key()}.{type(obj1).fields[fieldName].name}.<hi>.<0>"
+		
+		
+		
+		
+		self_key = "id"
+		if merge.path.fieldOnParent is not None:
+			self_key = merge.path.fieldOnParent
+		
+		merge.encodes[self_key] = obj.get_primary_key()
+			
+	#List[str] json
+	def _merge(context, obj:objects_new_methods):
+		encodeds = {}
+		for f in obj.__class_info__.fields.values():
+			val = obj.original_get_attr(f.name)
+			transcoder = obj.__transcoders__[f.name]
+			transcoder.encode_into(val, f.name, encodeds)
+		
 @dataclass
 class ListTranscoder(Transcoder):
 	value_transcoder:Transcoder
@@ -190,3 +324,5 @@ class storage_engine():
 		
 		t = Transcoder.for_type(obj_type)
 		
+#Transcoders can exclusively use class methods with the new "MergeArgs" for merging
+# possibly something similar for query
