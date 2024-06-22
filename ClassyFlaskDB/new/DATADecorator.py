@@ -3,6 +3,7 @@ from .InfoDecorator import *
 from .Transcoder import *
 from .StorageEngine import *
 from .AutoID import *
+from .DirtyDecorator import *
 
 @dataclass
 class DATADecorator(InfoDecorator):
@@ -17,7 +18,7 @@ class DATADecorator(InfoDecorator):
 	'''
 	storageEngine:StorageEngine
 	
-	class Interface(AutoID.Interface):
+	class Interface(AutoID.Interface, DirtyDecorator.Interface):
 		__transcoders__:List[Transcoder]
 		'''These are only those that have had their fields 'poked' so far. Use __get_transcoder__ if you want to do some digging.'''
 		def __get_transcoder__(self, name:str, default=object()) -> Transcoder:
