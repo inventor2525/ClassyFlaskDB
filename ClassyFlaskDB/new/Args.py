@@ -1,11 +1,9 @@
-from typing import List, Dict, Any, Union
+from Types import *
 from dataclasses import dataclass, Field, field
-
-BasicType = Union[bool,int,float,str]
 
 @dataclass
 class MergePath:
-	parentObj:objects_new_methods
+	parentObj:Interface
 	fieldOnParent:Field
 	otherPath:List[BasicType] = field(default_factory=list)
 	
@@ -28,7 +26,7 @@ class MergePath:
 	
 @dataclass
 class MergeArgs:
-	context:Dict[BasicType, objects_new_methods]
+	context:ContextType
 	path:MergePath
 	encodes:Dict[str, Any]
 	is_dirty:dict

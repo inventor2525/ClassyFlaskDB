@@ -2,17 +2,11 @@ from .StorageEngine import *
 from .DATADecorator import *
 
 @dataclass
-class JSON_Context(StorageEngineContext):
-	objects:dict = field(default_factory=dict)
-
-@dataclass
-class JSON_Engine(StorageEngine[JSON_Context]):
+class JSON_Engine(StorageEngine):
 	def merge(self, obj:Any):
 		classInfo = ClassInfo.get(obj)
 		if classInfo is None:
 			raise ValueError(f"{obj} must be a type that has a ClassInfo assigned to it.")
-		
-		
 
 jEngine = JSON_Engine()
 
