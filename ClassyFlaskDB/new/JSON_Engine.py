@@ -27,7 +27,7 @@ class BasicsTranscoder(Transcoder):
 @dataclass
 class ObjectTranscoder(Transcoder):
 	def validate(cls, classInfo:ClassInfo, field:Field) -> bool:
-		return ClassInfo.has_ClassInfo(field)
+		return ClassInfo.has_ClassInfo(classInfo.cls)
 	
 	def setup(cls, classInfo:ClassInfo, field:Field):
 		pass

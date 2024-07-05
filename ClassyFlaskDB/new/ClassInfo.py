@@ -61,14 +61,17 @@ class ClassInfo:
 		]
 	
 	@staticmethod
-	def has_ClassInfo(field:Field) -> bool:
-		'''
-		Checks if the type of field is itself also a InfoDecorator decorated class.
+	def has_ClassInfo(type_: Type) -> bool:
+		"""
+		Checks if the given type has a ClassInfo attribute.
 		
-		In other worlds, most commonly, should we drill into it when iterating, or treat
-		it as it's own separate type with a custom serializer like a datetime.
-		'''
-		return hasattr(field.type, ClassInfo.field_name)
+		This method is used to determine if a type is decorated with InfoDecorator
+		and thus has the necessary metadata for serialization and deserialization.
+
+		:param type_: The type to check for ClassInfo.
+		:return: True if the type has ClassInfo, False otherwise.
+		"""
+		return hasattr(type_, '__class_info__')
 	
 	@staticmethod
 	def get(cls:type) -> 'ClassInfo':

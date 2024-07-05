@@ -75,8 +75,12 @@ class SQLAlchemyStorageEngine(StorageEngine):
 
     def get_transcoder_type(self, class_info: ClassInfo, field: field = None) -> Type[Transcoder]:
         for transcoder in self.transcoders:
-            if transcoder.validate(class_info, field):
-                return transcoder
+            try:
+                if transcoder.validate(class_info, field):
+                    return transcoder
+            except Exception:
+                # If validation fails for any reason, consider the transcoder invalid
+                continue
         raise ValueError(f"No suitable transcoder found for {class_info.cls.__name__}.{field.name if field else ''}")
 
     def query(self, cls: Type[T]) -> 'SQLAlchemyStorageEngineQuery[T]':
@@ -191,7 +195,7 @@ class DateTimeTranscoder(Transcoder):
 class ObjectTranscoder(Transcoder):
     @classmethod
     def validate(cls, class_info: ClassInfo, field: field) -> bool:
-        return ClassInfo.has_ClassInfo(field)
+        return ClassInfo.has_ClassInfo(class_info.cls)
 
     @classmethod
     def setup(cls, class_info: ClassInfo, field: field, is_primary_key: bool) -> List[Column]:
@@ -205,11 +209,13 @@ class ObjectTranscoder(Transcoder):
         for field_name, field_info in obj.__class_info__.fields.items():
             value = getattr(obj, field_name)
             transcoder = obj.__class__.__transcoders__[field_name]
-            new_path = MergePath(parentObj=obj, fieldOnParent=field_info)
-            transcoder.merge(merge_args.new(new_path, {}), value)
+            new_merge_args = merge_args.new(field_info, {})
+            new_merge_args.path.parentObj = obj  # Set the parent object to the current object being merged
+            transcoder.merge(new_merge_args, value)
         
-        merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_id"] = obj.get_primary_key()
-
+        if merge_args.path.fieldOnParent:
+            merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_id"] = obj.get_primary_key()
+            
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
         return [f"{field.name}_id"]

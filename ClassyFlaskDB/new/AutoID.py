@@ -63,5 +63,7 @@ class AutoID:
 				init(self, *args, **kwargs)
 				self.new_id()
 			setattr(cls, "__init__", __init__)
-		setattr(cls, "get_primary_key", __init__)
+		def get_primary_key(self):
+			return getattr(self, self.__class_info__.primary_key_name)
+		setattr(cls, "get_primary_key", get_primary_key)
 		return cls
