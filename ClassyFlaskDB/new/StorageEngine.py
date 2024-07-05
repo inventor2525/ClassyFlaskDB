@@ -51,5 +51,11 @@ class StorageEngine(ABC):
 		pass
 	
 	@abstractmethod
-	def query(self, obj_type:TypeVar[U]) -> StorageEngineQuery[U]:
+	def query(self, obj_type:Type[U]) -> StorageEngineQuery[U]:
 		pass
+
+class CFInstance:
+	def __init__(self, storage_engine: StorageEngine):
+		self.storage_engine = storage_engine
+		self.loaded_fields = set()
+		self.encoded_values = {}

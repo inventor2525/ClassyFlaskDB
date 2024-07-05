@@ -2,33 +2,31 @@ from .ClassInfo import *
 from dataclasses import dataclass, Field
 from abc import ABC, abstractmethod, abstractclassmethod
 from .Args import *
+	
+class Transcoder:
+    @classmethod
+    def validate(cls, class_info: ClassInfo, field: Field) -> bool:
+        return False
 
-@dataclass
-class Transcoder(ABC):
-	@abstractclassmethod
-	def validate(cls, type:Type) -> bool:
-		'''
-		Returns true if this Transcoder type can be used with this Field.
-		'''
-		return False
-	
-	@abstractclassmethod
-	def setup(cls, classInfo:ClassInfo, field:Field) -> 'Transcoder':
-		'''
-		Creates anything needed, like columns in a table, or relationships
-		between them (or what ever makes sense in the case of this storage engine).
-		'''
-		pass
-	
-	@abstractmethod
-	def _merge(self, merge:MergeArgs, obj:Interface) -> None:
-		pass
-	
-	@classmethod
-	def merge(self, merge:MergeArgs, obj:Interface) -> None:
-		if obj.is_dirty(merge.is_dirty):
-			self._merge(merge, obj)
-			obj.clear_dirty(merge.is_dirty)
-	
-	def get_hashing_value(cls, value:Any) -> Any:
-		return value
+    @classmethod
+    def setup(cls, class_info: ClassInfo, field: Field, is_primary_key: bool) -> List[Any]:
+        return []
+
+    @classmethod
+    def _merge(cls, merge_args: MergeArgs, value: Any) -> None:
+        pass
+
+    @classmethod
+    def merge(cls, merge_args: MergeArgs, value: Any) -> None:
+        return cls._merge(merge_args, value)
+        if merge_args.is_dirty.get(id(value), True):
+            cls._merge(merge_args, value)
+            merge_args.is_dirty[id(value)] = False
+
+    @classmethod
+    def get_columns(cls, class_info: ClassInfo, field: Field) -> List[str]:
+        return []
+
+    @classmethod
+    def decode(cls, storage_engine: Any, obj: Any, field_name: str, encoded_values: Dict[str, Any]) -> Any:
+        return None

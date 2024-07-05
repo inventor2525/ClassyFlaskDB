@@ -1,7 +1,7 @@
 from .ClassInfo import *
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
 from typing import TypeVar, Type, Protocol, Any
-from dataclasses import dataclass, Field
+from dataclasses import dataclass, Field, MISSING
 import uuid
 
 T = TypeVar('T')
@@ -42,7 +42,7 @@ class AutoID:
 				setattr(classInfo.cls, "new_id", new_id)
 				setattr(classInfo.cls, classInfo.primary_key_name, None)
 				classInfo.cls.__annotations__[classInfo.primary_key_name] = str
-				f = Field(default_factory=new_id)
+				f = Field(default=MISSING, default_factory=new_id, init=True, repr=True, hash=None, compare=True, metadata=None, kw_only=MISSING)
 				f.name = classInfo.primary_key_name
 				f.type = str
 				classInfo.fields[f.name] = f

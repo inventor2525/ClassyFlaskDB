@@ -1,4 +1,4 @@
-from Types import *
+from .Types import *
 from dataclasses import dataclass, Field, field
 
 @dataclass

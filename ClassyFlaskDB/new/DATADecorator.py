@@ -16,7 +16,6 @@ class DATADecorator(InfoDecorator):
 	
 	Note: Remember to call finalize after every decorated class is imported!
 	'''
-	storageEngine:StorageEngine
 	
 	class Interface(AutoID.Interface, DirtyDecorator.Interface):
 		__transcoders__:List[Transcoder]
@@ -50,49 +49,25 @@ class DATADecorator(InfoDecorator):
 		#more cls mods in finalize!
 		return cls
 	
-	def finalize(self):
+	def finalize(self, storage_engine: StorageEngine):
 		super().finalize()
 		
 		for cls in self.decorated_classes:
 			classInfo = ClassInfo.get(cls)
 			
-			#Replace cls's getattr and setattr where each of
-			#it's fields that are specified in ClassInfo.fields
-			#are redirected to lazily created Transcoder instances
+			old_getattr = cls.__getattribute__
 			
-			old_getattr = cls.__getattr__
-			old_setattr = cls.__setattr__
-			no_default = object()
-			
-			transcoders_name = "__transcoders__"
-			def get_transcoder(obj_self, name:str, default=no_default):
-				objs_transcoders = getattr(obj_self, transcoders_name, {})
-				if len(objs_transcoders)==0:
-					setattr(obj_self, transcoders_name, objs_transcoders)
-				if name in objs_transcoders:
-					return objs_transcoders[name]
-				
-				transcoder = StorageEngine.get_transcoder(classInfo, classInfo.fields[name])
-				if default is not no_default:
-					transcoder.set(default)
-				objs_transcoders[name] = transcoder
-				return transcoder
-			setattr(cls, "__get_transcoder__", get_transcoder)
-				
-			def getattr(self, name:str, default=no_default):
-				if name in classInfo.fields:
-					transcoder = get_transcoder(self, name, default)
-					return transcoder.get()
-				if default is no_default:
-					return old_getattr(self, name)
-				else:
-					return old_getattr(self, name, default)
-			setattr(cls, "__getattr__", getattr)
-			
-			def setattr(self, name:str, value):
-				if name in classInfo.fields:
-					transcoder = get_transcoder(self, name)
-					transcoder.set(value)
-				else:
-					old_setattr(self, name, value)
-			setattr(cls, "__setattr__", setattr)
+			def __getattribute__(self, name):
+				if hasattr(self, '_cf_instance'):
+					cf_instance = object.__getattribute__(self, '_cf_instance')
+					if name in classInfo.fields and name not in cf_instance.loaded_fields:
+						if name in cf_instance.encoded_values:
+							transcoder = self.__class__.__transcoders__[name]
+							value = transcoder.decode(cf_instance.storage_engine, self, name, cf_instance.encoded_values[name])
+							object.__setattr__(self, name, value)
+							cf_instance.loaded_fields.add(name)
+							return value
+
+				return old_getattr(self, name)
+
+			cls.__getattribute__ = __getattribute__
