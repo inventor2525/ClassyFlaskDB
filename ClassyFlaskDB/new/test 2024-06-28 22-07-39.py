@@ -66,6 +66,8 @@ class SQLAlchemyStorageEngine(StorageEngine):
             transcoder = self.get_transcoder_type(ClassInfo.get(type(obj)), None)
             transcoder.merge(merge_args, obj)
             
+            print(f"Final merge_args.encodes: {merge_args.encodes}")
+            
             table = self.metadata.tables[self.get_table_name(type(obj))]
             session.execute(table.insert().values(**merge_args.encodes))
             session.commit()
@@ -98,7 +100,9 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         class_info = ClassInfo.get(self.cls)
         primary_key_name = class_info.primary_key_name
         self.query = self.query.where(getattr(self.table.c, primary_key_name) == id_value)
-        return self._execute_query_first()
+        result = self._execute_query_first()
+        print(f"Query result for {self.cls.__name__} with ID {id_value}: {result}")
+        return result
 
     def all(self) -> List[T]:
         return self._execute_query_all()
@@ -154,6 +158,7 @@ class BasicsTranscoder(Transcoder):
     @classmethod
     def _merge(cls, merge_args: MergeArgs, value: Any) -> None:
         merge_args.encodes[merge_args.path.fieldOnParent.name] = value
+        print(f"Basic merge for {merge_args.path.fieldOnParent.name}: {merge_args.encodes}")
 
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
@@ -206,15 +211,24 @@ class ObjectTranscoder(Transcoder):
 
     @classmethod
     def _merge(cls, merge_args: MergeArgs, obj: Any) -> None:
+        print(f"Merging object: {obj}")
+        print(f"Initial encodes: {merge_args.encodes}")
+        
         for field_name, field_info in obj.__class_info__.fields.items():
             value = getattr(obj, field_name)
             transcoder = obj.__class__.__transcoders__[field_name]
             new_merge_args = merge_args.new(field_info, {})
-            new_merge_args.path.parentObj = obj  # Set the parent object to the current object being merged
+            new_merge_args.path.parentObj = obj
             transcoder.merge(new_merge_args, value)
+            
+            print(f"After merging {field_name}: {new_merge_args.encodes}")
+            merge_args.encodes.update(new_merge_args.encodes)
         
-        if merge_args.path.fieldOnParent:
-            merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_id"] = obj.get_primary_key()
+        primary_key = obj.get_primary_key()
+        assert primary_key is not None, f"Primary key for {obj} is None"
+        merge_args.encodes[obj.__class_info__.primary_key_name] = primary_key
+        
+        print(f"Final encodes: {merge_args.encodes}")
             
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
