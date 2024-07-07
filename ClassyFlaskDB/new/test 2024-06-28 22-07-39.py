@@ -114,7 +114,6 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         primary_key_name = class_info.primary_key_name
         self.query = self.query.where(getattr(self.table.c, primary_key_name) == id_value)
         result = self._execute_query_first()
-        print(f"Query result for {self.cls.__name__} with ID {id_value}: {result}")
         return result
 
     def all(self) -> List[T]:
@@ -182,7 +181,6 @@ class BasicsTranscoder(Transcoder):
     @classmethod
     def _merge(cls, merge_args: MergeArgs, value: Any) -> None:
         merge_args.encodes[merge_args.path.fieldOnParent.name] = value
-        print(f"Basic merge for {merge_args.path.fieldOnParent.name}: {merge_args.encodes}")
 
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
@@ -235,8 +233,6 @@ class ObjectTranscoder(Transcoder):
 
     @classmethod
     def _merge(cls, parent_merge_args: SQLMergeArgs, obj: Any) -> None:
-        print(f"Merging object: {obj}")
-        
         # Create a personal merge_args for this object
         personal_merge_args = SQLMergeArgs(
             context=parent_merge_args.context,
@@ -272,9 +268,6 @@ class ObjectTranscoder(Transcoder):
             # Nested object
             parent_merge_args.encodes[f"{parent_merge_args.path.fieldOnParent.name}_id"] = primary_key
         
-        print(f"Final personal encodes: {personal_merge_args.encodes}")
-        print(f"Updated parent encodes: {parent_merge_args.encodes}")
-            
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
         return [f"{field.name}_id"]

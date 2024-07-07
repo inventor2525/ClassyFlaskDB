@@ -67,18 +67,15 @@ class DATADecorator(InfoDecorator):
 			
 			def __getattribute__(self, name):
 				if safe_hasattr(self, '_cf_instance'):
-					print(f"Accessing attribute: {name}")
 					cf_instance = object.__getattribute__(self, '_cf_instance')
 					class_info = ClassInfo.get(type(self))
 					
 					if name in class_info.fields and name not in cf_instance.loaded_fields:
-						print(f"Lazy loading attribute: {name}")
 						field = class_info.fields[name]
 						transcoder = self.__class__.__transcoders__[name]
 						value = transcoder.decode(cf_instance, field)
 						object.__setattr__(self, name, value)
 						cf_instance.loaded_fields.add(name)
-						print(f"Loaded value for {name}: {value}")
 						return value
 					
 				return old_getattr(self, name)
