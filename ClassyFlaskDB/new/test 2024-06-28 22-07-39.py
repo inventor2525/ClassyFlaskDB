@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData
 from sqlalchemy.orm import sessionmaker
 from typing import Dict, Any, Type, List, Generic, TypeVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, Field
 from datetime import datetime
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
@@ -11,6 +11,23 @@ from ClassyFlaskDB.new.Args import MergeArgs, MergePath
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
 
+from sqlalchemy.orm import Session
+
+class SQLMergeArgs(MergeArgs):
+    def __init__(self, *args, session: Session, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.session = session
+
+    def new(self, field: Field):
+        return SQLMergeArgs(
+            context=self.context,
+            path=MergePath(parentObj=self.path.parentObj, fieldOnParent=field),
+            encodes=self.encodes,  # Use the same encodes dictionary
+            is_dirty=self.is_dirty,
+            storage_engine=self.storage_engine,
+            session=self.session
+        )
+    
 class CFInstance:
     def __init__(self):
         self.storage_engine = None
@@ -56,20 +73,16 @@ class SQLAlchemyStorageEngine(StorageEngine):
 
     def merge(self, obj: Any):
         with self.session_maker() as session:
-            merge_args = MergeArgs(
+            merge_args = SQLMergeArgs(
                 context={},
                 path=MergePath(parentObj=None, fieldOnParent=None),
                 encodes={},
                 is_dirty={},
-                storage_engine=self
+                storage_engine=self,
+                session=session
             )
             transcoder = self.get_transcoder_type(ClassInfo.get(type(obj)), None)
             transcoder.merge(merge_args, obj)
-            
-            print(f"Final merge_args.encodes: {merge_args.encodes}")
-            
-            # table = self.metadata.tables[self.get_table_name(type(obj))]
-            # session.execute(table.insert().values(**merge_args.encodes))
             session.commit()
 
     def get_table_name(self, cls: Type) -> str:
@@ -210,16 +223,17 @@ class ObjectTranscoder(Transcoder):
         return [Column(f"{field.name}_id", column_type, primary_key=is_primary_key)]
 
     @classmethod
-    def _merge(cls, parent_merge_args: MergeArgs, obj: Any) -> None:
+    def _merge(cls, parent_merge_args: SQLMergeArgs, obj: Any) -> None:
         print(f"Merging object: {obj}")
         
         # Create a personal merge_args for this object
-        personal_merge_args = MergeArgs(
+        personal_merge_args = SQLMergeArgs(
             context=parent_merge_args.context,
             path=parent_merge_args.path,
             encodes={},
             is_dirty=parent_merge_args.is_dirty,
-            storage_engine=parent_merge_args.storage_engine
+            storage_engine=parent_merge_args.storage_engine,
+            session=parent_merge_args.session
         )
         
         # Iterate through fields and merge
@@ -233,9 +247,7 @@ class ObjectTranscoder(Transcoder):
         table = parent_merge_args.storage_engine.metadata.tables[parent_merge_args.storage_engine.get_table_name(type(obj))]
         
         # Update the table with our personal encodes
-        with parent_merge_args.storage_engine.session_maker() as session:
-            session.execute(table.insert().values(**personal_merge_args.encodes))
-            session.commit()
+        personal_merge_args.session.execute(table.insert().values(**personal_merge_args.encodes))
         
         # Get the primary key
         primary_key = obj.get_primary_key()
@@ -247,7 +259,7 @@ class ObjectTranscoder(Transcoder):
             parent_merge_args.encodes['id'] = primary_key
         else:
             # Nested object
-            parent_merge_args.encodes[f'{parent_merge_args.path.fieldOnParent.name}_id'] = primary_key
+            parent_merge_args.encodes[f"{parent_merge_args.path.fieldOnParent.name}_id"] = primary_key
         
         print(f"Final personal encodes: {personal_merge_args.encodes}")
         print(f"Updated parent encodes: {parent_merge_args.encodes}")
