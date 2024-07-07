@@ -15,11 +15,11 @@ class MergeArgs:
 	is_dirty: Dict[int, bool]
 	storage_engine: 'StorageEngine'
 
-	def new(self, field: Field, new_encodes: Dict[str, Any]):
+	def new(self, field: Field):
 		return MergeArgs(
 			context=self.context,
 			path=MergePath(parentObj=self.path.parentObj, fieldOnParent=field),
-			encodes=new_encodes,
+			encodes=self.encodes,
 			is_dirty=self.is_dirty,
 			storage_engine=self.storage_engine
 		)

@@ -68,8 +68,8 @@ class SQLAlchemyStorageEngine(StorageEngine):
             
             print(f"Final merge_args.encodes: {merge_args.encodes}")
             
-            table = self.metadata.tables[self.get_table_name(type(obj))]
-            session.execute(table.insert().values(**merge_args.encodes))
+            # table = self.metadata.tables[self.get_table_name(type(obj))]
+            # session.execute(table.insert().values(**merge_args.encodes))
             session.commit()
 
     def get_table_name(self, cls: Type) -> str:
@@ -210,25 +210,47 @@ class ObjectTranscoder(Transcoder):
         return [Column(f"{field.name}_id", column_type, primary_key=is_primary_key)]
 
     @classmethod
-    def _merge(cls, merge_args: MergeArgs, obj: Any) -> None:
+    def _merge(cls, parent_merge_args: MergeArgs, obj: Any) -> None:
         print(f"Merging object: {obj}")
-        print(f"Initial encodes: {merge_args.encodes}")
         
+        # Create a personal merge_args for this object
+        personal_merge_args = MergeArgs(
+            context=parent_merge_args.context,
+            path=parent_merge_args.path,
+            encodes={},
+            is_dirty=parent_merge_args.is_dirty,
+            storage_engine=parent_merge_args.storage_engine
+        )
+        
+        # Iterate through fields and merge
         for field_name, field_info in obj.__class_info__.fields.items():
             value = getattr(obj, field_name)
             transcoder = obj.__class__.__transcoders__[field_name]
-            new_merge_args = merge_args.new(field_info, {})
-            new_merge_args.path.parentObj = obj
-            transcoder.merge(new_merge_args, value)
-            
-            print(f"After merging {field_name}: {new_merge_args.encodes}")
-            merge_args.encodes.update(new_merge_args.encodes)
+            field_merge_args = personal_merge_args.new(field_info)
+            transcoder.merge(field_merge_args, value)
         
+        # Get the table for this object
+        table = parent_merge_args.storage_engine.metadata.tables[parent_merge_args.storage_engine.get_table_name(type(obj))]
+        
+        # Update the table with our personal encodes
+        with parent_merge_args.storage_engine.session_maker() as session:
+            session.execute(table.insert().values(**personal_merge_args.encodes))
+            session.commit()
+        
+        # Get the primary key
         primary_key = obj.get_primary_key()
         assert primary_key is not None, f"Primary key for {obj} is None"
-        merge_args.encodes[obj.__class_info__.primary_key_name] = primary_key
         
-        print(f"Final encodes: {merge_args.encodes}")
+        # Update parent_merge_args.encodes with our primary key
+        if parent_merge_args.path.fieldOnParent is None:
+            # Top-level object
+            parent_merge_args.encodes['id'] = primary_key
+        else:
+            # Nested object
+            parent_merge_args.encodes[f'{parent_merge_args.path.fieldOnParent.name}_id'] = primary_key
+        
+        print(f"Final personal encodes: {personal_merge_args.encodes}")
+        print(f"Updated parent encodes: {parent_merge_args.encodes}")
             
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
