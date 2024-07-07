@@ -7,6 +7,7 @@ from .DirtyDecorator import *
 
 @dataclass
 class DATADecorator(InfoDecorator):
+	not_initialized = object()
 	'''
 	A class decorator that replaces all specified fields with 'Transcoder'
 	instances that facilitate (optionally lazy) loading of objects from
@@ -58,16 +59,20 @@ class DATADecorator(InfoDecorator):
 			old_getattr = cls.__getattribute__
 			
 			def __getattribute__(self, name):
-				if hasattr(self, '_cf_instance'):
-					cf_instance = object.__getattribute__(self, '_cf_instance')
-					if name in classInfo.fields and name not in cf_instance.loaded_fields:
-						if name in cf_instance.encoded_values:
-							transcoder = self.__class__.__transcoders__[name]
-							value = transcoder.decode(cf_instance.storage_engine, self, name, cf_instance.encoded_values[name])
-							object.__setattr__(self, name, value)
-							cf_instance.loaded_fields.add(name)
-							return value
-
-				return old_getattr(self, name)
+				print(f"Accessing attribute: {name}")
+				cf_instance = object.__getattribute__(self, '_cf_instance')
+				class_info = ClassInfo.get(type(self))
+				
+				if name in class_info.fields and name not in cf_instance.loaded_fields:
+					print(f"Lazy loading attribute: {name}")
+					field = class_info.fields[name]
+					transcoder = self.__class__.__transcoders__[name]
+					value = transcoder.decode(cf_instance, field)
+					object.__setattr__(self, name, value)
+					cf_instance.loaded_fields.add(name)
+					print(f"Loaded value for {name}: {value}")
+					return value
+				
+				return object.__getattribute__(self, name)
 
 			cls.__getattribute__ = __getattribute__

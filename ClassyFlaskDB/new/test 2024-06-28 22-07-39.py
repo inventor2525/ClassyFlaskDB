@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData
 from sqlalchemy.orm import sessionmaker
 from typing import Dict, Any, Type, List, Generic, TypeVar
-from dataclasses import dataclass, field, Field
+from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
@@ -139,6 +139,20 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         
         setattr(instance, '_cf_instance', cf_instance)
         
+        class_info = ClassInfo.get(self.cls)
+        
+        # Set all serialized fields to not_initialized
+        for field_name in class_info.fields:
+            setattr(instance, field_name, DATADecorator.not_initialized)
+        
+        # Set non-serialized fields to their default values
+        for field_name, field in class_info.all_fields.items():
+            if field_name not in class_info.fields:
+                if field.default is not MISSING:
+                    setattr(instance, field_name, field.default)
+                elif field.default_factory is not MISSING:
+                    setattr(instance, field_name, field.default_factory())
+        
         # Call __post_init__ if it exists
         if hasattr(instance, '__post_init__'):
             instance.__post_init__()
@@ -175,8 +189,8 @@ class BasicsTranscoder(Transcoder):
         return [field.name]
 
     @classmethod
-    def decode(cls, storage_engine: SQLAlchemyStorageEngine, obj: Any, field_name: str, encoded_values: Dict[str, Any]) -> Any:
-        return encoded_values[field_name]
+    def decode(cls, cf_instance: CFInstance, field: Field) -> Any:
+        return cf_instance.encoded_values[field.name]
 
 @transcoder_collection.add
 class DateTimeTranscoder(Transcoder):
@@ -201,9 +215,9 @@ class DateTimeTranscoder(Transcoder):
         return [f"{field.name}_datetime", f"{field.name}_timezone"]
 
     @classmethod
-    def decode(cls, storage_engine: SQLAlchemyStorageEngine, obj: Any, field_name: str, encoded_values: Dict[str, Any]) -> datetime:
-        dt = encoded_values[f"{field_name}_datetime"]
-        tz = encoded_values[f"{field_name}_timezone"]
+    def decode(cls, cf_instance: CFInstance, field: Field) -> datetime:
+        dt = cf_instance.encoded_values[f"{field.name}_datetime"]
+        tz = cf_instance.encoded_values[f"{field.name}_timezone"]
         return dt.replace(tzinfo=tz) if tz else dt
 
 @transcoder_collection.add
@@ -266,10 +280,10 @@ class ObjectTranscoder(Transcoder):
         return [f"{field.name}_id"]
 
     @classmethod
-    def decode(cls, storage_engine: SQLAlchemyStorageEngine, obj: Any, field_name: str, encoded_values: Dict[str, Any]) -> Any:
-        field_type = obj.__class_info__.fields[field_name].type
-        id_value = encoded_values[f"{field_name}_id"]
-        return storage_engine.query(field_type).filter_by_id(id_value)
+    def decode(cls, cf_instance: CFInstance, field: Field) -> Any:
+        field_type = field.type
+        id_value = cf_instance.encoded_values[f"{field.name}_id"]
+        return cf_instance.storage_engine.query(field_type).filter_by_id(id_value)
 
 # Example usage
 DATA = DATADecorator()
