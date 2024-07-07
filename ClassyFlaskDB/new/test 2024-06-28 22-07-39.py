@@ -146,12 +146,12 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
             setattr(instance, field_name, DATADecorator.not_initialized)
         
         # Set non-serialized fields to their default values
-        for field_name, field in class_info.all_fields.items():
-            if field_name not in class_info.fields:
+        for field in class_info.all_fields:
+            if field.name not in class_info.fields:
                 if field.default is not MISSING:
-                    setattr(instance, field_name, field.default)
+                    setattr(instance, field.name, field.default)
                 elif field.default_factory is not MISSING:
-                    setattr(instance, field_name, field.default_factory())
+                    setattr(instance, field.name, field.default_factory())
         
         # Call __post_init__ if it exists
         if hasattr(instance, '__post_init__'):

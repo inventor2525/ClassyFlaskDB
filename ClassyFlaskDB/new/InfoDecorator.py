@@ -9,7 +9,6 @@ class InfoDecorator:
 	which can be used to resolve forward references after everything that
 	is decorated with this has been imported.
 	'''
-	decorated_classes:List[type] = field(default_factory=list, kw_only=True)
 	registry:Dict[str, type] = field(default_factory=dict, kw_only=True)
 	
 	@overload
