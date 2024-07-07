@@ -134,16 +134,14 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         instance = object.__new__(self.cls)
         cf_instance = CFInstance(self.storage_engine)
         
-        class_info = ClassInfo.get(self.cls)
-        for field_name, field_info in class_info.fields.items():
-            transcoder = self.cls.__transcoders__[field_name]
-            columns = transcoder.get_columns(class_info, field_info)
-            cf_instance.encoded_values[field_name] = {col: row[col] for col in columns if col in row.keys()}
+        # Set encoded_values directly from the row
+        cf_instance.encoded_values = row._asdict()
         
         setattr(instance, '_cf_instance', cf_instance)
         
-        # Initialize the instance with default values
-        instance.__init__(**{f.name: None for f in class_info.fields.values()})
+        # Call __post_init__ if it exists
+        if hasattr(instance, '__post_init__'):
+            instance.__post_init__()
         
         return instance
 
