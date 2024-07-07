@@ -29,8 +29,8 @@ class SQLMergeArgs(MergeArgs):
         )
     
 class CFInstance:
-    def __init__(self):
-        self.storage_engine = None
+    def __init__(self, storage_engine: 'SQLAlchemyStorageEngine'):
+        self.storage_engine = storage_engine
         self.loaded_fields = set()
         self.encoded_values = {}
 
@@ -140,11 +140,10 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
             columns = transcoder.get_columns(class_info, field_info)
             cf_instance.encoded_values[field_name] = {col: row[col] for col in columns if col in row.keys()}
         
-        object.__setattr__(instance, '_cf_instance', cf_instance)
+        setattr(instance, '_cf_instance', cf_instance)
         
-        # Call __init__ with default values to ensure the object is properly initialized
-        init_args = [row.get(field, None) for field in class_info.fields]
-        instance.__init__(*init_args)
+        # Initialize the instance with default values
+        instance.__init__(**{f.name: None for f in class_info.fields.values()})
         
         return instance
 
