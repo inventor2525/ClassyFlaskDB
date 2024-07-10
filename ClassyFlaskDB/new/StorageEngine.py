@@ -55,7 +55,15 @@ class StorageEngine(ABC):
 		pass
 
 class CFInstance:
-	def __init__(self, storage_engine: StorageEngine):
-		self.storage_engine = storage_engine
-		self.loaded_fields = set()
-		self.encoded_values = {}
+    def __init__(self, storage_engine: StorageEngine):
+        self.storage_engine = storage_engine
+        self.loaded_fields = set()
+        self.encoded_values = {}
+
+class TranscoderCollection:
+    def __init__(self):
+        self.transcoders = []
+
+    def add(self, transcoder_cls):
+        self.transcoders.append(transcoder_cls)
+        return transcoder_cls
