@@ -229,21 +229,34 @@ class ObjectTranscoder(Transcoder):
             session=parent_merge_args.session
         )
         
+        # Get the class info and primary key name
+        class_info = ClassInfo.get(type(obj))
+        primary_key_name = class_info.primary_key_name
+        
+        # Check if the object exists in the database
+        table = parent_merge_args.storage_engine.metadata.tables[parent_merge_args.storage_engine.get_table_name(type(obj))]
+        primary_key = obj.get_primary_key()
+        existing_obj = personal_merge_args.session.query(table).filter(getattr(table.c, primary_key_name) == primary_key).first()
+        
+        is_update = existing_obj is not None
+        
         # Iterate through fields and merge
-        for field_name, field_info in obj.__class_info__.fields.items():
+        for field_name, field_info in class_info.fields.items():
+            if is_update and field_info.metadata.get('no_update', False):
+                continue
+            
             value = getattr(obj, field_name)
             transcoder = obj.__class__.__transcoders__[field_name]
             field_merge_args = personal_merge_args.new(field_info)
             transcoder.merge(field_merge_args, value)
         
-        # Get the table for this object
-        table = parent_merge_args.storage_engine.metadata.tables[parent_merge_args.storage_engine.get_table_name(type(obj))]
-        
         # Update the table with our personal encodes
-        personal_merge_args.session.execute(table.insert().values(**personal_merge_args.encodes))
+        if is_update:
+            personal_merge_args.session.query(table).filter(getattr(table.c, primary_key_name) == primary_key).update(personal_merge_args.encodes)
+        else:
+            personal_merge_args.session.execute(table.insert().values(**personal_merge_args.encodes))
         
         # Get the primary key
-        primary_key = obj.get_primary_key()
         assert primary_key is not None, f"Primary key for {obj} is None"
         
         # Update parent_merge_args.encodes with our primary key
@@ -253,7 +266,7 @@ class ObjectTranscoder(Transcoder):
         else:
             # Nested object
             parent_merge_args.encodes[f"{parent_merge_args.path.fieldOnParent.name}_id"] = primary_key
-        
+                
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
         return [f"{field.name}_id"]

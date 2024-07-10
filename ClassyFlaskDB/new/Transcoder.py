@@ -18,10 +18,13 @@ class Transcoder:
 
     @classmethod
     def merge(cls, merge_args: MergeArgs, value: Any) -> None:
-        return cls._merge(merge_args, value)
-        if merge_args.is_dirty.get(id(value), True):
+        try:
+            cf_instance = object.__getattribute__(value, '_cf_instance')
+            if cf_instance.storage_engine != merge_args.storage_engine or merge_args.is_dirty.get(id(value), True):
+                cls._merge(merge_args, value)
+                merge_args.is_dirty[id(value)] = False
+        except AttributeError:
             cls._merge(merge_args, value)
-            merge_args.is_dirty[id(value)] = False
 
     @classmethod
     def get_columns(cls, class_info: ClassInfo, field: Field) -> List[str]:
