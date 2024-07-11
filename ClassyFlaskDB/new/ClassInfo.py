@@ -97,3 +97,6 @@ class ClassInfo:
 	@staticmethod
 	def get_dict_types(field:Field) -> Tuple[type,type]:
 		return getattr(field.type, "__args__", [None,None])
+
+	def is_primary_key(self, field: Field) -> bool:
+		return field.name == self.primary_key_name

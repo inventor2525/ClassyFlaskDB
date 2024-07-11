@@ -1,6 +1,7 @@
 from dataclasses import dataclass, Field
 from typing import Any, Dict, Optional
 from .Types import Interface, BasicType
+from .ClassInfo import ClassInfo
 
 @dataclass
 class MergePath:
@@ -23,3 +24,8 @@ class MergeArgs:
 			is_dirty=self.is_dirty,
 			storage_engine=self.storage_engine
 		)
+
+@dataclass
+class SetupArgs:
+    storage_engine: 'StorageEngine'
+    class_info: ClassInfo

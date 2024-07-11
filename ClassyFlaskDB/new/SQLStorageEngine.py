@@ -1,13 +1,13 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData
 from sqlalchemy.orm import sessionmaker
-from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator
+from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection, CFInstance
 from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
-from ClassyFlaskDB.new.Args import MergeArgs, MergePath
+from ClassyFlaskDB.new.Args import MergeArgs, MergePath, SetupArgs
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
 
@@ -45,14 +45,10 @@ class SQLAlchemyStorageEngine(StorageEngine):
     def setup(self, data_decorator: DATADecorator):
         for cls in data_decorator.registry.values():
             class_info = ClassInfo.get(cls)
-            table_name = self.get_table_name(cls)
-            columns = []
-            primary_key_name = class_info.primary_key_name
-            for field_name, field_info in class_info.fields.items():
-                transcoder = cls.__transcoders__[field_name]
-                new_columns = transcoder.setup(class_info, field_info, field_name == primary_key_name)
-                columns.extend(new_columns)
-            Table(table_name, self.metadata, *columns)
+            setup_args = SetupArgs(storage_engine=self, class_info=class_info)
+            transcoder = self.get_transcoder_type(class_info, None)
+            transcoder.setup(setup_args, None)
+
         self.metadata.create_all(self.engine)
 
     def merge(self, obj: Any):
@@ -92,7 +88,7 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         self.cls = cls
         self.table = storage_engine.metadata.tables[storage_engine.get_table_name(cls)]
         self.query = select(self.table)
-        self.transcoder = storage_engine.get_transcoder_type(ClassInfo.get(cls), None)
+        self.transcoder:LazyLoadingTranscoder = storage_engine.get_transcoder_type(ClassInfo.get(cls), None)
         if not issubclass(self.transcoder, LazyLoadingTranscoder):
             raise ValueError(f"Transcoder for {cls} does not support lazy loading")
 
@@ -130,9 +126,9 @@ class BasicsTranscoder(Transcoder):
         return field.type in cls.supported_types
 
     @classmethod
-    def setup(cls, class_info: ClassInfo, field: field, is_primary_key: bool) -> List[Column]:
+    def setup(cls, setup_args: SetupArgs, field: Field) -> List[Column]:
         column_type = cls.supported_types[field.type]
-        return [Column(field.name, column_type, primary_key=is_primary_key)]
+        return [Column(field.name, column_type, primary_key=setup_args.class_info.is_primary_key(field))]
 
     @classmethod
     def _merge(cls, merge_args: MergeArgs, value: Any) -> None:
@@ -153,9 +149,9 @@ class DateTimeTranscoder(Transcoder):
         return field.type == datetime
 
     @classmethod
-    def setup(cls, class_info: ClassInfo, field: field, is_primary_key: bool) -> List[Column]:
+    def setup(cls, setup_args: SetupArgs, field: Field) -> List[Column]:
         return [
-            Column(f"{field.name}_datetime", DateTime, primary_key=is_primary_key),
+            Column(f"{field.name}_datetime", DateTime, primary_key=setup_args.class_info.is_primary_key(field)),
             Column(f"{field.name}_timezone", String)
         ]
 
@@ -181,11 +177,23 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         return ClassInfo.has_ClassInfo(class_info.cls)
 
     @classmethod
-    def setup(cls, class_info: ClassInfo, field: field, is_primary_key: bool) -> List[Column]:
-        field_class_info = ClassInfo.get(field.type)
-        pk_type = field_class_info.fields[field_class_info.primary_key_name].type
-        column_type = BasicsTranscoder.supported_types.get(pk_type, String)
-        return [Column(f"{field.name}_id", column_type, primary_key=is_primary_key)]
+    def setup(cls, setup_args: SetupArgs, field: Field) -> List[Column]:
+        if field is None:
+            # This is a top-level object setup
+            table_name = f"obj_{setup_args.class_info.cls.__name__}"
+            columns = []
+            for field_name, field_info in setup_args.class_info.fields.items():
+                transcoder = setup_args.class_info.cls.__transcoders__[field_name]
+                new_columns = transcoder.setup(setup_args, field_info)
+                columns.extend(new_columns)
+            Table(table_name, setup_args.storage_engine.metadata, *columns)
+            return columns
+        else:
+            # This is a field setup
+            field_class_info = ClassInfo.get(field.type)
+            pk_type = field_class_info.fields[field_class_info.primary_key_name].type
+            column_type = BasicsTranscoder.supported_types.get(pk_type, String)
+            return [Column(f"{field.name}_id", column_type, primary_key=setup_args.class_info.is_primary_key(field))]
 
     @classmethod
     def _merge(cls, parent_merge_args: SQLMergeArgs, obj: Any) -> None:

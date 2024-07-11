@@ -9,8 +9,8 @@ class Transcoder:
         return False
 
     @classmethod
-    def setup(cls, class_info: ClassInfo, field: Field, is_primary_key: bool) -> List[Any]:
-        return []
+    def setup(cls, setup_args: SetupArgs, field: Field):
+        pass
 
     @classmethod
     def _merge(cls, merge_args: MergeArgs, value: Any) -> None:
