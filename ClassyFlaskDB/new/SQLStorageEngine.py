@@ -135,10 +135,6 @@ class BasicsTranscoder(Transcoder):
         merge_args.encodes[merge_args.path.fieldOnParent.name] = value
 
     @classmethod
-    def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
-        return [field.name]
-
-    @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
         cf_instance = decode_args.parent._cf_instance
         return cf_instance.encoded_values[decode_args.field.name]
@@ -160,10 +156,6 @@ class DateTimeTranscoder(Transcoder):
     def _merge(cls, merge_args: MergeArgs, value: datetime) -> None:
         merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_datetime"] = value.replace(tzinfo=None)
         merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_timezone"] = str(value.tzinfo) if value.tzinfo else None
-
-    @classmethod
-    def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
-        return [f"{field.name}_datetime", f"{field.name}_timezone"]
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> datetime:
@@ -246,10 +238,6 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         else:
             # Nested object
             parent_merge_args.encodes[f"{parent_merge_args.path.fieldOnParent.name}_id"] = primary_key
-                
-    @classmethod
-    def get_columns(cls, class_info: ClassInfo, field: field) -> List[str]:
-        return [f"{field.name}_id"]
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:

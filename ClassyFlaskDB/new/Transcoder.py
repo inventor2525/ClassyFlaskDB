@@ -27,10 +27,6 @@ class Transcoder:
             cls._merge(merge_args, value)
 
     @classmethod
-    def get_columns(cls, class_info: ClassInfo, field: Field) -> List[str]:
-        return []
-
-    @classmethod
     def decode(cls, storage_engine: Any, obj: Any, field_name: str, encoded_values: Dict[str, Any]) -> Any:
         return None
 
