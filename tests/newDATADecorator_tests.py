@@ -77,5 +77,10 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_bar.foe.bar.location, bar.location)
 		self.assertEqual(queried_bar.foe.bar.auto_id, bar.auto_id)
 		
+		self.assertNotEqual(id(bar), id(queried_bar))
+		self.assertNotEqual(id(bar.foe), id(queried_bar.foe))
+		
+		self.assertEqual(id(queried_bar), id(queried_bar.foe.bar))
+		self.assertEqual(id(queried_bar.foe), id(queried_bar.foe.bar.foe))
 if __name__ == '__main__':
 	unittest.main()
