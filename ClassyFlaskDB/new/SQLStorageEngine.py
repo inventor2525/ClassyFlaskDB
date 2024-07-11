@@ -7,7 +7,7 @@ from datetime import datetime
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection, CFInstance
 from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
-from ClassyFlaskDB.new.Args import MergeArgs, MergePath, SetupArgs
+from ClassyFlaskDB.new.Args import MergeArgs, MergePath, SetupArgs, DecodeArgs
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
 
@@ -139,8 +139,9 @@ class BasicsTranscoder(Transcoder):
         return [field.name]
 
     @classmethod
-    def decode(cls, cf_instance: CFInstance, field: Field) -> Any:
-        return cf_instance.encoded_values[field.name]
+    def decode(cls, decode_args: DecodeArgs) -> Any:
+        cf_instance = decode_args.parent._cf_instance
+        return cf_instance.encoded_values[decode_args.field.name]
 
 @transcoder_collection.add
 class DateTimeTranscoder(Transcoder):
@@ -165,9 +166,10 @@ class DateTimeTranscoder(Transcoder):
         return [f"{field.name}_datetime", f"{field.name}_timezone"]
 
     @classmethod
-    def decode(cls, cf_instance: CFInstance, field: Field) -> datetime:
-        dt = cf_instance.encoded_values[f"{field.name}_datetime"]
-        tz = cf_instance.encoded_values[f"{field.name}_timezone"]
+    def decode(cls, decode_args: DecodeArgs) -> datetime:
+        cf_instance = decode_args.parent._cf_instance
+        dt = cf_instance.encoded_values[f"{decode_args.field.name}_datetime"]
+        tz = cf_instance.encoded_values[f"{decode_args.field.name}_timezone"]
         return dt.replace(tzinfo=tz) if tz else dt
 
 @transcoder_collection.add
@@ -250,10 +252,11 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         return [f"{field.name}_id"]
 
     @classmethod
-    def decode(cls, cf_instance: CFInstance, field: Field) -> Any:
-        field_type = field.type
-        id_value = cf_instance.encoded_values[f"{field.name}_id"]
-        return cf_instance.storage_engine.query(field_type).filter_by_id(id_value)
+    def decode(cls, decode_args: DecodeArgs) -> Any:
+        cf_instance = decode_args.parent._cf_instance
+        field_type = decode_args.field.type
+        id_value = cf_instance.encoded_values[f"{decode_args.field.name}_id"]
+        return decode_args.storage_engine.query(field_type).filter_by_id(id_value)
     
     @classmethod
     def create_lazy_instance(cls, storage_engine: 'StorageEngine', obj_type: Type, encoded_values: Dict[str, Any]) -> Any:

@@ -20,6 +20,7 @@ class DATADecorator(InfoDecorator):
 	
 	class Interface(AutoID.Interface, DirtyDecorator.Interface):
 		__transcoders__:List[Transcoder]
+		_cf_instance: Optional['CFInstance'] = None
 		'''These are only those that have had their fields 'poked' so far. Use __get_transcoder__ if you want to do some digging.'''
 		def __get_transcoder__(self, name:str, default=object()) -> Transcoder:
 			'''
@@ -79,7 +80,12 @@ class DATADecorator(InfoDecorator):
 					if name in class_info.fields and name not in cf_instance.loaded_fields:
 						field = class_info.fields[name]
 						transcoder = self.__class__.__transcoders__[name]
-						value = transcoder.decode(cf_instance, field)
+						decode_args = DecodeArgs(
+							storage_engine=cf_instance.storage_engine,
+							parent=self,
+							field=field
+						)
+						value = transcoder.decode(decode_args)
 						object.__setattr__(self, name, value)
 						cf_instance.loaded_fields.add(name)
 						return value

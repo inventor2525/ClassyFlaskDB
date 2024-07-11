@@ -1,5 +1,5 @@
-from dataclasses import dataclass, Field
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, Field, field
+from typing import Any, Dict, Optional, List, Union
 from .Types import Interface, BasicType
 from .ClassInfo import ClassInfo
 
@@ -29,3 +29,10 @@ class MergeArgs:
 class SetupArgs:
     storage_engine: 'StorageEngine'
     class_info: ClassInfo
+	
+@dataclass
+class DecodeArgs:
+    storage_engine: 'StorageEngine'
+    parent: 'DataDecorator.Interface'
+    field: Field
+    path: List[Union[str, int]] = field(default_factory=list)
