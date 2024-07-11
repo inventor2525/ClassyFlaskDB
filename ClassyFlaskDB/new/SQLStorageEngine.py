@@ -51,10 +51,11 @@ class SQLAlchemyStorageEngine(StorageEngine):
 
         self.metadata.create_all(self.engine)
 
-    def merge(self, obj: Any):
+    def merge(self, obj: Any, persist: bool = False):
+        context = self.context if persist else {}
         with self.session_maker() as session:
             merge_args = SQLMergeArgs(
-                context={},
+                context=context,
                 path=MergePath(parentObj=None, fieldOnParent=None),
                 encodes={},
                 is_dirty={},
@@ -96,19 +97,50 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         class_info = ClassInfo.get(self.cls)
         primary_key_name = class_info.primary_key_name
         self.query = self.query.where(getattr(self.table.c, primary_key_name) == id_value)
+        
+        # Check context first
+        context_obj = self.storage_engine.context.get(self.cls, {}).get(id_value, MISSING)
+        if context_obj is not MISSING:
+            return context_obj
+
         with self.storage_engine.session_maker() as session:
             result = session.execute(self.query).first()
-            return self._create_lazy_instance(result) if result else None
+            if result:
+                encoded_values = result._asdict()
+                obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
+                
+                # Check context first
+                context_obj = self.storage_engine.context.get(self.cls, {}).get(obj_id, MISSING)
+                if context_obj is not MISSING:
+                    return context_obj
+                else:
+                    return self._create_lazy_instance(encoded_values)
+            return None
 
     def all(self) -> Iterator[T]:
         with self.storage_engine.session_maker() as session:
             results = session.execute(self.query)
             for row in results:
-                yield self._create_lazy_instance(row)
+                encoded_values = row._asdict()
+                obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
+                
+                # Check context first
+                context_obj = self.storage_engine.context.get(self.cls, {}).get(obj_id, MISSING)
+                if context_obj is not MISSING:
+                    yield context_obj
+                else:
+                    yield self._create_lazy_instance(encoded_values)
 
-    def _create_lazy_instance(self, row):
-        encoded_values = row._asdict()
-        return self.transcoder.create_lazy_instance(self.storage_engine, self.cls, encoded_values)
+    def _create_lazy_instance(self, encoded_values: Dict[str, Any]) -> T:
+        instance = self.transcoder.create_lazy_instance(self.storage_engine, self.cls, encoded_values)
+        
+        # Add to context
+        obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
+        if self.cls not in self.storage_engine.context:
+            self.storage_engine.context[self.cls] = {}
+        self.storage_engine.context[self.cls][obj_id] = instance
+        
+        return instance
 
 transcoder_collection = TranscoderCollection()
 
@@ -238,6 +270,13 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         else:
             # Nested object
             parent_merge_args.encodes[f"{parent_merge_args.path.fieldOnParent.name}_id"] = primary_key
+        
+        # Add object to context
+        obj_type = type(obj)
+        obj_id = obj.get_primary_key()
+        if obj_type not in parent_merge_args.context:
+            parent_merge_args.context[obj_type] = {}
+        parent_merge_args.context[obj_type][obj_id] = obj
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:

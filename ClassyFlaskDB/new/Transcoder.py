@@ -18,12 +18,16 @@ class Transcoder:
 
     @classmethod
     def merge(cls, merge_args: MergeArgs, value: Any) -> None:
+        different_storage_engine = False
         try:
             cf_instance = object.__getattribute__(value, '_cf_instance')
-            if cf_instance.storage_engine != merge_args.storage_engine or merge_args.is_dirty.get(id(value), True):
-                cls._merge(merge_args, value)
-                merge_args.is_dirty[id(value)] = False
-        except AttributeError:
+            if cf_instance.storage_engine != merge_args.storage_engine:
+                different_storage_engine = True
+        except:
+             pass
+        
+        if different_storage_engine or merge_args.is_dirty.get(id(value), True):
+            merge_args.is_dirty[id(value)] = False
             cls._merge(merge_args, value)
 
     @classmethod
