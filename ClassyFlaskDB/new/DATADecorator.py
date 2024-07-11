@@ -88,6 +88,7 @@ class DATADecorator(InfoDecorator):
 						value = transcoder.decode(decode_args)
 						object.__setattr__(self, name, value)
 						cf_instance.loaded_fields.add(name)
+						print("lazy", name, class_info, self)
 						return value
 					
 				return old_getattr(self, name)

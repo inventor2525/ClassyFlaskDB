@@ -163,7 +163,7 @@ class BasicsTranscoder(Transcoder):
         return [Column(field.name, column_type, primary_key=setup_args.class_info.is_primary_key(field))]
 
     @classmethod
-    def _merge(cls, merge_args: MergeArgs, value: Any) -> None:
+    def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
         merge_args.encodes[merge_args.path.fieldOnParent.name] = value
 
     @classmethod
@@ -185,7 +185,7 @@ class DateTimeTranscoder(Transcoder):
         ]
 
     @classmethod
-    def _merge(cls, merge_args: MergeArgs, value: datetime) -> None:
+    def _encode(cls, merge_args: MergeArgs, value: datetime) -> None:
         merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_datetime"] = value.replace(tzinfo=None)
         merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_timezone"] = str(value.tzinfo) if value.tzinfo else None
 
@@ -263,6 +263,17 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         # Get the primary key
         assert primary_key is not None, f"Primary key for {obj} is None"
         
+        # Add object to context
+        obj_type = type(obj)
+        obj_id = obj.get_primary_key()
+        if obj_type not in parent_merge_args.context:
+            parent_merge_args.context[obj_type] = {}
+        parent_merge_args.context[obj_type][obj_id] = obj
+        
+    @classmethod
+    def _encode(cls, parent_merge_args: SQLMergeArgs, obj: Any) -> None:
+        primary_key = obj.get_primary_key()
+        
         # Update parent_merge_args.encodes with our primary key
         if parent_merge_args.path.fieldOnParent is None:
             # Top-level object
@@ -271,13 +282,6 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             # Nested object
             parent_merge_args.encodes[f"{parent_merge_args.path.fieldOnParent.name}_id"] = primary_key
         
-        # Add object to context
-        obj_type = type(obj)
-        obj_id = obj.get_primary_key()
-        if obj_type not in parent_merge_args.context:
-            parent_merge_args.context[obj_type] = {}
-        parent_merge_args.context[obj_type][obj_id] = obj
-
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
         cf_instance = decode_args.parent._cf_instance
