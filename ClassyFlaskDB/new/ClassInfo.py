@@ -24,13 +24,15 @@ class ClassInfo:
 	def __init__(self, cls:type, included_fields:Set[str], excluded_fields:Set[str]):
 		self.cls = cls
 		self.qualname = cls.__qualname__
-		self.semi_qualname = re.sub(r"""^(.*?<locals>\.)?(.*?$)""", r'\2', cls.__qualname__)
+		self.semi_qualname = self.qualname
 		'''
 		Similar to cls.__qualname__ except it cleans up type hints for
 		nested classes defined inside functions (like in a unit test!).
 		
 		It's not as specific though so... beware name collisions.
 		'''
+		while "<locals>." in self.semi_qualname:
+			self.semi_qualname = re.sub(r"""^(.*?<locals>\.)?(.*?$)""", r'\2', self.semi_qualname)
 		
 		# Get fields:
 		self.all_fields = fields(cls)
