@@ -1,11 +1,10 @@
 from dataclasses import dataclass, Field, field
 from typing import Any, Dict, Optional, List, Union
-from .Types import Interface, BasicType
 from .ClassInfo import ClassInfo
 
 @dataclass
 class MergePath:
-	parentObj: Optional[Interface]
+	parentObj: Optional['DataDecorator.Interface']
 	fieldOnParent: Optional[Field]
 
 @dataclass

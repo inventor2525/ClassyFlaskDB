@@ -1,6 +1,6 @@
+from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple
 from .Transcoder import *
 from .ClassInfo import *
-from .Types import *
 
 T = TypeVar('T')
 class StorageEngineQuery(ABC, Generic[T]): #TODO, somehow generically include with StorageEngine so a StorageEngine sub class has to define a StorageEngineQuery to use. Also somehow include T in StorageEngineQuery as a generic. Essentially I'm re-building a thin orm here, so... look at sql alchamy's for reference
@@ -19,7 +19,7 @@ U = TypeVar('U')
 @dataclass
 class StorageEngine(ABC):
 	transcoder_types:List[Type[Transcoder]] = field(default_factory=list, kw_only=True)
-	context:ContextType = field(default_factory=dict, kw_only=True)
+	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
 	
 	def add(self, transcoder:Type[T]) -> Type[T]: #TODO:  + priority
 		'''
