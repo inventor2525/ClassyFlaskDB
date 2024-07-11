@@ -33,3 +33,8 @@ class Transcoder:
     @classmethod
     def decode(cls, storage_engine: Any, obj: Any, field_name: str, encoded_values: Dict[str, Any]) -> Any:
         return None
+
+class LazyLoadingTranscoder(Transcoder):
+    @classmethod
+    def create_lazy_instance(self, storage_engine: 'StorageEngine', cls: Type, encoded_values: Dict[str, Any]) -> Any:
+        pass

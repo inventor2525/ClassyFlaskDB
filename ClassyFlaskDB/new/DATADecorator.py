@@ -52,10 +52,16 @@ class DATADecorator(InfoDecorator):
 	
 	def finalize(self, storage_engine: StorageEngine):
 		super().finalize()
+		self.storage_engine = storage_engine
 		
 		for cls in self.registry.values():
 			classInfo = ClassInfo.get(cls)
 			
+			cls.__transcoders__ = {}
+			for field_name, field_info in classInfo.fields.items():
+				transcoder_type = self.storage_engine.get_transcoder_type(classInfo, field_info)
+				cls.__transcoders__[field_name] = transcoder_type()	
+				
 			old_getattr = cls.__getattribute__
 			
 			def safe_hasattr(obj, name):

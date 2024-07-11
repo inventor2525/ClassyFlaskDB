@@ -1,12 +1,12 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData
 from sqlalchemy.orm import sessionmaker
-from typing import Dict, Any, Type, List, Generic, TypeVar
+from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection, CFInstance
-from ClassyFlaskDB.new.Transcoder import Transcoder
+from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
 from ClassyFlaskDB.new.Args import MergeArgs, MergePath
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
@@ -33,7 +33,7 @@ class SQLAlchemyStorageEngine(StorageEngine):
     def __init__(self, connection_string: str, transcoder_collection: TranscoderCollection, data_decorator: DATADecorator):
         super().__init__()
         self.engine = create_engine(connection_string)
-        self.session_maker = sessionmaker(bind=self.engine)        
+        self.session_maker = sessionmaker(bind=self.engine)
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)
         self.transcoders = transcoder_collection.transcoders
@@ -48,10 +48,8 @@ class SQLAlchemyStorageEngine(StorageEngine):
             table_name = self.get_table_name(cls)
             columns = []
             primary_key_name = class_info.primary_key_name
-            cls.__transcoders__ = {}
             for field_name, field_info in class_info.fields.items():
-                transcoder = self.get_transcoder_type(class_info, field_info)
-                cls.__transcoders__[field_name] = transcoder()
+                transcoder = cls.__transcoders__[field_name]
                 new_columns = transcoder.setup(class_info, field_info, field_name == primary_key_name)
                 columns.extend(new_columns)
             Table(table_name, self.metadata, *columns)
@@ -94,55 +92,27 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         self.cls = cls
         self.table = storage_engine.metadata.tables[storage_engine.get_table_name(cls)]
         self.query = select(self.table)
+        self.transcoder = storage_engine.get_transcoder_type(ClassInfo.get(cls), None)
+        if not issubclass(self.transcoder, LazyLoadingTranscoder):
+            raise ValueError(f"Transcoder for {cls} does not support lazy loading")
 
     def filter_by_id(self, id_value: Any) -> T:
         class_info = ClassInfo.get(self.cls)
         primary_key_name = class_info.primary_key_name
         self.query = self.query.where(getattr(self.table.c, primary_key_name) == id_value)
-        result = self._execute_query_first()
-        return result
-
-    def all(self) -> List[T]:
-        return self._execute_query_all()
-
-    def _execute_query_first(self) -> T:
         with self.storage_engine.session_maker() as session:
             result = session.execute(self.query).first()
             return self._create_lazy_instance(result) if result else None
 
-    def _execute_query_all(self) -> List[T]:
+    def all(self) -> Iterator[T]:
         with self.storage_engine.session_maker() as session:
-            results = session.execute(self.query).fetchall()
-            return [self._create_lazy_instance(row) for row in results]
+            results = session.execute(self.query)
+            for row in results:
+                yield self._create_lazy_instance(row)
 
     def _create_lazy_instance(self, row):
-        instance = object.__new__(self.cls)
-        cf_instance = CFInstance(self.storage_engine)
-        
-        # Set encoded_values directly from the row
-        cf_instance.encoded_values = row._asdict()
-        
-        setattr(instance, '_cf_instance', cf_instance)
-        
-        class_info = ClassInfo.get(self.cls)
-        
-        # Set all serialized fields to not_initialized
-        for field_name in class_info.fields:
-            setattr(instance, field_name, DATADecorator.not_initialized)
-        
-        # Set non-serialized fields to their default values
-        for field in class_info.all_fields:
-            if field.name not in class_info.fields:
-                if field.default is not MISSING:
-                    setattr(instance, field.name, field.default)
-                elif field.default_factory is not MISSING:
-                    setattr(instance, field.name, field.default_factory())
-        
-        # Call __post_init__ if it exists
-        if hasattr(instance, '__post_init__'):
-            instance.__post_init__()
-        
-        return instance
+        encoded_values = row._asdict()
+        return self.transcoder.create_lazy_instance(self.storage_engine, self.cls, encoded_values)
 
 transcoder_collection = TranscoderCollection()
 
@@ -205,7 +175,7 @@ class DateTimeTranscoder(Transcoder):
         return dt.replace(tzinfo=tz) if tz else dt
 
 @transcoder_collection.add
-class ObjectTranscoder(Transcoder):
+class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, class_info: ClassInfo, field: field) -> bool:
         return ClassInfo.has_ClassInfo(class_info.cls)
@@ -276,3 +246,27 @@ class ObjectTranscoder(Transcoder):
         field_type = field.type
         id_value = cf_instance.encoded_values[f"{field.name}_id"]
         return cf_instance.storage_engine.query(field_type).filter_by_id(id_value)
+    
+    @classmethod
+    def create_lazy_instance(cls, storage_engine: 'StorageEngine', obj_type: Type, encoded_values: Dict[str, Any]) -> Any:
+        instance = object.__new__(obj_type)
+        cf_instance = CFInstance(storage_engine)
+        cf_instance.encoded_values = encoded_values
+        setattr(instance, '_cf_instance', cf_instance)
+        
+        class_info = ClassInfo.get(obj_type)
+        
+        for field_name in class_info.fields:
+            setattr(instance, field_name, DATADecorator.not_initialized)
+        
+        for field in class_info.all_fields:
+            if field.name not in class_info.fields:
+                if field.default is not MISSING:
+                    setattr(instance, field.name, field.default)
+                elif field.default_factory is not MISSING:
+                    setattr(instance, field.name, field.default_factory())
+        
+        if hasattr(instance, '__post_init__'):
+            instance.__post_init__()
+        
+        return instance
