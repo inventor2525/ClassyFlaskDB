@@ -37,7 +37,7 @@ class Transcoder:
                 cf_instance = object.__getattribute__(value, '_cf_instance')
                 if cf_instance.storage_engine != merge_args.storage_engine:
                     different_storage_engine = True
-            except:
+            except AttributeError:
                 pass
             
             if different_storage_engine or merge_args.is_dirty.get(id(value), True):

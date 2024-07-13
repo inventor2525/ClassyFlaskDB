@@ -1,8 +1,9 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData
 from sqlalchemy.orm import sessionmaker
-from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional
+from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
+import uuid
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection, CFInstance
@@ -78,6 +79,12 @@ class SQLAlchemyStorageEngine(StorageEngine):
     
     def query(self, cls: Type[T]) -> 'SQLAlchemyStorageEngineQuery[T]':
         return SQLAlchemyStorageEngineQuery(self, cls)
+    
+    def get_table_by_name(self, table_name: str) -> Table:
+        if table_name in self.metadata.tables:
+            return self.metadata.tables[table_name]
+        else:
+            raise ValueError(f"Table '{table_name}' not found in metadata")
 
 T = TypeVar('T')
 class SQLAlchemyStorageEngineQuery(Generic[T]):
@@ -208,7 +215,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
                 transcoder = setup_args.class_info.cls.__transcoders__[field_name]
                 new_columns = transcoder.setup(setup_args, field_name, field_info.type, setup_args.class_info.is_primary_key(field_info))
                 columns.extend(new_columns)
-            Table(table_name, setup_args.storage_engine.metadata, *columns)
+            Table(table_name, setup_args.storage_engine.metadata, *columns, extend_existing=True)
             return columns
         else:
             # This is a field setup
@@ -308,23 +315,23 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             instance.__post_init__()
         
         return instance
-    
+
+@transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
     list_id_mapping: Dict[int, str] = {}
 
     @classmethod
     def validate(cls, type_: Type) -> bool:
-        return ClassInfo.is_list(type_)
+        return get_origin(type_) is list
 
     @classmethod
     def get_table_name(cls, value_type: Type) -> str:
-        if ClassInfo.is_list(value_type):
-            return f"list_list"
-        return f"list_{value_type.__name__}"
+        origin = get_origin(value_type)
+        return f"list_{origin.__name__ if origin else value_type.__name__}"
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
-        value_type = ClassInfo.get_list_type(type_)
+        value_type = get_args(type_)[0]
         table_name = cls.get_table_name(value_type)
         value_transcoder = setup_args.storage_engine.get_transcoder_type(value_type)
         
@@ -337,7 +344,8 @@ class ListTranscoder(LazyLoadingTranscoder):
         value_columns = value_transcoder.setup(setup_args, "value", value_type, False)
         columns.extend(value_columns)
         
-        Table(table_name, setup_args.storage_engine.metadata, *columns)
+        # Add extend_existing=True to handle cases where the table might already exist
+        Table(table_name, setup_args.storage_engine.metadata, *columns, extend_existing=True)
         return [Column(f"{name}_id", String, primary_key=is_primary_key)]
 
     @classmethod
@@ -345,8 +353,8 @@ class ListTranscoder(LazyLoadingTranscoder):
         return f"{merge_path.fieldOnParent.name}_id" if merge_path.fieldOnParent else "value_id"
 
     @classmethod
-    def _merge(cls, merge_args: MergeArgs, value: List[Any]) -> None:
-        value_type = ClassInfo.get_list_type(merge_args.path.fieldOnParent.type)
+    def _merge(cls, merge_args: SQLMergeArgs, value: List[Any]) -> None:
+        value_type = get_args(merge_args.path.fieldOnParent.type)[0]
         value_transcoder = merge_args.storage_engine.get_transcoder_type(value_type)
         
         table_name = cls.get_table_name(value_type)
@@ -355,15 +363,16 @@ class ListTranscoder(LazyLoadingTranscoder):
         list_id = cls._get_or_create_list_id(value)
         
         # Clear existing entries
-        merge_args.storage_engine.session.query(table).filter(table.c.list_id == list_id).delete()
+        merge_args.session.query(table).filter(table.c.list_id == list_id).delete()
         
         for index, item in enumerate(value):
-            item_merge_args = MergeArgs(
+            item_merge_args = SQLMergeArgs(
                 context=merge_args.context,
                 path=MergePath(parentObj=merge_args.path.parentObj, fieldOnParent=merge_args.path.fieldOnParent, path=merge_args.path.path + [index]),
                 encodes={},
                 is_dirty=merge_args.is_dirty,
-                storage_engine=merge_args.storage_engine
+                storage_engine=merge_args.storage_engine,
+                session=merge_args.session
             )
             value_transcoder.merge(item_merge_args, item)
             
@@ -372,7 +381,7 @@ class ListTranscoder(LazyLoadingTranscoder):
                 'index': index,
                 **item_merge_args.encodes
             }
-            merge_args.storage_engine.session.execute(table.insert().values(**row))
+            merge_args.session.execute(table.insert().values(**row))
 
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: List[Any]) -> None:

@@ -6,6 +6,7 @@ from .ClassInfo import ClassInfo
 class MergePath:
 	parentObj: Optional['DataDecorator.Interface']
 	fieldOnParent: Optional[Field]
+	path: List[Union[str, int]] = field(default_factory=list)
 
 @dataclass
 class MergeArgs:

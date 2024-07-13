@@ -75,20 +75,21 @@ class DATADecorator(InfoDecorator):
 			def __getattribute__(self, name):
 				if safe_hasattr(self, '_cf_instance'):
 					cf_instance = object.__getattribute__(self, '_cf_instance')
-					class_info = ClassInfo.get(type(self))
-					
-					if name in class_info.fields and name not in cf_instance.loaded_fields:
-						field = class_info.fields[name]
-						transcoder = self.__class__.__transcoders__[name]
-						decode_args = DecodeArgs(
-							storage_engine=cf_instance.storage_engine,
-							parent=self,
-							field=field
-						)
-						value = transcoder.decode(decode_args)
-						object.__setattr__(self, name, value)
-						cf_instance.loaded_fields.add(name)
-						return value
+					if cf_instance is not None:
+						class_info = ClassInfo.get(type(self))
+						
+						if name in class_info.fields and name not in cf_instance.loaded_fields:
+							field = class_info.fields[name]
+							transcoder = self.__class__.__transcoders__[name]
+							decode_args = DecodeArgs(
+								storage_engine=cf_instance.storage_engine,
+								parent=self,
+								field=field
+							)
+							value = transcoder.decode(decode_args)
+							object.__setattr__(self, name, value)
+							cf_instance.loaded_fields.add(name)
+							return value
 					
 				return old_getattr(self, name)
 
