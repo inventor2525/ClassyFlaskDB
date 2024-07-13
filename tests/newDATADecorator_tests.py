@@ -89,5 +89,72 @@ class newDATADecorator_tests(unittest.TestCase):
 			self.assertEqual(id(queried_bar.foe), id(queried_bar.foe.bar.foe))
 		test_with_or_without_persisting(True)
 		test_with_or_without_persisting(False)
+		
+	def test_list_and_circular_ref(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class Person:
+			name: str
+			age: int
+			family: 'ImmediateFamily' = None
+
+		@DATA
+		@dataclass
+		class ImmediateFamily:
+			surname: str
+			children: List[Person]
+			parents: List[Person]
+
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+
+		# Create family members
+		alice = Person("Alice", 10)
+		bob = Person("Bob", 12)
+		eve = Person("Eve", 35)
+		adam = Person("Adam", 37)
+
+		# Create family
+		family = ImmediateFamily("Smith", [alice, bob], [eve, adam])
+
+		# Set circular references
+		alice.family = family
+		bob.family = family
+		eve.family = family
+		adam.family = family
+
+		# Merge into database
+		data_engine.merge(family)
+
+		# Query from database
+		queried_family = data_engine.query(ImmediateFamily).filter_by_id(family.get_primary_key())
+
+		# Validate
+		self.assertEqual(queried_family.surname, "Smith")
+		self.assertEqual(len(queried_family.children), 2)
+		self.assertEqual(len(queried_family.parents), 2)
+
+		alice_queried = queried_family.children[0]
+		bob_queried = queried_family.children[1]
+		eve_queried = queried_family.parents[0]
+		adam_queried = queried_family.parents[1]
+
+		self.assertEqual(alice_queried.name, "Alice")
+		self.assertEqual(bob_queried.name, "Bob")
+		self.assertEqual(eve_queried.name, "Eve")
+		self.assertEqual(adam_queried.name, "Adam")
+
+		# Check circular references
+		self.assertEqual(alice_queried.family.surname, "Smith")
+		self.assertEqual(bob_queried.family.surname, "Smith")
+		self.assertEqual(eve_queried.family.surname, "Smith")
+		self.assertEqual(adam_queried.family.surname, "Smith")
+
+		# Check that circular references are maintained
+		self.assertIs(alice_queried.family, queried_family)
+		self.assertIs(bob_queried.family, queried_family)
+		self.assertIs(eve_queried.family, queried_family)
+		self.assertIs(adam_queried.family, queried_family)
 if __name__ == '__main__':
 	unittest.main()
