@@ -317,7 +317,14 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             instance.__post_init__()
         
         return instance
-
+class ListCFInstance(CFInstance):
+    def __init__(self, storage_engine: 'StorageEngine', decode_args: DecodeArgs):
+        super().__init__(storage_engine)
+        self.decode_args: DecodeArgs = decode_args
+        self.list_id: str = None
+        self.value_transcoder: Type[Transcoder] = None
+        self.value_type: Type = None
+        
 @transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
     list_id_mapping: Dict[int, str] = {}
@@ -411,20 +418,22 @@ class ListTranscoder(LazyLoadingTranscoder):
         table = decode_args.storage_engine.get_table_by_name(table_name)
         
         list_id = cf_instance.encoded_values[f"{decode_args.field.name}_id"]
-        query = decode_args.storage_engine.session.query(table).filter(table.c.list_id == list_id).order_by(table.c.index)
         
-        encoded_values = [row._asdict() for row in query.all()]
+        with decode_args.storage_engine.session_maker() as session:
+            query = session.query(table).filter(table.c.list_id == list_id).order_by(table.c.index)
+            encoded_values = [row._asdict() for row in query.all()]
         
-        return cls.create_lazy_instance(decode_args.storage_engine, value_type, value_transcoder, encoded_values, list_id)
+        return cls.create_lazy_instance(decode_args.storage_engine, decode_args, value_type, value_transcoder, encoded_values, list_id)
 
     @classmethod
-    def create_lazy_instance(cls, storage_engine: 'StorageEngine', value_type: Type, value_transcoder: Type[Transcoder], encoded_values: List[dict], list_id: str) -> InstrumentedList:
+    def create_lazy_instance(cls, storage_engine: 'StorageEngine', decode_args: DecodeArgs, value_type: Type, value_transcoder: Type[Transcoder], encoded_values: List[dict], list_id: str) -> InstrumentedList:
         lazy_list = InstrumentedList()
-        lazy_list._cf_instance = ListCFInstance(storage_engine)
-        lazy_list._cf_instance.encoded_values = encoded_values
-        lazy_list._cf_instance.value_transcoder = value_transcoder
-        lazy_list._cf_instance.value_type = value_type
-        lazy_list._cf_instance.list_id = list_id
+        cf_instance = ListCFInstance(storage_engine, decode_args)
+        cf_instance.encoded_values = encoded_values
+        cf_instance.value_transcoder = value_transcoder
+        cf_instance.value_type = value_type
+        cf_instance.list_id = list_id
+        setattr(lazy_list, '_cf_instance', cf_instance)
         
         # Pre-populate the list with placeholder objects
         lazy_list.extend([MISSING for _ in range(len(encoded_values))])

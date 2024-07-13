@@ -56,9 +56,9 @@ class InstrumentedList(list):
 		if super().__getitem__(index) is MISSING:
 			decode_args = DecodeArgs(
 				storage_engine=self._cf_instance.storage_engine,
-				parent=self._cf_instance.parent,
-				field=self._cf_instance.field,
-				path=self._cf_instance.path + [index]
+				parent=self._cf_instance.decode_args.parent,
+				field=self._cf_instance.decode_args.field,
+				path=self._cf_instance.decode_args.path + [index]
 			)
 			value = self._cf_instance.value_transcoder.decode(decode_args)
 			super().__setitem__(index, value)
