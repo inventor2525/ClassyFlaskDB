@@ -289,10 +289,29 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
-        cf_instance = decode_args.parent._cf_instance
-        field_type = decode_args.field.type
-        id_value = cf_instance.encoded_values[f"{decode_args.field.name}_id"]
-        return decode_args.storage_engine.query(field_type).filter_by_id(id_value)
+        if hasattr(decode_args, 'list_item_data'):
+            encoded_values = decode_args.list_item_data
+            id_value = encoded_values['value_id']
+            
+            # Drill down the type based on the path
+            field_type = decode_args.field.type
+            for _ in decode_args.path:
+                if get_origin(field_type) is list:
+                    field_type = get_args(field_type)[0]
+                elif get_origin(field_type) is dict:
+                    field_type = get_args(field_type)[1]
+                else:
+                    break
+            
+            # Use the drilled-down type for the query
+            return decode_args.storage_engine.query(field_type).filter_by_id(id_value)
+        else:
+            # Existing logic for non-list items
+            cf_instance = decode_args.parent._cf_instance
+            field_type = decode_args.field.type
+            id_name = f"{decode_args.field.name}_id"
+            id_value = cf_instance.encoded_values[id_name]
+            return decode_args.storage_engine.query(field_type).filter_by_id(id_value)
     
     @classmethod
     def create_lazy_instance(cls, storage_engine: 'StorageEngine', obj_type: Type, encoded_values: Dict[str, Any]) -> Any:
@@ -317,6 +336,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             instance.__post_init__()
         
         return instance
+
 class ListCFInstance(CFInstance):
     def __init__(self, storage_engine: 'StorageEngine', decode_args: DecodeArgs):
         super().__init__(storage_engine)

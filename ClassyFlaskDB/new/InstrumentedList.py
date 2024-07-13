@@ -60,6 +60,8 @@ class InstrumentedList(list):
 				field=self._cf_instance.decode_args.field,
 				path=self._cf_instance.decode_args.path + [index]
 			)
+			decode_args.list_item_data = self._cf_instance.encoded_values[index]
+			
 			value = self._cf_instance.value_transcoder.decode(decode_args)
 			super().__setitem__(index, value)
 		return super().__getitem__(index)
