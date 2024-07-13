@@ -156,5 +156,103 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertIs(bob_queried.family, queried_family)
 		self.assertIs(eve_queried.family, queried_family)
 		self.assertIs(adam_queried.family, queried_family)
+		
+	def test_nested_lists_and_circular_refs(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class Person:
+			name: str
+			age: int
+			family: 'ImmediateFamily' = None
+
+		@DATA
+		@dataclass
+		class ImmediateFamily:
+			surname: str
+			children: List[Person]
+			parents: List[Person]
+			grandparents: List[List[Person]]
+
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+
+		# Create family members
+		alice = Person("Alice", 10)
+		bob = Person("Bob", 12)
+		eve = Person("Eve", 35)
+		adam = Person("Adam", 37)
+		
+		# Grandparents
+		gma_eve = Person("Grandma Eve", 60)
+		gpa_eve = Person("Grandpa Eve", 62)
+		gma_adam = Person("Grandma Adam", 61)
+		gpa_adam = Person("Grandpa Adam", 63)
+
+		# Create families
+		smith_family = ImmediateFamily("Smith", [alice, bob], [eve, adam], [[gma_eve, gpa_eve], [gma_adam, gpa_adam]])
+		eve_family = ImmediateFamily("Eve's Maiden", [], [gma_eve, gpa_eve], [])
+		adam_family = ImmediateFamily("Adam's Maiden", [], [gma_adam, gpa_adam], [])
+
+		# Set circular references
+		alice.family = smith_family
+		bob.family = smith_family
+		eve.family = smith_family
+		adam.family = smith_family
+		gma_eve.family = eve_family
+		gpa_eve.family = eve_family
+		gma_adam.family = adam_family
+		gpa_adam.family = adam_family
+
+		# Merge into database
+		data_engine.merge(smith_family)
+		data_engine.merge(eve_family)
+		data_engine.merge(adam_family)
+
+		# Query from database
+		queried_family = data_engine.query(ImmediateFamily).filter_by_id(smith_family.get_primary_key())
+
+		# Validate
+		self.assertEqual(queried_family.surname, "Smith")
+		self.assertEqual(len(queried_family.children), 2)
+		self.assertEqual(len(queried_family.parents), 2)
+		self.assertEqual(len(queried_family.grandparents), 2)
+		self.assertEqual(len(queried_family.grandparents[0]), 2)
+		self.assertEqual(len(queried_family.grandparents[1]), 2)
+
+		alice_queried = queried_family.children[0]
+		bob_queried = queried_family.children[1]
+		eve_queried = queried_family.parents[0]
+		adam_queried = queried_family.parents[1]
+
+		# Check grandparents
+		gma_eve_queried = queried_family.grandparents[0][0]
+		gpa_eve_queried = queried_family.grandparents[0][1]
+		gma_adam_queried = queried_family.grandparents[1][0]
+		gpa_adam_queried = queried_family.grandparents[1][1]
+
+		# Validate grandparents
+		self.assertEqual(gma_eve_queried.name, "Grandma Eve")
+		self.assertEqual(gpa_eve_queried.name, "Grandpa Eve")
+		self.assertEqual(gma_adam_queried.name, "Grandma Adam")
+		self.assertEqual(gpa_adam_queried.name, "Grandpa Adam")
+
+		# Check that grandparents list is the same object for all family members
+		self.assertIs(queried_family.grandparents, alice_queried.family.grandparents)
+		self.assertIs(queried_family.grandparents, bob_queried.family.grandparents)
+		self.assertIs(queried_family.grandparents, eve_queried.family.grandparents)
+		self.assertIs(queried_family.grandparents, adam_queried.family.grandparents)
+
+		# Validate grandparents through immediate families
+		self.assertEqual(eve_queried.family.parents[0].name, gma_eve_queried.name)
+		self.assertEqual(eve_queried.family.parents[1].name, gpa_eve_queried.name)
+		self.assertEqual(adam_queried.family.parents[0].name, gma_adam_queried.name)
+		self.assertEqual(adam_queried.family.parents[1].name, gpa_adam_queried.name)
+
+		# Check object identity
+		self.assertIs(eve_queried.family.parents[0], gma_eve_queried)
+		self.assertIs(eve_queried.family.parents[1], gpa_eve_queried)
+		self.assertIs(adam_queried.family.parents[0], gma_adam_queried)
+		self.assertIs(adam_queried.family.parents[1], gpa_adam_queried)
 if __name__ == '__main__':
 	unittest.main()
