@@ -63,7 +63,7 @@ class SQLAlchemyStorageEngine(StorageEngine):
                 storage_engine=self,
                 session=session
             )
-            transcoder = self.get_transcoder_type(ClassInfo.get(type(obj)), None)
+            transcoder = self.get_transcoder_type(type(obj))
             transcoder.merge(merge_args, obj)
             session.commit()
 
@@ -86,7 +86,7 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         self.cls = cls
         self.table = storage_engine.metadata.tables[storage_engine.get_table_name(cls)]
         self.query = select(self.table)
-        self.transcoder:LazyLoadingTranscoder = storage_engine.get_transcoder_type(ClassInfo.get(cls), None)
+        self.transcoder:LazyLoadingTranscoder = storage_engine.get_transcoder_type(cls)
         if not issubclass(self.transcoder, LazyLoadingTranscoder):
             raise ValueError(f"Transcoder for {cls} does not support lazy loading")
 
@@ -394,7 +394,7 @@ class ListTranscoder(LazyLoadingTranscoder):
     def decode(cls, decode_args: DecodeArgs) -> InstrumentedList:
         cf_instance = decode_args.parent._cf_instance
         value_type = ClassInfo.get_list_type(decode_args.field)
-        value_transcoder = decode_args.storage_engine.get_transcoder_type(ClassInfo.get(value_type), None)
+        value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
         
         table_name = cls.get_table_name(value_type)
         table = decode_args.storage_engine.get_table_by_name(table_name)

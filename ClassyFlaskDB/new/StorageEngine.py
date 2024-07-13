@@ -29,22 +29,22 @@ class StorageEngine(ABC):
 		self.transcoder_types.append(transcoder)
 		return transcoder
 	
-	def get_transcoder_type(self, classInfo:ClassInfo, field:Field) -> Type[Transcoder]:
-		for transcoder_type in self.transcoder_types:
-			if transcoder_type.validate(classInfo, field):
-				return transcoder_type
-		raise ValueError(f"There is no suitable transcoder type provided for {classInfo.qualname}.{field.name} ({field.type})")
+	# def get_transcoder_type(self, classInfo:ClassInfo, field:Field) -> Type[Transcoder]:
+	# 	for transcoder_type in self.transcoder_types:
+	# 		if transcoder_type.validate(classInfo, field):
+	# 			return transcoder_type
+	# 	raise ValueError(f"There is no suitable transcoder type provided for {classInfo.qualname}.{field.name} ({field.type})")
 	
-	def get_transcoder(self, classInfo:ClassInfo, field:Field) -> Transcoder:
-		transcoder_type = self.get_transcoder_type(classInfo, field)
-		return transcoder_type(self.context, classInfo, field)
+	# def get_transcoder(self, classInfo:ClassInfo, field:Field) -> Transcoder:
+	# 	transcoder_type = self.get_transcoder_type(classInfo, field)
+	# 	return transcoder_type(self.context, classInfo, field)
 		
-	def setup(self, registry:Dict[str, type]):
-		for cls in registry.values():
-			classInfo = ClassInfo.get(cls)
-			for field in classInfo.fields.values():
-				transcoder_type = self.get_transcoder_type(classInfo, field)
-				transcoder_type.setup(classInfo, field)
+	# def setup(self, registry:Dict[str, type]):
+	# 	for cls in registry.values():
+	# 		classInfo = ClassInfo.get(cls)
+	# 		for field in classInfo.fields.values():
+	# 			transcoder_type = self.get_transcoder_type(classInfo, field)
+	# 			transcoder_type.setup(classInfo, field)
 	
 	@abstractmethod
 	def merge(self, obj:Any):

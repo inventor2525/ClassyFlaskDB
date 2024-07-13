@@ -1,6 +1,7 @@
 from .DirtyDecorator import DirtyDecorator
 from typing import Any, Iterable
 from dataclasses import MISSING
+from .Args import DecodeArgs
 
 @DirtyDecorator
 class InstrumentedList(list):

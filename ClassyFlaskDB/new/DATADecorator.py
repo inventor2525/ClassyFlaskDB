@@ -60,7 +60,7 @@ class DATADecorator(InfoDecorator):
 			
 			cls.__transcoders__ = {}
 			for field_name, field_info in classInfo.fields.items():
-				transcoder_type = self.storage_engine.get_transcoder_type(classInfo, field_info)
+				transcoder_type = self.storage_engine.get_transcoder_type(field_info.type)
 				cls.__transcoders__[field_name] = transcoder_type()	
 				
 			old_getattr = cls.__getattribute__
