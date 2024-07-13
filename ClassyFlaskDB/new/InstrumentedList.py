@@ -1,8 +1,13 @@
 from .DirtyDecorator import DirtyDecorator
 from typing import Any, Iterable
+from dataclasses import MISSING
 
 @DirtyDecorator
 class InstrumentedList(list):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._cf_instance = None
+
 	def __setitem__(self, key: int, value: Any) -> None:
 		if key < len(self):
 			if self[key] is not value:
@@ -42,3 +47,22 @@ class InstrumentedList(list):
 	def clear(self) -> None:
 		self._dirty = True
 		super().clear()
+
+	def __getitem__(self, index):
+		if self._cf_instance is None:
+			return super().__getitem__(index)
+		
+		if super().__getitem__(index) is MISSING:
+			decode_args = DecodeArgs(
+				storage_engine=self._cf_instance.storage_engine,
+				parent=self._cf_instance.parent,
+				field=self._cf_instance.field,
+				path=self._cf_instance.path + [index]
+			)
+			value = self._cf_instance.value_transcoder.decode(decode_args)
+			super().__setitem__(index, value)
+		return super().__getitem__(index)
+
+	def __iter__(self):
+		for i in range(len(self)):
+			yield self[i]

@@ -3,6 +3,7 @@ from dataclasses import dataclass, Field, field
 from .ClassInfo import *
 
 T = TypeVar('T')
+
 @dataclass
 class DirtyDecorator:
 	class Interface:
@@ -31,7 +32,7 @@ class DirtyDecorator:
 			'''
 			_is_dirty for dictionaries
 			'''
-			for key,value in self:
+			for key,value in self.items():
 				if hasattr(key, "is_dirty"):
 					if key.is_dirty(isDirt):
 						return True
@@ -64,7 +65,7 @@ class DirtyDecorator:
 			self._dirty = False
 			isDirt[id(self)]=False
 		
-		if isinstance(cls, list):
+		if issubclass(cls, list):
 			setattr(cls, "_is_dirty", list_is_dirty)
 		elif isinstance(cls, dict):
 			setattr(cls, "_is_dirty", dict_is_dirty)
@@ -76,4 +77,6 @@ class DirtyDecorator:
 		setattr(cls, "_dirty", True)
 		setattr(cls, "is_dirty", is_dirty)
 		setattr(cls, "clear_dirty", clear_dirty)
+		return cls
+
 DirtyDecorator = DirtyDecorator()

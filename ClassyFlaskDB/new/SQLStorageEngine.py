@@ -10,6 +10,7 @@ from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
 from ClassyFlaskDB.new.Args import MergeArgs, MergePath, SetupArgs, DecodeArgs
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
+from ClassyFlaskDB.new.InstrumentedList import InstrumentedList
 
 from sqlalchemy.orm import Session
 
@@ -313,15 +314,17 @@ class ListTranscoder(LazyLoadingTranscoder):
 
     @classmethod
     def validate(cls, type_: Type) -> bool:
-        return getattr(type_, "__origin__", None) is list
+        return ClassInfo.is_list(type_)
 
     @classmethod
     def get_table_name(cls, value_type: Type) -> str:
+        if ClassInfo.is_list(value_type):
+            return f"list_list"
         return f"list_{value_type.__name__}"
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
-        value_type = getattr(type_, "__args__", [Any])[0]
+        value_type = ClassInfo.get_list_type(type_)
         table_name = cls.get_table_name(value_type)
         value_transcoder = setup_args.storage_engine.get_transcoder_type(value_type)
         
@@ -338,13 +341,12 @@ class ListTranscoder(LazyLoadingTranscoder):
         return [Column(f"{name}_id", String, primary_key=is_primary_key)]
 
     @classmethod
-    def get_list_id(cls, merge_path: MergePath) -> str:
-        field_name = merge_path.fieldOnParent.name if merge_path.fieldOnParent else "value"
-        return f"{field_name}_id"
+    def get_parent_encodes_key(cls, merge_path: MergePath) -> str:
+        return f"{merge_path.fieldOnParent.name}_id" if merge_path.fieldOnParent else "value_id"
 
     @classmethod
     def _merge(cls, merge_args: MergeArgs, value: List[Any]) -> None:
-        value_type = getattr(merge_args.path.fieldOnParent.type, "__args__", [Any])[0]
+        value_type = ClassInfo.get_list_type(merge_args.path.fieldOnParent.type)
         value_transcoder = merge_args.storage_engine.get_transcoder_type(value_type)
         
         table_name = cls.get_table_name(value_type)
@@ -375,15 +377,15 @@ class ListTranscoder(LazyLoadingTranscoder):
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: List[Any]) -> None:
         list_id = cls._get_or_create_list_id(value)
-        field_name = cls.get_list_id(merge_args.path)
+        field_name = cls.get_parent_encodes_key(merge_args.path)
         merge_args.encodes[field_name] = list_id
 
     @classmethod
     def _get_or_create_list_id(cls, value: List[Any]) -> str:
         if isinstance(value, InstrumentedList):
             return value._cf_instance.list_id
-        list_id = cls.list_id_mapping.get(id(value))
-        if list_id is None:
+        list_id = cls.list_id_mapping.get(id(value), MISSING)
+        if list_id is MISSING:
             list_id = str(uuid.uuid4())
             cls.list_id_mapping[id(value)] = list_id
         return list_id
