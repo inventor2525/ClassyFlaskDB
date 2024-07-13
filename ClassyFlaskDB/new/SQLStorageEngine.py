@@ -274,16 +274,18 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         parent_merge_args.context[obj_type][obj_id] = obj
         
     @classmethod
-    def _encode(cls, parent_merge_args: SQLMergeArgs, obj: Any) -> None:
-        primary_key = obj.get_primary_key()
+    def _encode(cls, merge_args: MergeArgs, obj: Any) -> None:
+        class_info = ClassInfo.get(type(obj))
+        primary_key = getattr(obj, class_info.primary_key_name)
         
-        # Update parent_merge_args.encodes with our primary key
-        if parent_merge_args.path.fieldOnParent is None:
-            # Top-level object
-            parent_merge_args.encodes['id'] = primary_key
+        if merge_args.path.fieldOnParent:
+            parent_field_type = merge_args.path.fieldOnParent.type
+            if get_origin(parent_field_type) is list or isinstance(parent_field_type, list):
+                merge_args.encodes['value_id'] = primary_key
+            else:
+                merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_id"] = primary_key
         else:
-            # Nested object
-            parent_merge_args.encodes[f"{parent_merge_args.path.fieldOnParent.name}_id"] = primary_key
+            merge_args.encodes['id'] = primary_key
         
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
