@@ -1,13 +1,22 @@
 from .DirtyDecorator import DirtyDecorator
 from typing import Any, Iterable
 from dataclasses import MISSING
-from .Args import DecodeArgs
+from .Args import DecodeArgs, CFInstance
+from dataclasses import dataclass
+from typing import Type
+from .Transcoder import Transcoder
+
+@dataclass
+class ListCFInstance(CFInstance):
+	list_id: str
+	value_type: Type
+	value_transcoder: Type[Transcoder]
 
 @DirtyDecorator
 class InstrumentedList(list):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		self._cf_instance = None
+		self._cf_instance:ListCFInstance = None
 
 	def __setitem__(self, key: int, value: Any) -> None:
 		if key < len(self):
@@ -50,21 +59,19 @@ class InstrumentedList(list):
 		super().clear()
 
 	def __getitem__(self, index):
+		value = super().__getitem__(index)
 		if self._cf_instance is None:
-			return super().__getitem__(index)
+			return value
 		
-		if super().__getitem__(index) is MISSING:
-			decode_args = DecodeArgs(
-				storage_engine=self._cf_instance.storage_engine,
-				parent=self._cf_instance.decode_args.parent,
-				field=self._cf_instance.decode_args.field,
-				path=self._cf_instance.decode_args.path + [index]
+		if value is MISSING:
+			decode_args = self._cf_instance.decode_args.new(
+				encodes=self._cf_instance.decode_args.encodes[index],
+				base_name="value",
+				type=self._cf_instance.value_type
 			)
-			decode_args.list_item_data = self._cf_instance.encoded_values[index]
-			
 			value = self._cf_instance.value_transcoder.decode(decode_args)
 			super().__setitem__(index, value)
-		return super().__getitem__(index)
+		return value
 
 	def __iter__(self):
 		for i in range(len(self)):

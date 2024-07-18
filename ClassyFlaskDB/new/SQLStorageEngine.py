@@ -6,29 +6,18 @@ from datetime import datetime
 import uuid
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
-from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection, CFInstance
+from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection
 from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
-from ClassyFlaskDB.new.Args import MergeArgs, MergePath, SetupArgs, DecodeArgs
+from ClassyFlaskDB.new.Args import MergeArgs, SetupArgs, DecodeArgs, CFInstance
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
-from ClassyFlaskDB.new.InstrumentedList import InstrumentedList
+from ClassyFlaskDB.new.InstrumentedList import InstrumentedList, ListCFInstance
 
 from sqlalchemy.orm import Session
 
+@dataclass
 class SQLMergeArgs(MergeArgs):
-    def __init__(self, *args, session: Session, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.session = session
-
-    def new(self, field: Field):
-        return SQLMergeArgs(
-            context=self.context,
-            path=MergePath(parentObj=self.path.parentObj, fieldOnParent=field),
-            encodes=self.encodes,  # Use the same encodes dictionary
-            is_dirty=self.is_dirty,
-            storage_engine=self.storage_engine,
-            session=self.session
-        )
+    session: Session
 
 T = TypeVar('T')
 class SQLAlchemyStorageEngine(StorageEngine):
@@ -57,11 +46,12 @@ class SQLAlchemyStorageEngine(StorageEngine):
         context = self.context if persist else {}
         with self.session_maker() as session:
             merge_args = SQLMergeArgs(
-                context=context,
-                path=MergePath(parentObj=None, fieldOnParent=None),
-                encodes={},
-                is_dirty={},
                 storage_engine=self,
+                context=context,
+                is_dirty={},
+                encodes={},
+                base_name='id',
+                type=type(obj),
                 session=session
             )
             transcoder = self.get_transcoder_type(type(obj))
@@ -165,14 +155,15 @@ class BasicsTranscoder(Transcoder):
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
         column_type = cls.supported_types[type_]
         return [Column(name, column_type, primary_key=is_primary_key)]
+    
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
-        merge_args.encodes[merge_args.path.fieldOnParent.name] = value
+        merge_args.encodes[merge_args.base_name] = value
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
-        cf_instance = decode_args.parent._cf_instance
-        return cf_instance.encoded_values[decode_args.field.name]
+        value = decode_args.encodes[decode_args.base_name]
+        return decode_args.type(value)
 
 @transcoder_collection.add
 class DateTimeTranscoder(Transcoder):
@@ -189,14 +180,13 @@ class DateTimeTranscoder(Transcoder):
 
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: datetime) -> None:
-        merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_datetime"] = value.replace(tzinfo=None)
-        merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_timezone"] = str(value.tzinfo) if value.tzinfo else None
+        merge_args.encodes[f"{merge_args.base_name}_datetime"] = value.replace(tzinfo=None)
+        merge_args.encodes[f"{merge_args.base_name}_timezone"] = str(value.tzinfo) if value.tzinfo else None
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> datetime:
-        cf_instance = decode_args.parent._cf_instance
-        dt = cf_instance.encoded_values[f"{decode_args.field.name}_datetime"]
-        tz = cf_instance.encoded_values[f"{decode_args.field.name}_timezone"]
+        dt = decode_args.encodes[f"{decode_args.base_name}_datetime"]
+        tz = decode_args.encodes[f"{decode_args.base_name}_timezone"]
         return dt.replace(tzinfo=tz) if tz else dt
 
 @transcoder_collection.add
@@ -225,16 +215,9 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             return [Column(f"{name}_id", column_type, primary_key=is_primary_key)]
 
     @classmethod
-    def _merge(cls, parent_merge_args: SQLMergeArgs, obj: Any) -> None:
+    def _merge(cls, parent_merge_args: SQLMergeArgs, obj: DATADecorator.Interface) -> None:
         # Create a personal merge_args for this object
-        personal_merge_args = SQLMergeArgs(
-            context=parent_merge_args.context,
-            path=parent_merge_args.path,
-            encodes={},
-            is_dirty=parent_merge_args.is_dirty,
-            storage_engine=parent_merge_args.storage_engine,
-            session=parent_merge_args.session
-        )
+        personal_merge_args = parent_merge_args.new(encodes={})
         
         # Get the class info and primary key name
         class_info = ClassInfo.get(type(obj))
@@ -248,13 +231,16 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         is_update = existing_obj is not None
         
         # Iterate through fields and merge
-        for field_name, field_info in class_info.fields.items():
-            if is_update and field_info.metadata.get('no_update', False):
+        for field in class_info.fields.values():
+            if is_update and field.metadata.get('no_update', False):
                 continue
             
-            value = getattr(obj, field_name)
-            transcoder = obj.__class__.__transcoders__[field_name]
-            field_merge_args = personal_merge_args.new(field_info)
+            value = getattr(obj, field.name)
+            transcoder = obj.__transcoders__[field.name]
+            field_merge_args = personal_merge_args.new(
+                base_name = field.name,
+                type = field.type
+            )
             transcoder.merge(field_merge_args, value)
         
         # Update the table with our personal encodes
@@ -274,50 +260,27 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         parent_merge_args.context[obj_type][obj_id] = obj
         
     @classmethod
-    def _encode(cls, merge_args: MergeArgs, obj: Any) -> None:
-        class_info = ClassInfo.get(type(obj))
-        primary_key = getattr(obj, class_info.primary_key_name)
-        
-        if merge_args.path.fieldOnParent:
-            parent_field_type = merge_args.path.fieldOnParent.type
-            if get_origin(parent_field_type) is list or isinstance(parent_field_type, list):
-                merge_args.encodes['value_id'] = primary_key
-            else:
-                merge_args.encodes[f"{merge_args.path.fieldOnParent.name}_id"] = primary_key
-        else:
-            merge_args.encodes['id'] = primary_key
+    def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
+        class_info = ClassInfo.get(type(value))
+        primary_key = getattr(value, class_info.primary_key_name)
+        merge_args.encodes[f"{merge_args.base_name}_id"] = primary_key
         
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
-        if hasattr(decode_args, 'list_item_data'):
-            encoded_values = decode_args.list_item_data
-            id_value = encoded_values['value_id']
-            
-            # Drill down the type based on the path
-            field_type = decode_args.field.type
-            for _ in decode_args.path:
-                if get_origin(field_type) is list:
-                    field_type = get_args(field_type)[0]
-                elif get_origin(field_type) is dict:
-                    field_type = get_args(field_type)[1]
-                else:
-                    break
-            
-            # Use the drilled-down type for the query
-            return decode_args.storage_engine.query(field_type).filter_by_id(id_value)
-        else:
-            # Existing logic for non-list items
-            cf_instance = decode_args.parent._cf_instance
-            field_type = decode_args.field.type
-            id_name = f"{decode_args.field.name}_id"
-            id_value = cf_instance.encoded_values[id_name]
-            return decode_args.storage_engine.query(field_type).filter_by_id(id_value)
+        id_value = decode_args.encodes[f"{decode_args.base_name}_id"]
+        return decode_args.storage_engine.query(decode_args.type).filter_by_id(id_value)
     
     @classmethod
     def create_lazy_instance(cls, storage_engine: 'StorageEngine', obj_type: Type, encoded_values: Dict[str, Any]) -> Any:
         instance = object.__new__(obj_type)
-        cf_instance = CFInstance(storage_engine)
-        cf_instance.encoded_values = encoded_values
+        cf_instance = CFInstance(
+            decode_args=DecodeArgs(
+                storage_engine=storage_engine,
+                encodes=encoded_values,
+                base_name=None,
+                type=obj_type
+            )
+        )
         setattr(instance, '_cf_instance', cf_instance)
         
         class_info = ClassInfo.get(obj_type)
@@ -336,14 +299,6 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             instance.__post_init__()
         
         return instance
-
-class ListCFInstance(CFInstance):
-    def __init__(self, storage_engine: 'StorageEngine', decode_args: DecodeArgs):
-        super().__init__(storage_engine)
-        self.decode_args: DecodeArgs = decode_args
-        self.list_id: str = None
-        self.value_transcoder: Type[Transcoder] = None
-        self.value_type: Type = None
         
 @transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
@@ -378,12 +333,8 @@ class ListTranscoder(LazyLoadingTranscoder):
         return [Column(f"{name}_id", String, primary_key=is_primary_key)]
 
     @classmethod
-    def get_parent_encodes_key(cls, merge_path: MergePath) -> str:
-        return f"{merge_path.fieldOnParent.name}_id" if merge_path.fieldOnParent else "value_id"
-
-    @classmethod
     def _merge(cls, merge_args: SQLMergeArgs, value: List[Any]) -> None:
-        value_type = get_args(merge_args.path.fieldOnParent.type)[0]
+        value_type = get_args(merge_args.type)[0]
         value_transcoder = merge_args.storage_engine.get_transcoder_type(value_type)
         
         table_name = cls.get_table_name(value_type)
@@ -395,13 +346,10 @@ class ListTranscoder(LazyLoadingTranscoder):
         merge_args.session.query(table).filter(table.c.list_id == list_id).delete()
         
         for index, item in enumerate(value):
-            item_merge_args = SQLMergeArgs(
-                context=merge_args.context,
-                path=MergePath(parentObj=merge_args.path.parentObj, fieldOnParent=merge_args.path.fieldOnParent, path=merge_args.path.path + [index]),
+            item_merge_args = merge_args.new(
                 encodes={},
-                is_dirty=merge_args.is_dirty,
-                storage_engine=merge_args.storage_engine,
-                session=merge_args.session
+                base_name='value',
+                type=value_type
             )
             value_transcoder.merge(item_merge_args, item)
             
@@ -415,8 +363,7 @@ class ListTranscoder(LazyLoadingTranscoder):
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: List[Any]) -> None:
         list_id = cls._get_or_create_list_id(value)
-        field_name = cls.get_parent_encodes_key(merge_args.path)
-        merge_args.encodes[field_name] = list_id
+        merge_args.encodes[f"{merge_args.base_name}_id"] = list_id
 
     @classmethod
     def _get_or_create_list_id(cls, value: List[Any]) -> str:
@@ -430,32 +377,27 @@ class ListTranscoder(LazyLoadingTranscoder):
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> InstrumentedList:
-        cf_instance = decode_args.parent._cf_instance
-        value_type = ClassInfo.get_list_type(decode_args.field)
+        value_type = get_args(decode_args.type)[0]
         value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
         
         table_name = cls.get_table_name(value_type)
         table = decode_args.storage_engine.get_table_by_name(table_name)
         
-        list_id = cf_instance.encoded_values[f"{decode_args.field.name}_id"]
+        list_id = decode_args.encodes[f"{decode_args.base_name}_id"]
         
         with decode_args.storage_engine.session_maker() as session:
             query = session.query(table).filter(table.c.list_id == list_id).order_by(table.c.index)
             encoded_values = [row._asdict() for row in query.all()]
         
-        return cls.create_lazy_instance(decode_args.storage_engine, decode_args, value_type, value_transcoder, encoded_values, list_id)
-
-    @classmethod
-    def create_lazy_instance(cls, storage_engine: 'StorageEngine', decode_args: DecodeArgs, value_type: Type, value_transcoder: Type[Transcoder], encoded_values: List[dict], list_id: str) -> InstrumentedList:
         lazy_list = InstrumentedList()
-        cf_instance = ListCFInstance(storage_engine, decode_args)
-        cf_instance.encoded_values = encoded_values
-        cf_instance.value_transcoder = value_transcoder
-        cf_instance.value_type = value_type
-        cf_instance.list_id = list_id
-        setattr(lazy_list, '_cf_instance', cf_instance)
-        
+        lazy_list._cf_instance = ListCFInstance(
+            decode_args=decode_args.new(
+                encodes = encoded_values
+            ),
+            list_id = list_id,
+            value_type = value_type,
+            value_transcoder = value_transcoder
+        )
         # Pre-populate the list with placeholder objects
         lazy_list.extend([MISSING for _ in range(len(encoded_values))])
-        
         return lazy_list

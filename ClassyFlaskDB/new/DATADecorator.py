@@ -19,7 +19,7 @@ class DATADecorator(InfoDecorator):
 	'''
 	
 	class Interface(AutoID.Interface, DirtyDecorator.Interface):
-		__transcoders__:List[Transcoder]
+		__transcoders__:Dict[str, Transcoder]
 		_cf_instance: Optional['CFInstance'] = None
 		'''These are only those that have had their fields 'poked' so far. Use __get_transcoder__ if you want to do some digging.'''
 		def __get_transcoder__(self, name:str, default=object()) -> Transcoder:
@@ -65,31 +65,23 @@ class DATADecorator(InfoDecorator):
 				
 			old_getattr = cls.__getattribute__
 			
-			def safe_hasattr(obj, name):
-				try:
-					object.__getattribute__(obj, name)
-					return True
-				except AttributeError:
-					return False
-			
-			def __getattribute__(self, name):
-				if safe_hasattr(self, '_cf_instance'):
-					cf_instance = object.__getattribute__(self, '_cf_instance')
-					if cf_instance is not None:
-						class_info = ClassInfo.get(type(self))
-						
-						if name in class_info.fields and name not in cf_instance.loaded_fields:
-							field = class_info.fields[name]
-							transcoder = self.__class__.__transcoders__[name]
-							decode_args = DecodeArgs(
-								storage_engine=cf_instance.storage_engine,
-								parent=self,
-								field=field
-							)
-							value = transcoder.decode(decode_args)
-							object.__setattr__(self, name, value)
-							cf_instance.loaded_fields.add(name)
-							return value
+			def __getattribute__(self:'DATADecorator.Interface', name:str):
+				cf_instance = CFInstance.get(self)
+				if cf_instance is not MISSING and cf_instance is not None:
+					self_type = type(self)
+					class_info = ClassInfo.get(self_type)
+					
+					if name in class_info.fields and name not in cf_instance.loaded_fields:
+						field = class_info.fields[name]
+						transcoder = self_type.__transcoders__[name]
+						decode_args = cf_instance.decode_args.new(
+							base_name = field.name,
+							type = field.type
+						)
+						value = transcoder.decode(decode_args)
+						object.__setattr__(self, name, value)
+						cf_instance.loaded_fields.add(name)
+						return value
 					
 				return old_getattr(self, name)
 

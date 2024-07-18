@@ -33,13 +33,14 @@ class Transcoder:
     def merge(cls, merge_args: MergeArgs, value: Any) -> None:
         if cls.check_overridden(Transcoder._merge):
             different_storage_engine = False
-            try:
-                cf_instance = object.__getattribute__(value, '_cf_instance')
-                if cf_instance.storage_engine != merge_args.storage_engine:
+            cf_instance = CFInstance.get(value)
+            if cf_instance is not MISSING:
+                if cf_instance.decode_args.storage_engine != merge_args.storage_engine:
                     different_storage_engine = True
-            except AttributeError:
-                pass
             
+            # Always merge if a different storage engine,
+            # was used for query of something we are now merging,
+            # otherwise do so if this object is dirty:
             if different_storage_engine or merge_args.is_dirty.get(id(value), True):
                 merge_args.is_dirty[id(value)] = False
                 cls._merge(merge_args, value)
