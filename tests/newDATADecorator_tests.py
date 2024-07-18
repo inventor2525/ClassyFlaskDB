@@ -1,5 +1,6 @@
 from ClassyFlaskDB.new.SQLStorageEngine import *
 import unittest
+from enum import Enum
 
 class newDATADecorator_tests(unittest.TestCase):
 	def test_relationship(self):
@@ -34,7 +35,39 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_bar.location, bar.location)
 		self.assertEqual(queried_bar.foe.name, foe.name)
 		self.assertEqual(queried_bar.foe.strength, foe.strength)
-	
+
+	def test_enum(self):
+		class TestColor(Enum):
+			RED = 1
+			GREEN = 2
+			BLUE = 3
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class ColorObject:
+			name: str
+			color: TestColor
+
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+
+		# Create and merge object
+		color_obj = ColorObject("Sky", TestColor.BLUE)
+		data_engine.merge(color_obj)
+
+		# Query and validate
+		queried_obj = data_engine.query(ColorObject).filter_by_id(color_obj.get_primary_key())
+		self.assertEqual(queried_obj.name, "Sky")
+		self.assertEqual(queried_obj.color, TestColor.BLUE)
+
+		# Update and re-merge
+		color_obj.color = TestColor.GREEN
+		data_engine.merge(color_obj)
+
+		# Query again and validate
+		queried_obj = data_engine.query(ColorObject).filter_by_id(color_obj.get_primary_key())
+		self.assertEqual(queried_obj.color, TestColor.GREEN)
+		
 	def test_relationship_with_circular_ref(self):
 		def test_with_or_without_persisting(persist:bool):
 			DATA = DATADecorator()

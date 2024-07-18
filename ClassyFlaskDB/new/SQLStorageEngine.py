@@ -299,7 +299,28 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             instance.__post_init__()
         
         return instance
-        
+
+from enum import Enum
+
+@transcoder_collection.add
+class EnumTranscoder(Transcoder):
+    @classmethod
+    def validate(cls, type_: Type) -> bool:
+        return issubclass(type_, Enum)
+
+    @classmethod
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
+        return [Column(name, String, primary_key=is_primary_key)]
+
+    @classmethod
+    def _encode(cls, merge_args: MergeArgs, value: Enum) -> None:
+        merge_args.encodes[merge_args.base_name] = value.name
+
+    @classmethod
+    def decode(cls, decode_args: DecodeArgs) -> Enum:
+        enum_value = decode_args.encodes[decode_args.base_name]
+        return decode_args.type[enum_value]
+    
 @transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
     list_id_mapping: Dict[int, str] = {}
