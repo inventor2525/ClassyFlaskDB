@@ -67,7 +67,7 @@ class DirtyDecorator:
 		
 		if issubclass(cls, list):
 			setattr(cls, "_is_dirty", list_is_dirty)
-		elif isinstance(cls, dict):
+		elif issubclass(cls, dict):
 			setattr(cls, "_is_dirty", dict_is_dirty)
 		elif hasattr(cls, ClassInfo.field_name):
 			setattr(cls, "_is_dirty", obj_is_dirty)

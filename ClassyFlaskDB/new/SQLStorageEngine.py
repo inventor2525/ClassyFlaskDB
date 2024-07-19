@@ -12,6 +12,7 @@ from ClassyFlaskDB.new.Args import MergeArgs, SetupArgs, DecodeArgs, CFInstance
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
 from ClassyFlaskDB.new.InstrumentedList import InstrumentedList, ListCFInstance
+from ClassyFlaskDB.new.InstrumentedDict import InstrumentedDict, DictCFInstance
 
 from sqlalchemy.orm import Session
 
@@ -63,8 +64,11 @@ class SQLAlchemyStorageEngine(StorageEngine):
 
     def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
         for transcoder in self.transcoders:
-            if transcoder.validate(type_):
-                return transcoder
+            try:
+                if transcoder.validate(type_):
+                    return transcoder
+            except:
+                pass
         raise ValueError(f"No suitable transcoder found for {type_}")
     
     def query(self, cls: Type[T]) -> 'SQLAlchemyStorageEngineQuery[T]':
@@ -422,3 +426,107 @@ class ListTranscoder(LazyLoadingTranscoder):
         # Pre-populate the list with placeholder objects
         lazy_list.extend([MISSING for _ in range(len(encoded_values))])
         return lazy_list
+
+@transcoder_collection.add
+class DictionaryTranscoder(LazyLoadingTranscoder):
+    @classmethod
+    def validate(cls, type_: Type) -> bool:
+        return get_origin(type_) is dict
+
+    @classmethod
+    def get_table_name(cls, key_type: Type, value_type: Type) -> str:
+        return f"dict_{key_type.__name__}_{value_type.__name__}"
+
+    @classmethod
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
+        key_type, value_type = get_args(type_)
+        table_name = cls.get_table_name(key_type, value_type)
+        key_transcoder = setup_args.storage_engine.get_transcoder_type(key_type)
+        value_transcoder = setup_args.storage_engine.get_transcoder_type(value_type)
+        
+        columns = [
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('dict_id', String),
+        ]
+        
+        key_columns = key_transcoder.setup(setup_args, "key", key_type, False)
+        value_columns = value_transcoder.setup(setup_args, "value", value_type, False)
+        columns.extend(key_columns)
+        columns.extend(value_columns)
+        
+        Table(table_name, setup_args.storage_engine.metadata, *columns, extend_existing=True)
+        return [Column(f"{name}_id", String, primary_key=is_primary_key)]
+
+    @classmethod
+    def _merge(cls, merge_args: SQLMergeArgs, value: dict) -> None:
+        key_type, value_type = get_args(merge_args.type)
+        key_transcoder = merge_args.storage_engine.get_transcoder_type(key_type)
+        value_transcoder = merge_args.storage_engine.get_transcoder_type(value_type)
+        
+        table_name = cls.get_table_name(key_type, value_type)
+        table = merge_args.storage_engine.get_table_by_name(table_name)
+        
+        dict_id = cls._get_or_create_dict_id(value)
+        
+        merge_args.session.query(table).filter(table.c.dict_id == dict_id).delete()
+        
+        for key, item in value.items():
+            key_merge_args = merge_args.new(encodes={}, base_name='key', type=key_type)
+            value_merge_args = merge_args.new(encodes={}, base_name='value', type=value_type)
+            
+            key_transcoder.merge(key_merge_args, key)
+            value_transcoder.merge(value_merge_args, item)
+            
+            row = {
+                'dict_id': dict_id,
+                **key_merge_args.encodes,
+                **value_merge_args.encodes
+            }
+            merge_args.session.execute(table.insert().values(**row))
+
+    @classmethod
+    def _encode(cls, merge_args: MergeArgs, value: dict) -> None:
+        dict_id = cls._get_or_create_dict_id(value)
+        merge_args.encodes[f"{merge_args.base_name}_id"] = dict_id
+
+    @classmethod
+    def decode(cls, decode_args: DecodeArgs) -> InstrumentedDict:
+        key_type, value_type = get_args(decode_args.type)
+        key_transcoder = decode_args.storage_engine.get_transcoder_type(key_type)
+        value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
+        
+        table_name = cls.get_table_name(key_type, value_type)
+        table = decode_args.storage_engine.get_table_by_name(table_name)
+        
+        dict_id = decode_args.encodes[f"{decode_args.base_name}_id"]
+        
+        with decode_args.storage_engine.session_maker() as session:
+            query = session.query(table).filter(table.c.dict_id == dict_id)
+            encoded_values = [row._asdict() for row in query.all()]
+        
+        return cls.create_lazy_instance(decode_args, key_type, value_type, key_transcoder, value_transcoder, encoded_values, dict_id)
+
+    @classmethod
+    def create_lazy_instance(cls, decode_args: DecodeArgs, key_type: Type, value_type: Type, key_transcoder: Type[Transcoder], value_transcoder: Type[Transcoder], encoded_values: List[dict], dict_id: str) -> InstrumentedDict:
+        lazy_dict = InstrumentedDict()
+        lazy_dict._cf_instance = DictCFInstance(
+            decode_args=decode_args.new(encodes=encoded_values),
+            dict_id=dict_id,
+            key_type=key_type,
+            value_type=value_type,
+            key_transcoder=key_transcoder,
+            value_transcoder=value_transcoder
+        )
+        return lazy_dict
+
+    @classmethod
+    def _get_or_create_dict_id(cls, value: dict) -> str:
+        if isinstance(value, InstrumentedDict):
+            return value._cf_instance.dict_id
+        dict_id = cls.dict_id_mapping.get(id(value), MISSING)
+        if dict_id is MISSING:
+            dict_id = str(uuid.uuid4())
+            cls.dict_id_mapping[id(value)] = dict_id
+        return dict_id
+
+    dict_id_mapping: Dict[int, str] = {}

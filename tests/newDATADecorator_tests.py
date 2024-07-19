@@ -189,7 +189,40 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertIs(bob_queried.family, queried_family)
 		self.assertIs(eve_queried.family, queried_family)
 		self.assertIs(adam_queried.family, queried_family)
-		
+	
+	def test_dictionary(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class DictContainer:
+			name: str
+			data: Dict[str, int]
+
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+
+		# Create and merge object
+		dict_obj = DictContainer("Test Dict", {"a": 1, "b": 2, "c": 3})
+		data_engine.merge(dict_obj)
+
+		# Query and validate
+		queried_obj = data_engine.query(DictContainer).filter_by_id(dict_obj.get_primary_key())
+		self.assertEqual(queried_obj.name, "Test Dict")
+		self.assertEqual(queried_obj.data, {"a": 1, "b": 2, "c": 3})
+
+		# Update dictionary and re-merge
+		dict_obj.data["d"] = 4
+		dict_obj.data["b"] = 5
+		data_engine.merge(dict_obj)
+
+		# Query again and validate
+		queried_obj = data_engine.query(DictContainer).filter_by_id(dict_obj.get_primary_key())
+		self.assertEqual(queried_obj.data, {"a": 1, "b": 5, "c": 3, "d": 4})
+
+		# Test lazy loading
+		lazy_value = queried_obj.data["c"]
+		self.assertEqual(lazy_value, 3)
+
 	def test_nested_lists_and_circular_refs(self):
 		DATA = DATADecorator()
 
@@ -287,5 +320,6 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertIs(eve_queried.family.parents[1], gpa_eve_queried)
 		self.assertIs(adam_queried.family.parents[0], gma_adam_queried)
 		self.assertIs(adam_queried.family.parents[1], gpa_adam_queried)
+
 if __name__ == '__main__':
 	unittest.main()
