@@ -259,6 +259,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         # Add object to context
         obj_type = type(obj)
         obj_id = obj.get_primary_key()
+        parent_merge_args.storage_engine.context.get(obj_type, {}).pop(obj_id, None)
         if obj_type not in parent_merge_args.context:
             parent_merge_args.context[obj_type] = {}
         parent_merge_args.context[obj_type][obj_id] = obj
