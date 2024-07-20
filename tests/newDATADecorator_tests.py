@@ -122,6 +122,46 @@ class newDATADecorator_tests(unittest.TestCase):
 			self.assertEqual(id(queried_bar.foe), id(queried_bar.foe.bar.foe))
 		test_with_or_without_persisting(True)
 		test_with_or_without_persisting(False)
+	
+	def test_polymorphic_relationships(self):
+		DATA = DATADecorator()
+
+		# Define the data classes
+		@DATA
+		@dataclass
+		class Foe:
+			name: str
+			strength: int
+			
+		@DATA
+		@dataclass
+		class SuperFoe(Foe):
+			attack_multiplier : float
+
+		@DATA
+		@dataclass
+		class Bar:
+			name: str
+			location: str
+			foe: Foe = None
+			
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		
+		foe = SuperFoe(name="Dragon", strength=100, attack_multiplier=10)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
+
+		data_engine.merge(bar)
+		
+		# Query from database
+		queried_bar = data_engine.query(Bar).filter_by_id(bar.get_primary_key())
+
+		# Validate
+		self.assertEqual(queried_bar.name, bar.name)
+		self.assertEqual(queried_bar.location, bar.location)
+		self.assertEqual(type(queried_bar.foe), SuperFoe)
+		self.assertEqual(queried_bar.foe.name, foe.name)
+		self.assertEqual(queried_bar.foe.strength, foe.strength)
+		self.assertEqual(queried_bar.foe.attack_multiplier, foe.attack_multiplier)
 		
 	def test_list_and_circular_ref(self):
 		DATA = DATADecorator()
@@ -222,6 +262,62 @@ class newDATADecorator_tests(unittest.TestCase):
 		# Test lazy loading
 		lazy_value = queried_obj.data["c"]
 		self.assertEqual(lazy_value, 3)
+	
+	def test_simple_nested_lists(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class Bar:
+			value: int
+
+		@DATA
+		@dataclass
+		class Foo:
+			name: str
+			nested_bars: List[List[Bar]]
+
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+
+		# Create nested structure
+		bar1 = Bar(1)
+		bar2 = Bar(2)
+		bar3 = Bar(3)
+		bar4 = Bar(4)
+
+		foo = Foo("TestFoo", [[bar1, bar2], [bar3, bar4]])
+
+		# Merge into database
+		data_engine.merge(foo)
+
+		# Query from database
+		queried_foo = data_engine.query(Foo).filter_by_id(foo.get_primary_key())
+
+		# Validate
+		self.assertEqual(queried_foo.name, "TestFoo")
+		self.assertEqual(len(queried_foo.nested_bars), 2)
+		self.assertEqual(len(queried_foo.nested_bars[0]), 2)
+		self.assertEqual(len(queried_foo.nested_bars[1]), 2)
+
+		# Check values
+		self.assertEqual(queried_foo.nested_bars[0][0].value, 1)
+		self.assertEqual(queried_foo.nested_bars[0][1].value, 2)
+		self.assertEqual(queried_foo.nested_bars[1][0].value, 3)
+		self.assertEqual(queried_foo.nested_bars[1][1].value, 4)
+
+		# Modify and re-merge
+		foo.nested_bars[0][1] = Bar(5)
+		foo.nested_bars[1].append(Bar(6))
+
+		data_engine.merge(foo)
+
+		# Query again
+		queried_foo = data_engine.query(Foo).filter_by_id(foo.get_primary_key())
+
+		# Validate changes
+		self.assertEqual(queried_foo.nested_bars[0][1].value, 5)
+		self.assertEqual(len(queried_foo.nested_bars[1]), 3)
+		self.assertEqual(queried_foo.nested_bars[1][2].value, 6)
 
 	def test_nested_lists_and_circular_refs(self):
 		DATA = DATADecorator()
