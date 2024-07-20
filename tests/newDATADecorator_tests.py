@@ -20,7 +20,7 @@ class newDATADecorator_tests(unittest.TestCase):
 			location: str
 			foe: Foe = None
 			
-		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 		
 		foe = Foe(name="Dragon", strength=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
@@ -49,7 +49,7 @@ class newDATADecorator_tests(unittest.TestCase):
 			name: str
 			color: TestColor
 
-		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 		# Create and merge object
 		color_obj = ColorObject("Sky", TestColor.BLUE)
@@ -87,7 +87,7 @@ class newDATADecorator_tests(unittest.TestCase):
 				location: str
 				foe: "Foe" = None
 				
-			data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+			data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 			foe = Foe(name="Dragon1", strength=100)
 			bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
@@ -145,7 +145,7 @@ class newDATADecorator_tests(unittest.TestCase):
 			location: str
 			foe: Foe = None
 			
-		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 		
 		foe = SuperFoe(name="Dragon", strength=100, attack_multiplier=10)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
@@ -180,7 +180,7 @@ class newDATADecorator_tests(unittest.TestCase):
 			children: List[Person]
 			parents: List[Person]
 
-		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 		# Create family members
 		alice = Person("Alice", 10)
@@ -239,7 +239,7 @@ class newDATADecorator_tests(unittest.TestCase):
 			name: str
 			data: Dict[str, int]
 
-		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 		# Create and merge object
 		dict_obj = DictContainer("Test Dict", {"a": 1, "b": 2, "c": 3})
@@ -277,7 +277,7 @@ class newDATADecorator_tests(unittest.TestCase):
 			name: str
 			nested_bars: List[List[Bar]]
 
-		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 		# Create nested structure
 		bar1 = Bar(1)
@@ -337,7 +337,7 @@ class newDATADecorator_tests(unittest.TestCase):
 			parents: List[Person]
 			grandparents: List[List[Person]]
 
-		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 		# Create family members
 		alice = Person("Alice", 10)

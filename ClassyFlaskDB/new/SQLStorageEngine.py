@@ -20,15 +20,22 @@ from sqlalchemy.orm import Session
 class SQLMergeArgs(MergeArgs):
     session: Session
 
+sql_transcoder_collection = TranscoderCollection()
+
 T = TypeVar('T')
 class SQLAlchemyStorageEngine(StorageEngine):
-    def __init__(self, connection_string: str, transcoder_collection: TranscoderCollection, data_decorator: DATADecorator):
+    def __init__(self, connection_string: str, data_decorator: DATADecorator, extra_transcoders: TranscoderCollection=None):
         super().__init__()
         self.engine = create_engine(connection_string)
         self.session_maker = sessionmaker(bind=self.engine)
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)
-        self.transcoders = transcoder_collection.transcoders
+        if extra_transcoders:
+            self.transcoders = list(extra_transcoders.transcoders)
+            self.transcoders.extend(sql_transcoder_collection.transcoders)
+        else:
+            self.transcoders = list(sql_transcoder_collection.transcoders)
+        self.transcoder_map:Dict[Type,Transcoder] = {}
         self.data_decorator = data_decorator
         
         self.data_decorator.finalize(self)
@@ -63,9 +70,12 @@ class SQLAlchemyStorageEngine(StorageEngine):
         return f"obj_{cls.__name__}"
 
     def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
+        if type_ in self.transcoder_map:
+            return self.transcoder_map[type_]
         for transcoder in self.transcoders:
             try:
                 if transcoder.validate(type_):
+                    self.transcoder_map[type_] = transcoder
                     return transcoder
             except:
                 pass
@@ -147,9 +157,7 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
         
         return instance
 
-transcoder_collection = TranscoderCollection()
-
-@transcoder_collection.add
+@sql_transcoder_collection.add
 class BasicsTranscoder(Transcoder):
     supported_types = {
         int: Integer,
@@ -176,7 +184,7 @@ class BasicsTranscoder(Transcoder):
         value = decode_args.encodes[decode_args.base_name]
         return decode_args.type(value)
 
-@transcoder_collection.add
+@sql_transcoder_collection.add
 class DateTimeTranscoder(Transcoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
@@ -200,7 +208,7 @@ class DateTimeTranscoder(Transcoder):
         tz = decode_args.encodes[f"{decode_args.base_name}_timezone"]
         return dt.replace(tzinfo=tz) if tz else dt
 
-@transcoder_collection.add
+@sql_transcoder_collection.add
 class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
@@ -315,7 +323,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
 
 from enum import Enum
 
-@transcoder_collection.add
+@sql_transcoder_collection.add
 class EnumTranscoder(Transcoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
@@ -334,7 +342,7 @@ class EnumTranscoder(Transcoder):
         enum_value = decode_args.encodes[decode_args.base_name]
         return decode_args.type[enum_value]
     
-@transcoder_collection.add
+@sql_transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
     list_id_mapping: Dict[int, str] = {}
 
@@ -440,7 +448,7 @@ class ListTranscoder(LazyLoadingTranscoder):
         lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
         return lazy_list
 
-@transcoder_collection.add
+@sql_transcoder_collection.add
 class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:

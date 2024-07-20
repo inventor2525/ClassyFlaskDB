@@ -20,7 +20,7 @@ class ImmediateFamily:
     father: Person
 
 # Initialize the storage engine
-engine = SQLAlchemyStorageEngine("sqlite:///:memory:", transcoder_collection, DATA)
+engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 # Create test instances
 child = Person("Alice", 10, 140.0, datetime(2013, 5, 15))
