@@ -130,7 +130,14 @@ class SQLAlchemyStorageEngineQuery(Generic[T]):
                     yield self._create_lazy_instance(encoded_values)
 
     def _create_lazy_instance(self, encoded_values: Dict[str, Any]) -> T:
-        instance = self.transcoder.create_lazy_instance(self.storage_engine, self.cls, encoded_values)
+        instance = self.transcoder.create_lazy_instance(cf_instance = CFInstance(
+            decode_args=DecodeArgs(
+                storage_engine=self.storage_engine,
+                encodes=encoded_values,
+                base_name=None,
+                type=self.cls
+            )
+        ))
         
         # Add to context
         obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
@@ -284,19 +291,12 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         return decode_args.storage_engine.query(obj_type).filter_by_id(id_value)
     
     @classmethod
-    def create_lazy_instance(cls, storage_engine: 'StorageEngine', obj_type: Type, encoded_values: Dict[str, Any]) -> Any:
-        instance = object.__new__(obj_type)
-        cf_instance = CFInstance(
-            decode_args=DecodeArgs(
-                storage_engine=storage_engine,
-                encodes=encoded_values,
-                base_name=None,
-                type=obj_type
-            )
-        )
+    def create_lazy_instance(cls, cf_instance: CFInstance) -> Any:
+        instance = object.__new__(cf_instance.decode_args.type)
+        
         setattr(instance, '_cf_instance', cf_instance)
         
-        class_info = ClassInfo.get(obj_type)
+        class_info = ClassInfo.get(cf_instance.decode_args.type)
         
         for field_name in class_info.fields:
             setattr(instance, field_name, DATADecorator.not_initialized)
@@ -423,17 +423,21 @@ class ListTranscoder(LazyLoadingTranscoder):
             query = session.query(table).filter(table.c.list_id == list_id).order_by(table.c.index)
             encoded_values = [row._asdict() for row in query.all()]
         
-        lazy_list = InstrumentedList()
-        lazy_list._cf_instance = ListCFInstance(
+        return cls.create_lazy_instance(ListCFInstance(
             decode_args=decode_args.new(
                 encodes = encoded_values
             ),
             list_id = list_id,
             value_type = value_type,
             value_transcoder = value_transcoder
-        )
+        ))
+
+    @classmethod
+    def create_lazy_instance(cls, cf_instance:DictCFInstance) -> InstrumentedDict:
+        lazy_list = InstrumentedList()
+        lazy_list._cf_instance = cf_instance
         # Pre-populate the list with placeholder objects
-        lazy_list.extend([MISSING for _ in range(len(encoded_values))])
+        lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
         return lazy_list
 
 @transcoder_collection.add
@@ -513,19 +517,19 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
             query = session.query(table).filter(table.c.dict_id == dict_id)
             encoded_values = [row._asdict() for row in query.all()]
         
-        return cls.create_lazy_instance(decode_args, key_type, value_type, key_transcoder, value_transcoder, encoded_values, dict_id)
-
-    @classmethod
-    def create_lazy_instance(cls, decode_args: DecodeArgs, key_type: Type, value_type: Type, key_transcoder: Type[Transcoder], value_transcoder: Type[Transcoder], encoded_values: List[dict], dict_id: str) -> InstrumentedDict:
-        lazy_dict = InstrumentedDict()
-        lazy_dict._cf_instance = DictCFInstance(
+        return cls.create_lazy_instance(DictCFInstance(
             decode_args=decode_args.new(encodes=encoded_values),
             dict_id=dict_id,
             key_type=key_type,
             value_type=value_type,
             key_transcoder=key_transcoder,
             value_transcoder=value_transcoder
-        )
+        ))
+
+    @classmethod
+    def create_lazy_instance(cls, cf_instance:DictCFInstance) -> InstrumentedDict:
+        lazy_dict = InstrumentedDict()
+        lazy_dict._cf_instance = cf_instance
         return lazy_dict
 
     @classmethod

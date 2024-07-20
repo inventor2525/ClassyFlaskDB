@@ -52,5 +52,5 @@ class Transcoder:
 
 class LazyLoadingTranscoder(Transcoder):
     @classmethod
-    def create_lazy_instance(self, storage_engine: 'StorageEngine', cls: Type, encoded_values: Dict[str, Any]) -> Any:
+    def create_lazy_instance(self, cf_instance: CFInstance) -> Any:
         pass
