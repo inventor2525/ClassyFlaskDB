@@ -216,7 +216,10 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             field_class_info = ClassInfo.get(type_)
             pk_type = field_class_info.fields[field_class_info.primary_key_name].type
             column_type = BasicsTranscoder.supported_types.get(pk_type, String)
-            return [Column(f"{name}_id", column_type, primary_key=is_primary_key)]
+            return [
+                Column(f"{name}_id", column_type, primary_key=is_primary_key),
+                Column(f"{name}_type", String)
+            ]
 
     @classmethod
     def _merge(cls, parent_merge_args: SQLMergeArgs, obj: DATADecorator.Interface) -> None:
@@ -266,14 +269,19 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
-        class_info = ClassInfo.get(type(value))
+        value_type = type(value)
+        assert issubclass(value_type, merge_args.type), f"Type hint not obeyed. This is what we know {merge_args}"
+        class_info = ClassInfo.get(value_type)
         primary_key = getattr(value, class_info.primary_key_name)
         merge_args.encodes[f"{merge_args.base_name}_id"] = primary_key
+        merge_args.encodes[f"{merge_args.base_name}_type"] = class_info.semi_qualname
         
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
         id_value = decode_args.encodes[f"{decode_args.base_name}_id"]
-        return decode_args.storage_engine.query(decode_args.type).filter_by_id(id_value)
+        type_name = decode_args.encodes[f"{decode_args.base_name}_type"]
+        obj_type = decode_args.storage_engine.data_decorator.registry[type_name]
+        return decode_args.storage_engine.query(obj_type).filter_by_id(id_value)
     
     @classmethod
     def create_lazy_instance(cls, storage_engine: 'StorageEngine', obj_type: Type, encoded_values: Dict[str, Any]) -> Any:
