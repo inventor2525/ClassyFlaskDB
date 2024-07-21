@@ -527,17 +527,13 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         return cls.create_lazy_instance(DictCFInstance(
             decode_args=decode_args.new(encodes=encoded_values),
             dict_id=dict_id,
-            key_type=key_type,
-            value_type=value_type,
             key_transcoder=key_transcoder,
             value_transcoder=value_transcoder
         ))
 
     @classmethod
-    def create_lazy_instance(cls, cf_instance:DictCFInstance) -> InstrumentedDict:
-        lazy_dict = InstrumentedDict()
-        lazy_dict._cf_instance = cf_instance
-        return lazy_dict
+    def create_lazy_instance(cls, cf_instance: DictCFInstance) -> 'InstrumentedDict':
+        return InstrumentedDict.from_cf_instance(cf_instance)
 
     @classmethod
     def _get_or_create_dict_id(cls, value: dict) -> str:
