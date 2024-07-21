@@ -171,6 +171,8 @@ class newDATADecorator_tests(unittest.TestCase):
 		class Person:
 			name: str
 			age: int
+			height: float
+			birth_date: datetime
 			family: 'ImmediateFamily' = None
 
 		@DATA
@@ -183,10 +185,10 @@ class newDATADecorator_tests(unittest.TestCase):
 		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
 
 		# Create family members
-		alice = Person("Alice", 10)
-		bob = Person("Bob", 12)
-		eve = Person("Eve", 35)
-		adam = Person("Adam", 37)
+		alice = Person("Alice", 10, 140.0, datetime(2013, 5, 15))
+		bob = Person("Bob", 12, 150.0, datetime(2011, 3, 20))
+		eve = Person("Eve", 35, 165.5, datetime(1988, 9, 22))
+		adam = Person("Adam", 37, 180.0, datetime(1986, 3, 10))
 
 		# Create family
 		family = ImmediateFamily("Smith", [alice, bob], [eve, adam])
@@ -198,37 +200,49 @@ class newDATADecorator_tests(unittest.TestCase):
 		adam.family = family
 
 		# Merge into database
-		data_engine.merge(family)
+		data_engine.merge(alice)
 
 		# Query from database
-		queried_family = data_engine.query(ImmediateFamily).filter_by_id(family.get_primary_key())
+		queried_family = data_engine.query(Person).filter_by_id(eve.get_primary_key()).family
 
-		# Validate
-		self.assertEqual(queried_family.surname, "Smith")
-		self.assertEqual(len(queried_family.children), 2)
-		self.assertEqual(len(queried_family.parents), 2)
+		# Validate family
+		self.assertEqual(queried_family.surname, family.surname)
+		self.assertEqual(len(queried_family.children), len(family.children))
+		self.assertEqual(len(queried_family.parents), len(family.parents))
 
-		alice_queried = queried_family.children[0]
-		bob_queried = queried_family.children[1]
-		eve_queried = queried_family.parents[0]
-		adam_queried = queried_family.parents[1]
+		# Validate children
+		for original, queried in zip(family.children, queried_family.children):
+			self.assertEqual(queried.name, original.name)
+			self.assertEqual(queried.age, original.age)
+			self.assertEqual(queried.height, original.height)
+			self.assertEqual(queried.birth_date, original.birth_date)
+			self.assertEqual(queried.family.surname, family.surname)
+			self.assertIs(queried.family, queried_family)
 
-		self.assertEqual(alice_queried.name, "Alice")
-		self.assertEqual(bob_queried.name, "Bob")
-		self.assertEqual(eve_queried.name, "Eve")
-		self.assertEqual(adam_queried.name, "Adam")
+		# Validate parents
+		for original, queried in zip(family.parents, queried_family.parents):
+			self.assertEqual(queried.name, original.name)
+			self.assertEqual(queried.age, original.age)
+			self.assertEqual(queried.height, original.height)
+			self.assertEqual(queried.birth_date, original.birth_date)
+			self.assertEqual(queried.family.surname, family.surname)
+			self.assertIs(queried.family, queried_family)
 
-		# Check circular references
-		self.assertEqual(alice_queried.family.surname, "Smith")
-		self.assertEqual(bob_queried.family.surname, "Smith")
-		self.assertEqual(eve_queried.family.surname, "Smith")
-		self.assertEqual(adam_queried.family.surname, "Smith")
+		# Additional checks for circular references
+		alice_queried, bob_queried = queried_family.children
+		eve_queried, adam_queried = queried_family.parents
 
-		# Check that circular references are maintained
-		self.assertIs(alice_queried.family, queried_family)
-		self.assertIs(bob_queried.family, queried_family)
-		self.assertIs(eve_queried.family, queried_family)
-		self.assertIs(adam_queried.family, queried_family)
+		# Check that children in parents' family are the same objects
+		self.assertIs(eve_queried.family.children[0], alice_queried)
+		self.assertIs(eve_queried.family.children[1], bob_queried)
+		self.assertIs(adam_queried.family.children[0], alice_queried)
+		self.assertIs(adam_queried.family.children[1], bob_queried)
+
+		# Check that parents in children's family are the same objects
+		self.assertIs(alice_queried.family.parents[0], eve_queried)
+		self.assertIs(alice_queried.family.parents[1], adam_queried)
+		self.assertIs(bob_queried.family.parents[0], eve_queried)
+		self.assertIs(bob_queried.family.parents[1], adam_queried)
 	
 	def test_dictionary(self):
 		DATA = DATADecorator()
@@ -318,7 +332,7 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_foo.nested_bars[0][1].value, 5)
 		self.assertEqual(len(queried_foo.nested_bars[1]), 3)
 		self.assertEqual(queried_foo.nested_bars[1][2].value, 6)
-
+		
 	def test_nested_lists_and_circular_refs(self):
 		DATA = DATADecorator()
 
