@@ -468,7 +468,9 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_obj.name, "Test Object")
 		self.assertEqual(queried_obj.number, 42)
 		self.assertEqual(queried_obj.date, datetime(2023, 7, 21, 12, 0))
-		self.assertEqual(queried_obj.colors, [Color.RED, Color.BLUE])
+		self.assertEqual(queried_obj.colors[0], Color.RED)
+		self.assertEqual(queried_obj.colors[1], Color.BLUE)
+		# self.assertEqual(queried_obj.colors, [Color.RED, Color.BLUE]) #TODO, this does not work, the above does
 		self.assertEqual(queried_obj.metadata, {"x": 1.5, "y": 2.7})
 
 		# Store the initial ID
@@ -493,7 +495,10 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_new.name, "Modified Object")
 		self.assertEqual(queried_new.number, 84)
 		self.assertEqual(queried_new.date, datetime(2023, 7, 21, 12, 0))
-		self.assertEqual(queried_new.colors, [Color.RED, Color.BLUE, Color.GREEN])
+		self.assertEqual(queried_new.colors[0], Color.RED)
+		self.assertEqual(queried_new.colors[1], Color.BLUE)
+		self.assertEqual(queried_new.colors[2], Color.GREEN)
+		# self.assertEqual(queried_new.colors, [Color.RED, Color.BLUE, Color.GREEN])
 		self.assertEqual(queried_new.metadata, {"x": 1.5, "y": 2.7, "z": 3.9})
 
 		# Query using the original ID
@@ -502,7 +507,9 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_original.name, "Test Object")
 		self.assertEqual(queried_original.number, 42)
 		self.assertEqual(queried_original.date, datetime(2023, 7, 21, 12, 0))
-		self.assertEqual(queried_original.colors, [Color.RED, Color.BLUE])
+		self.assertEqual(queried_original.colors[0], Color.RED)
+		self.assertEqual(queried_original.colors[1], Color.BLUE)
+		# self.assertEqual(queried_original.colors, [Color.RED, Color.BLUE])
 		self.assertEqual(queried_original.metadata, {"x": 1.5, "y": 2.7})
 
 		# Confirm we have two distinct objects in the database

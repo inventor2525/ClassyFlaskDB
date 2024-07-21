@@ -3,9 +3,14 @@ from ClassyFlaskDB.DATA.ID_Type import ID_Type
 from typing import TypeVar, Type, Protocol, Any, get_origin, get_args
 from dataclasses import dataclass, Field, MISSING
 from enum import Enum
-import datetime
+from datetime import datetime
 import hashlib
 import uuid
+
+def get_semi_qual_name(type_: Type) -> str:
+    if ClassInfo.has_ClassInfo(type_):
+        return ClassInfo.get(type_).semi_qualname.replace('.', '_')
+    return type_.__name__
 
 T = TypeVar('T')
 @dataclass
@@ -17,8 +22,8 @@ class AutoID:
 	This also modifies the init to create an initial id.
 	'''
 	id_type:ID_Type
-	_hash_functions: Dict[Type, Callable] = field(default_factory=dict)
-	_hash_function_list: List[Callable] = field(default_factory=list)
+	_hash_functions = {}
+	_hash_function_list = []
 	
 	class Interface(ClassInfo.Interface):
 		auto_id:str
@@ -62,7 +67,7 @@ class AutoID:
 					for field_name, field_info in classInfo.fields.items():
 						if field_name != classInfo.primary_key_name:
 							value = getattr(self, field_name)
-							hash_func = self.get_hash_function(field_info.type)
+							hash_func = AutoID.get_hash_function(field_info.type)
 							fields.extend(hash_func(value, field_info.type, deep))
 					self.auto_id = hashlib.sha256(",".join(map(str, fields)).encode("utf-8")).hexdigest()
 				add_id(classInfo, new_id)
@@ -83,20 +88,20 @@ class AutoID:
 	def hash_function(cls, types: Union[Type, List[Type]] = None):
 		def decorator(func):
 			if types:
-				type_list = [types] if isinstance(types, Type) else types
+				type_list = [types] if isinstance(types, type) else types
 				for t in type_list:
 					cls._hash_functions[t] = func
 				def validate_error(func):
 					raise SyntaxError("Validate should not be used when types is passed.")
 				func.validate = validate_error
+				func.type_list = type_list
 			else:
-				cls._hash_function_list.append(func)
-			
 				def validator(validate_func):
 					func.validate = validate_func
 					return func
 				
 				func.validate = validator
+			cls._hash_function_list.append(func)
 			return func
 		return decorator
 
@@ -107,7 +112,13 @@ class AutoID:
 		
 		for func in reversed(cls._hash_function_list):
 			try:
-				if func.validate(type_):
+				type_list = getattr(func, 'type_list', None)
+				if type_list:
+					for t in type_list:
+						if issubclass(type_, t):
+							cls._hash_functions[type_] = func
+							return func
+				elif func.validate(type_):
 					cls._hash_functions[type_] = func
 					return func
 			except:
