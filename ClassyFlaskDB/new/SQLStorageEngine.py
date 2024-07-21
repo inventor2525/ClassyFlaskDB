@@ -10,7 +10,6 @@ from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection
 from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
 from ClassyFlaskDB.new.Args import MergeArgs, SetupArgs, DecodeArgs, CFInstance
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
-from ClassyFlaskDB.new.Types import Interface, BasicType, ContextType
 from ClassyFlaskDB.new.InstrumentedList import InstrumentedList, ListCFInstance
 from ClassyFlaskDB.new.InstrumentedDict import InstrumentedDict, DictCFInstance
 

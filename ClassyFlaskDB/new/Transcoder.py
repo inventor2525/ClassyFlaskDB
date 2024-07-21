@@ -14,11 +14,11 @@ class Transcoder:
         return False
     
     @classmethod
-    def validate(cls, class_info: ClassInfo, field: Field) -> bool:
+    def validate(cls, type_: Type) -> bool:
         return False
 
     @classmethod
-    def setup(cls, setup_args: SetupArgs, field: Field):
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool):
         pass
 
     @classmethod
@@ -47,7 +47,7 @@ class Transcoder:
         cls._encode(merge_args, value)
 
     @classmethod
-    def decode(cls, storage_engine: Any, obj: Any, field_name: str, encoded_values: Dict[str, Any]) -> Any:
+    def decode(cls, decode_args: DecodeArgs) -> Any:
         return None
 
 class LazyLoadingTranscoder(Transcoder):
