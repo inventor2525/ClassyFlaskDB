@@ -184,7 +184,7 @@ class BasicsTranscoder(Transcoder):
         return decode_args.type(value)
     
     @classmethod
-    def hash_values(cls, value: Any, deep: bool = False) -> List[Union[str, int, float]]:
+    def hash_values(cls, value: Any, type_:Type, deep: bool = False) -> List[Union[str, int, float]]:
         return [value]
     
 @sql_transcoder_collection.add
@@ -212,7 +212,7 @@ class DateTimeTranscoder(Transcoder):
         return dt.replace(tzinfo=tz) if tz else dt
     
     @classmethod
-    def hash_values(cls, value: datetime, deep: bool = False) -> List[str]:
+    def hash_values(cls, value: datetime, type_:Type, deep: bool = False) -> List[str]:
         formatted = value.strftime("%Y-%m-%d %H:%M:%S.%f")
         if value.tzinfo:
             formatted += f" {value.tzinfo}"
@@ -309,7 +309,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         return decode_args.storage_engine.query(obj_type).filter_by_id(id_value)
     
     @classmethod
-    def hash_values(cls, value: Any, deep: bool = False) -> List[str]:
+    def hash_values(cls, value: Any, type_:Type, deep: bool = False) -> List[str]:
         class_info = ClassInfo.get(type(value))
         if deep and class_info.id_type == ID_Type.HASHID:
             value.new_id(deep=True)
@@ -360,7 +360,7 @@ class EnumTranscoder(Transcoder):
         return decode_args.type[enum_value]
     
     @classmethod
-    def hash_values(cls, value: Enum, deep: bool = False) -> List[str]:
+    def hash_values(cls, value: Enum, type_:Type, deep: bool = False) -> List[str]:
         return [str(value)]
     
 @sql_transcoder_collection.add
@@ -470,12 +470,12 @@ class ListTranscoder(LazyLoadingTranscoder):
         return lazy_list
     
     @classmethod
-    def hash_values(cls, value: List[Any], deep: bool = False) -> List[Any]:
+    def hash_values(cls, value: List[Any], type_:Type, deep: bool = False) -> List[Any]:
         h = []
-        value_type = get_args(cls.decode_args.type)[0]
+        value_type = get_args(type_)[0]
         value_transcoder = cls.decode_args.storage_engine.get_transcoder_type(value_type)
         for item in value:
-            h.extend(value_transcoder.hash_values(item, deep))
+            h.extend(value_transcoder.hash_values(item, value_type, deep))
         return h
 
 @sql_transcoder_collection.add
@@ -577,14 +577,14 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         return dict_id
     
     @classmethod
-    def hash_values(cls, value: Dict[Any, Any], deep: bool = False) -> List[Any]:
+    def hash_values(cls, value: Dict[Any, Any], type_:Type, deep: bool = False) -> List[Any]:
         h = []
-        key_type, value_type = get_args(cls.decode_args.type)
+        key_type, value_type = get_args(type_)
         key_transcoder = cls.decode_args.storage_engine.get_transcoder_type(key_type)
         value_transcoder = cls.decode_args.storage_engine.get_transcoder_type(value_type)
         for k, v in value.items():
-            h.extend(key_transcoder.hash_values(k, deep))
-            h.extend(value_transcoder.hash_values(v, deep))
+            h.extend(key_transcoder.hash_values(k, key_type, deep))
+            h.extend(value_transcoder.hash_values(v, value_type, deep))
         return h
 
     dict_id_mapping: Dict[int, str] = {}

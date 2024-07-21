@@ -1,7 +1,9 @@
 from .ClassInfo import *
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
-from typing import TypeVar, Type, Protocol, Any
+from typing import TypeVar, Type, Protocol, Any, get_origin, get_args
 from dataclasses import dataclass, Field, MISSING
+from enum import Enum
+import datetime
 import hashlib
 import uuid
 
@@ -15,6 +17,8 @@ class AutoID:
 	This also modifies the init to create an initial id.
 	'''
 	id_type:ID_Type
+	_hash_functions: Dict[Type, Callable] = field(default_factory=dict)
+	_hash_function_list: List[Callable] = field(default_factory=list)
 	
 	class Interface(ClassInfo.Interface):
 		auto_id:str
@@ -58,8 +62,8 @@ class AutoID:
 					for field_name, field_info in classInfo.fields.items():
 						if field_name != classInfo.primary_key_name:
 							value = getattr(self, field_name)
-							transcoder = cls.__transcoders__[field_name]
-							fields.extend(transcoder.hash_values(value, deep))
+							hash_func = self.get_hash_function(field_info.type)
+							fields.extend(hash_func(value, field_info.type, deep))
 					self.auto_id = hashlib.sha256(",".join(map(str, fields)).encode("utf-8")).hexdigest()
 				add_id(classInfo, new_id)
 			else:
@@ -74,3 +78,104 @@ class AutoID:
 			return getattr(self, self.__class_info__.primary_key_name)
 		setattr(cls, "get_primary_key", get_primary_key)
 		return cls
+
+	@classmethod
+	def hash_function(cls, types: Union[Type, List[Type]] = None):
+		def decorator(func):
+			if types:
+				type_list = [types] if isinstance(types, Type) else types
+				for t in type_list:
+					cls._hash_functions[t] = func
+				def validate_error(func):
+					raise SyntaxError("Validate should not be used when types is passed.")
+				func.validate = validate_error
+			else:
+				cls._hash_function_list.append(func)
+			
+				def validator(validate_func):
+					func.validate = validate_func
+					return func
+				
+				func.validate = validator
+			return func
+		return decorator
+
+	@classmethod
+	def get_hash_function(cls, type_: Type) -> Callable:
+		if type_ in cls._hash_functions:
+			return cls._hash_functions[type_]
+		
+		for func in reversed(cls._hash_function_list):
+			try:
+				if func.validate(type_):
+					cls._hash_functions[type_] = func
+					return func
+			except:
+				pass
+		
+		raise ValueError(f"No suitable hash function found for {type_}")
+
+# Hash function definitions
+@AutoID.hash_function([int, float, str, bool])
+def basic_hash(value: Union[int, float, str, bool], type_: Type, deep: bool) -> List[Union[str, int, float]]:
+    return [value]
+
+@AutoID.hash_function(datetime)
+def datetime_hash(value: datetime, type_: Type, deep: bool) -> List[str]:
+    return [value.isoformat()]
+
+@AutoID.hash_function(Enum)
+def enum_hash(value: Enum, type_: Type, deep: bool) -> List[str]:
+    return [value.name]
+
+@AutoID.hash_function()
+def object_hash(value: Any, type_: Type, deep: bool) -> List[str]:
+    class_info = ClassInfo.get(type(value))
+    if deep and class_info.id_type == ID_Type.HASHID:
+        value.new_id(deep=True)
+    return [value.get_primary_key()]
+
+@object_hash.validate
+def validate_object(type_: Type) -> bool:
+    return ClassInfo.has_ClassInfo(type_)
+
+@AutoID.hash_function()
+def list_hash(value: List[Any], type_: Type, deep: bool) -> List[Any]:
+    h = []
+    value_type = get_args(type_)[0]
+    hash_func = AutoID.get_hash_function(value_type)
+    for item in value:
+        h.extend(hash_func(item, value_type, deep))
+    return h
+
+@list_hash.validate
+def validate_list(type_: Type) -> bool:
+    return get_origin(type_) is list
+
+@AutoID.hash_function()
+def dict_hash(value: Dict[Any, Any], type_: Type, deep: bool) -> List[Any]:
+    h = []
+    key_type, value_type = get_args(type_)
+    key_hash_func = AutoID.get_hash_function(key_type)
+    value_hash_func = AutoID.get_hash_function(value_type)
+    for k, v in value.items():
+        h.extend(key_hash_func(k, key_type, deep))
+        h.extend(value_hash_func(v, value_type, deep))
+    return h
+
+@dict_hash.validate
+def validate_dict(type_: Type) -> bool:
+    return get_origin(type_) is dict
+
+@AutoID.hash_function()
+def set_hash(value: Set[Any], type_: Type, deep: bool) -> List[Any]:
+    h = []
+    value_type = get_args(type_)[0]
+    hash_func = AutoID.get_hash_function(value_type)
+    for item in sorted(value):  # Sort to ensure consistent hashing
+        h.extend(hash_func(item, value_type, deep))
+    return h
+
+@set_hash.validate
+def validate_set(type_: Type) -> bool:
+    return get_origin(type_) is set
