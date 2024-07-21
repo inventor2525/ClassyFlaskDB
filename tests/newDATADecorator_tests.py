@@ -430,6 +430,82 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertIs(eve_queried.family.parents[1], gpa_eve_queried)
 		self.assertIs(adam_queried.family.parents[0], gma_adam_queried)
 		self.assertIs(adam_queried.family.parents[1], gpa_adam_queried)
+		
+	def test_hash_id(self):
+		DATA = DATADecorator()
 
+		class Color(Enum):
+			RED = 1
+			GREEN = 2
+			BLUE = 3
+
+		@DATA(id_type=ID_Type.HASHID)
+		@dataclass
+		class ComplexObject:
+			name: str
+			number: int
+			date: datetime
+			colors: List[Color]
+			metadata: Dict[str, float]
+
+		data_engine = SQLAlchemyStorageEngine("sqlite:///:memory:", DATA)
+
+		# Create initial object
+		initial_obj = ComplexObject(
+			name="Test Object",
+			number=42,
+			date=datetime(2023, 7, 21, 12, 0),
+			colors=[Color.RED, Color.BLUE],
+			metadata={"x": 1.5, "y": 2.7}
+		)
+
+		# Merge initial object
+		data_engine.merge(initial_obj)
+
+		# Query and confirm initial merge
+		queried_obj = data_engine.query(ComplexObject).filter_by_id(initial_obj.get_primary_key())
+		self.assertIsNotNone(queried_obj)
+		self.assertEqual(queried_obj.name, "Test Object")
+		self.assertEqual(queried_obj.number, 42)
+		self.assertEqual(queried_obj.date, datetime(2023, 7, 21, 12, 0))
+		self.assertEqual(queried_obj.colors, [Color.RED, Color.BLUE])
+		self.assertEqual(queried_obj.metadata, {"x": 1.5, "y": 2.7})
+
+		# Store the initial ID
+		initial_id = initial_obj.get_primary_key()
+
+		# Modify fields and generate new ID
+		initial_obj.name = "Modified Object"
+		initial_obj.number = 84
+		initial_obj.colors.append(Color.GREEN)
+		initial_obj.metadata["z"] = 3.9
+		initial_obj.new_id()
+
+		# Confirm ID has changed
+		self.assertNotEqual(initial_id, initial_obj.get_primary_key())
+
+		# Merge modified object
+		data_engine.merge(initial_obj)
+
+		# Query using the new ID
+		queried_new = data_engine.query(ComplexObject).filter_by_id(initial_obj.get_primary_key())
+		self.assertIsNotNone(queried_new)
+		self.assertEqual(queried_new.name, "Modified Object")
+		self.assertEqual(queried_new.number, 84)
+		self.assertEqual(queried_new.date, datetime(2023, 7, 21, 12, 0))
+		self.assertEqual(queried_new.colors, [Color.RED, Color.BLUE, Color.GREEN])
+		self.assertEqual(queried_new.metadata, {"x": 1.5, "y": 2.7, "z": 3.9})
+
+		# Query using the original ID
+		queried_original = data_engine.query(ComplexObject).filter_by_id(initial_id)
+		self.assertIsNotNone(queried_original)
+		self.assertEqual(queried_original.name, "Test Object")
+		self.assertEqual(queried_original.number, 42)
+		self.assertEqual(queried_original.date, datetime(2023, 7, 21, 12, 0))
+		self.assertEqual(queried_original.colors, [Color.RED, Color.BLUE])
+		self.assertEqual(queried_original.metadata, {"x": 1.5, "y": 2.7})
+
+		# Confirm we have two distinct objects in the database
+		self.assertNotEqual(queried_new.get_primary_key(), queried_original.get_primary_key())
 if __name__ == '__main__':
 	unittest.main()

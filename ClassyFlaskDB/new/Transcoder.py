@@ -49,6 +49,10 @@ class Transcoder:
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
         return None
+    
+    @classmethod
+    def hash_values(cls, value: Any, deep: bool = False) -> List[Union[str, int, float]]:
+        raise NotImplementedError("Subclasses must implement hash_values method")
 
 class LazyLoadingTranscoder(Transcoder):
     @classmethod

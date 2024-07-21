@@ -2,6 +2,7 @@ from .ClassInfo import *
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
 from typing import TypeVar, Type, Protocol, Any
 from dataclasses import dataclass, Field, MISSING
+import hashlib
 import uuid
 
 T = TypeVar('T')
@@ -52,8 +53,14 @@ class AutoID:
 					self.auto_id = str(uuid.uuid4())
 				add_id(classInfo, new_id)
 			elif self.id_type == ID_Type.HASHID:
-				def new_id(self):
-					pass
+				def new_id(self, deep: bool = False):
+					fields = []
+					for field_name, field_info in classInfo.fields.items():
+						if field_name != classInfo.primary_key_name:
+							value = getattr(self, field_name)
+							transcoder = cls.__transcoders__[field_name]
+							fields.extend(transcoder.hash_values(value, deep))
+					self.auto_id = hashlib.sha256(",".join(map(str, fields)).encode("utf-8")).hexdigest()
 				add_id(classInfo, new_id)
 			else:
 				raise ValueError(f"A primary_key_name was not supplied for {classInfo.cls} yet it is set to {ID_Type.USER_SUPPLIED}. You must have a field with 'primary_key':True in it's metadata or define __primary_key_name__ in the class's definition. In here: ({classInfo.cls})")

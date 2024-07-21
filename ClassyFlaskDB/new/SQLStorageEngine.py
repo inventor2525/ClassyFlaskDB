@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData
 from sqlalchemy.orm import sessionmaker
-from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args
+from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
 import uuid
@@ -9,7 +9,7 @@ from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection
 from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
 from ClassyFlaskDB.new.Args import MergeArgs, SetupArgs, DecodeArgs, CFInstance
-from ClassyFlaskDB.new.ClassInfo import ClassInfo
+from ClassyFlaskDB.new.ClassInfo import ClassInfo, ID_Type
 from ClassyFlaskDB.new.InstrumentedList import InstrumentedList, ListCFInstance
 from ClassyFlaskDB.new.InstrumentedDict import InstrumentedDict, DictCFInstance
 
@@ -182,7 +182,11 @@ class BasicsTranscoder(Transcoder):
     def decode(cls, decode_args: DecodeArgs) -> Any:
         value = decode_args.encodes[decode_args.base_name]
         return decode_args.type(value)
-
+    
+    @classmethod
+    def hash_values(cls, value: Any, deep: bool = False) -> List[Union[str, int, float]]:
+        return [value]
+    
 @sql_transcoder_collection.add
 class DateTimeTranscoder(Transcoder):
     @classmethod
@@ -206,7 +210,14 @@ class DateTimeTranscoder(Transcoder):
         dt = decode_args.encodes[f"{decode_args.base_name}_datetime"]
         tz = decode_args.encodes[f"{decode_args.base_name}_timezone"]
         return dt.replace(tzinfo=tz) if tz else dt
-
+    
+    @classmethod
+    def hash_values(cls, value: datetime, deep: bool = False) -> List[str]:
+        formatted = value.strftime("%Y-%m-%d %H:%M:%S.%f")
+        if value.tzinfo:
+            formatted += f" {value.tzinfo}"
+        return [formatted]
+    
 @sql_transcoder_collection.add
 class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
@@ -298,6 +309,13 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         return decode_args.storage_engine.query(obj_type).filter_by_id(id_value)
     
     @classmethod
+    def hash_values(cls, value: Any, deep: bool = False) -> List[str]:
+        class_info = ClassInfo.get(type(value))
+        if deep and class_info.id_type == ID_Type.HASHID:
+            value.new_id(deep=True)
+        return [value.get_primary_key()]
+    
+    @classmethod
     def create_lazy_instance(cls, cf_instance: CFInstance) -> Any:
         instance = object.__new__(cf_instance.decode_args.type)
         
@@ -340,6 +358,10 @@ class EnumTranscoder(Transcoder):
     def decode(cls, decode_args: DecodeArgs) -> Enum:
         enum_value = decode_args.encodes[decode_args.base_name]
         return decode_args.type[enum_value]
+    
+    @classmethod
+    def hash_values(cls, value: Enum, deep: bool = False) -> List[str]:
+        return [str(value)]
     
 @sql_transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
@@ -446,6 +468,15 @@ class ListTranscoder(LazyLoadingTranscoder):
         # Pre-populate the list with placeholder objects
         lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
         return lazy_list
+    
+    @classmethod
+    def hash_values(cls, value: List[Any], deep: bool = False) -> List[Any]:
+        h = []
+        value_type = get_args(cls.decode_args.type)[0]
+        value_transcoder = cls.decode_args.storage_engine.get_transcoder_type(value_type)
+        for item in value:
+            h.extend(value_transcoder.hash_values(item, deep))
+        return h
 
 @sql_transcoder_collection.add
 class DictionaryTranscoder(LazyLoadingTranscoder):
@@ -544,5 +575,16 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
             dict_id = str(uuid.uuid4())
             cls.dict_id_mapping[id(value)] = dict_id
         return dict_id
+    
+    @classmethod
+    def hash_values(cls, value: Dict[Any, Any], deep: bool = False) -> List[Any]:
+        h = []
+        key_type, value_type = get_args(cls.decode_args.type)
+        key_transcoder = cls.decode_args.storage_engine.get_transcoder_type(key_type)
+        value_transcoder = cls.decode_args.storage_engine.get_transcoder_type(value_type)
+        for k, v in value.items():
+            h.extend(key_transcoder.hash_values(k, deep))
+            h.extend(value_transcoder.hash_values(v, deep))
+        return h
 
     dict_id_mapping: Dict[int, str] = {}
