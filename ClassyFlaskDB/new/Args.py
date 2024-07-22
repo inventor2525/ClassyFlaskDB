@@ -1,5 +1,6 @@
 from dataclasses import dataclass, Field, field, fields, MISSING
 from typing import Any, Dict, Optional, List, Union, TypeVar, Type, Set, Literal
+from .StorageEngine import StorageEngine
 from .ClassInfo import ClassInfo
 
 T = TypeVar('T', bound='Args')
@@ -39,22 +40,21 @@ class Args:
 
 @dataclass
 class MergeArgs(Args):
-	storage_engine: 'StorageEngine' = field(kw_only=True)
+	storage_engine: StorageEngine = field(kw_only=True)
 	context: Dict[str, Any] = field(kw_only=True)
 	is_dirty: Dict[int, bool] = field(kw_only=True)
 	encodes: Dict[str, Any] = field(kw_only=True)
 	base_name: str = field(kw_only=True)
 	type: Type = field(kw_only=True)
 
-
 @dataclass
 class SetupArgs(Args):
-	storage_engine: 'StorageEngine' = field(kw_only=True)
+	storage_engine: StorageEngine = field(kw_only=True)
 	class_info: ClassInfo = field(kw_only=True)
 
 @dataclass
 class DecodeArgs(Args):
-	storage_engine: 'StorageEngine' = field(kw_only=True)
+	storage_engine: StorageEngine = field(kw_only=True)
 	encodes: Dict[str, Any] = field(kw_only=True)
 	base_name: str = field(kw_only=True)
 	type: Type = field(kw_only=True)

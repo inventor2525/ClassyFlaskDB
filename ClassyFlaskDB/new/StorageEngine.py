@@ -1,63 +1,51 @@
 from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple
-from .Transcoder import *
+from abc import ABC, abstractmethod, abstractproperty
 from .ClassInfo import *
 
 T = TypeVar('T')
-class StorageEngineQuery(ABC, Generic[T]): #TODO, somehow generically include with StorageEngine so a StorageEngine sub class has to define a StorageEngineQuery to use. Also somehow include T in StorageEngineQuery as a generic. Essentially I'm re-building a thin orm here, so... look at sql alchamy's for reference
+class StorageEngineQuery(ABC, Generic[T]):
 	@abstractmethod
-	def all(self) -> Iterator[T]:
-		pass
+	def filter_by_id(self, obj_id: Any) -> T:
+		...
 	
 	@abstractmethod
-	def id(self, id:Any) -> T:
-		'''Returns a single queried object where query.id == id'''
-		pass
+	def all(self) -> Iterator[T]:
+		...
 
-T = TypeVar('T', bound=Transcoder)
-U = TypeVar('U')
+T = TypeVar('T')
 
 @dataclass
 class StorageEngine(ABC):
-	transcoder_types:List[Type[Transcoder]] = field(default_factory=list, kw_only=True)
 	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
 	
-	def add(self, transcoder:Type[T]) -> Type[T]: #TODO:  + priority
-		'''
-		Decorator you can use to keep track of which
-		transcoders can be used with this type of StorageEngine.
-		'''
-		self.transcoder_types.append(transcoder)
-		return transcoder
-	
-	# def get_transcoder_type(self, classInfo:ClassInfo, field:Field) -> Type[Transcoder]:
-	# 	for transcoder_type in self.transcoder_types:
-	# 		if transcoder_type.validate(classInfo, field):
-	# 			return transcoder_type
-	# 	raise ValueError(f"There is no suitable transcoder type provided for {classInfo.qualname}.{field.name} ({field.type})")
-	
-	# def get_transcoder(self, classInfo:ClassInfo, field:Field) -> Transcoder:
-	# 	transcoder_type = self.get_transcoder_type(classInfo, field)
-	# 	return transcoder_type(self.context, classInfo, field)
-		
-	# def setup(self, registry:Dict[str, type]):
-	# 	for cls in registry.values():
-	# 		classInfo = ClassInfo.get(cls)
-	# 		for field in classInfo.fields.values():
-	# 			transcoder_type = self.get_transcoder_type(classInfo, field)
-	# 			transcoder_type.setup(classInfo, field)
+	@abstractproperty
+	def transcoders(self) -> Iterator['Transcoder']:
+		...
 	
 	@abstractmethod
-	def merge(self, obj:Any):
-		pass
+	def setup(self, data_decorator: 'DATADecorator'):
+		...
 	
 	@abstractmethod
-	def query(self, obj_type:Type[U]) -> StorageEngineQuery[U]:
-		pass
+	def merge(self, obj: Any, persist: bool = False):
+		...
+	
+	@abstractmethod
+	def get_transcoder_type(self, type_: Type) -> Type['Transcoder']:
+		...
+	
+	@abstractmethod
+	def query(self, cls: Type[T]) -> StorageEngineQuery[T]:
+		...
 
+@dataclass
 class TranscoderCollection:
-    def __init__(self):
-        self.transcoders = []
+	transcoders:List['Transcoder'] = field(default_factory=list)
+	
+	def add(self, transcoder_cls):
+		self.transcoders.append(transcoder_cls)
+		return transcoder_cls
 
-    def add(self, transcoder_cls):
-        self.transcoders.append(transcoder_cls)
-        return transcoder_cls
+from .DATADecorator import *
+#imported here to avoid circular reference but fulfill the
+#IDE's curiosity about those forward references above.

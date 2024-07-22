@@ -13,7 +13,7 @@ class Transcoder:
                 return True
         return False
     
-    @classmethod
+    @abstractclassmethod
     def validate(cls, type_: Type) -> bool:
         return False
 
@@ -25,7 +25,7 @@ class Transcoder:
     def _merge(cls, merge_args: MergeArgs, value: Any) -> None:
         pass
     
-    @classmethod
+    @abstractclassmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
         pass
 
@@ -46,15 +46,16 @@ class Transcoder:
                 cls._merge(merge_args, value)
         cls._encode(merge_args, value)
 
-    @classmethod
+    @abstractclassmethod
     def decode(cls, decode_args: DecodeArgs) -> Any:
         return None
-    
-    @classmethod
-    def hash_values(cls, value: Any, deep: bool = False) -> List[Union[str, int, float]]:
-        raise NotImplementedError("Subclasses must implement hash_values method")
 
 class LazyLoadingTranscoder(Transcoder):
-    @classmethod
+    @abstractclassmethod
     def create_lazy_instance(self, cf_instance: CFInstance) -> Any:
-        pass
+        '''
+        Creates an instance of a queried object, having in it's
+        _cf_instance all it needs to decode it's fields lazily
+        as they are first accessed.
+        '''
+        ...

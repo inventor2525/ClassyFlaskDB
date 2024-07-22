@@ -19,15 +19,7 @@ class DATADecorator(InfoDecorator):
 	'''
 	
 	class Interface(AutoID.Interface, DirtyDecorator.Interface):
-		__transcoders__:Dict[str, Transcoder]
 		_cf_instance: Optional['CFInstance'] = None
-		'''These are only those that have had their fields 'poked' so far. Use __get_transcoder__ if you want to do some digging.'''
-		def __get_transcoder__(self, name:str, default=object()) -> Transcoder:
-			'''
-			Lazily creates a transcoder if it doesn't already exist and returns it if it does.
-			Also calls set on the transcoder if default is passed, before returning.
-			'''
-			pass
 		
 	@overload
 	def __call__(self, cls:Type[T]) -> Union[Type[T], Type[AutoID.Interface]]:
@@ -56,33 +48,25 @@ class DATADecorator(InfoDecorator):
 		self.storage_engine = storage_engine
 		
 		for cls in self.registry.values():
-			classInfo = ClassInfo.get(cls)
-			
-			cls.__transcoders__ = {}
-			for field_name, field_info in classInfo.fields.items():
-				transcoder_type = self.storage_engine.get_transcoder_type(field_info.type)
-				cls.__transcoders__[field_name] = transcoder_type()	
-				
 			old_getattr = cls.__getattribute__
 			
-			def __getattribute__(self:'DATADecorator.Interface', name:str):
+			def __getattribute__(self:'DATADecorator.Interface', field_name:str):
 				cf_instance = CFInstance.get(self)
 				if cf_instance is not MISSING and cf_instance is not None:
-					self_type = type(self)
-					class_info = ClassInfo.get(self_type)
+					class_info = ClassInfo.get(type(self))
 					
-					if name in class_info.fields and name not in cf_instance.loaded_fields:
-						field = class_info.fields[name]
-						transcoder = self_type.__transcoders__[name]
+					if field_name in class_info.fields and field_name not in cf_instance.loaded_fields:
+						field = class_info.fields[field_name]
+						transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type)
 						decode_args = cf_instance.decode_args.new(
-							base_name = field.name,
+							base_name = field_name,
 							type = field.type
 						)
 						value = transcoder.decode(decode_args)
-						object.__setattr__(self, name, value)
-						cf_instance.loaded_fields.add(name)
+						object.__setattr__(self, field_name, value)
+						cf_instance.loaded_fields.add(field_name)
 						return value
 					
-				return old_getattr(self, name)
+				return old_getattr(self, field_name)
 
 			cls.__getattribute__ = __getattribute__

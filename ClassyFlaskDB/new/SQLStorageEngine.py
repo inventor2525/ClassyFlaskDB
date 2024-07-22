@@ -6,7 +6,7 @@ from datetime import datetime
 import uuid
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
-from ClassyFlaskDB.new.StorageEngine import StorageEngine, TranscoderCollection
+from ClassyFlaskDB.new.StorageEngine import StorageEngine, StorageEngineQuery, TranscoderCollection
 from ClassyFlaskDB.new.Transcoder import Transcoder, LazyLoadingTranscoder
 from ClassyFlaskDB.new.Args import MergeArgs, SetupArgs, DecodeArgs, CFInstance
 from ClassyFlaskDB.new.ClassInfo import ClassInfo, ID_Type
@@ -22,21 +22,25 @@ class SQLMergeArgs(MergeArgs):
 sql_transcoder_collection = TranscoderCollection()
 
 T = TypeVar('T')
-class SQLAlchemyStorageEngine(StorageEngine):
-    def __init__(self, connection_string: str, data_decorator: DATADecorator, extra_transcoders: TranscoderCollection=None):
+class SQLStorageEngine(StorageEngine):
+    @property
+    def transcoders(self) -> Iterator[Transcoder]:
+        for transcoder in self._extra_transcoders:
+            yield transcoder
+        for transcoder in sql_transcoder_collection.transcoders:
+            yield transcoder
+    
+    def __init__(self, connection_string: str, data_decorator: DATADecorator, extra_transcoders: List[Transcoder]=[]):
         super().__init__()
         self.engine = create_engine(connection_string)
         self.session_maker = sessionmaker(bind=self.engine)
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)
-        if extra_transcoders:
-            self.transcoders = list(extra_transcoders.transcoders)
-            self.transcoders.extend(sql_transcoder_collection.transcoders)
-        else:
-            self.transcoders = list(sql_transcoder_collection.transcoders)
-        self.transcoder_map:Dict[Type,Transcoder] = {}
-        self.data_decorator = data_decorator
         
+        self._extra_transcoders = extra_transcoders
+        self.transcoder_map:Dict[Type,Transcoder] = {}
+        
+        self.data_decorator = data_decorator
         self.data_decorator.finalize(self)
         self.setup(self.data_decorator)
 
@@ -64,10 +68,13 @@ class SQLAlchemyStorageEngine(StorageEngine):
             transcoder = self.get_transcoder_type(type(obj))
             transcoder.merge(merge_args, obj)
             session.commit()
-
+    
+    def query(self, cls: Type[T]) -> 'SQLStorageEngineQuery[T]':
+        return SQLStorageEngineQuery(self, cls)
+    
     def get_table_name(self, cls: Type) -> str:
         return f"obj_{cls.__name__}"
-
+    
     def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
         if type_ in self.transcoder_map:
             return self.transcoder_map[type_]
@@ -80,64 +87,62 @@ class SQLAlchemyStorageEngine(StorageEngine):
                 pass
         raise ValueError(f"No suitable transcoder found for {type_}")
     
-    def query(self, cls: Type[T]) -> 'SQLAlchemyStorageEngineQuery[T]':
-        return SQLAlchemyStorageEngineQuery(self, cls)
-    
     def get_table_by_name(self, table_name: str) -> Table:
         if table_name in self.metadata.tables:
             return self.metadata.tables[table_name]
         else:
             raise ValueError(f"Table '{table_name}' not found in metadata")
+    
+    def get_table_by_type(self, type_:Type) -> Table:
+        table_name = self.get_table_name(type_)
+        return self.get_table_by_name(table_name)
 
 T = TypeVar('T')
-class SQLAlchemyStorageEngineQuery(Generic[T]):
-    def __init__(self, storage_engine: SQLAlchemyStorageEngine, cls: Type[T]):
+class SQLStorageEngineQuery(StorageEngineQuery[T]):
+    def __init__(self, storage_engine: SQLStorageEngine, cls: Type[T]):
         self.storage_engine = storage_engine
         self.cls = cls
-        self.table = storage_engine.metadata.tables[storage_engine.get_table_name(cls)]
-        self.query = select(self.table)
+        
+        self.table = storage_engine.get_table_by_type(cls)
         self.transcoder:LazyLoadingTranscoder = storage_engine.get_transcoder_type(cls)
         if not issubclass(self.transcoder, LazyLoadingTranscoder):
             raise ValueError(f"Transcoder for {cls} does not support lazy loading")
-
-    def filter_by_id(self, id_value: Any) -> T:
-        class_info = ClassInfo.get(self.cls)
-        primary_key_name = class_info.primary_key_name
-        self.query = self.query.where(getattr(self.table.c, primary_key_name) == id_value)
-        
-        # Check context first
-        context_obj = self.storage_engine.context.get(self.cls, {}).get(id_value, MISSING)
+    
+    def filter_by_id(self, obj_id: Any) -> T:
+        # Check context first:
+        context_obj = self._get_from_context(obj_id)
         if context_obj is not MISSING:
             return context_obj
-
+        
+        # Create query:
+        class_info = ClassInfo.get(self.cls)
+        primary_key_name = class_info.primary_key_name
+        query = select(self.table).where(getattr(self.table.c, primary_key_name) == obj_id)
+        
+        # Run query:
         with self.storage_engine.session_maker() as session:
-            result = session.execute(self.query).first()
+            result = session.execute(query).first()
             if result:
-                encoded_values = result._asdict()
-                obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
-                
-                # Check context first
-                context_obj = self.storage_engine.context.get(self.cls, {}).get(obj_id, MISSING)
-                if context_obj is not MISSING:
-                    return context_obj
-                else:
-                    return self._create_lazy_instance(encoded_values)
+                return self._create_lazy_instance(result._asdict())
             return None
 
     def all(self) -> Iterator[T]:
         with self.storage_engine.session_maker() as session:
-            results = session.execute(self.query)
+            results = session.execute(select(self.table))
             for row in results:
                 encoded_values = row._asdict()
                 obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
                 
-                # Check context first
-                context_obj = self.storage_engine.context.get(self.cls, {}).get(obj_id, MISSING)
+                # Check context:
+                context_obj = self._get_from_context(obj_id)
                 if context_obj is not MISSING:
                     yield context_obj
-                else:
+                else: # Decode from query:
                     yield self._create_lazy_instance(encoded_values)
-
+    
+    def _get_from_context(self, id_value:Any):
+        return self.storage_engine.context.get(self.cls, {}).get(id_value, MISSING)
+    
     def _create_lazy_instance(self, encoded_values: Dict[str, Any]) -> T:
         instance = self.transcoder.create_lazy_instance(cf_instance = CFInstance(
             decode_args=DecodeArgs(
@@ -183,10 +188,6 @@ class BasicsTranscoder(Transcoder):
         value = decode_args.encodes[decode_args.base_name]
         return decode_args.type(value)
     
-    @classmethod
-    def hash_values(cls, value: Any, type_:Type, deep: bool = False) -> List[Union[str, int, float]]:
-        return [value]
-    
 @sql_transcoder_collection.add
 class DateTimeTranscoder(Transcoder):
     @classmethod
@@ -211,13 +212,6 @@ class DateTimeTranscoder(Transcoder):
         tz = decode_args.encodes[f"{decode_args.base_name}_timezone"]
         return dt.replace(tzinfo=tz) if tz else dt
     
-    @classmethod
-    def hash_values(cls, value: datetime, type_:Type, deep: bool = False) -> List[str]:
-        formatted = value.strftime("%Y-%m-%d %H:%M:%S.%f")
-        if value.tzinfo:
-            formatted += f" {value.tzinfo}"
-        return [formatted]
-    
 @sql_transcoder_collection.add
 class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
@@ -231,7 +225,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             table_name = f"obj_{setup_args.class_info.cls.__name__}"
             columns = []
             for field_name, field_info in setup_args.class_info.fields.items():
-                transcoder = setup_args.class_info.cls.__transcoders__[field_name]
+                transcoder = setup_args.storage_engine.get_transcoder_type(field_info.type)
                 new_columns = transcoder.setup(setup_args, field_name, field_info.type, setup_args.class_info.is_primary_key(field_info))
                 columns.extend(new_columns)
             Table(table_name, setup_args.storage_engine.metadata, *columns, extend_existing=True)
@@ -256,7 +250,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         primary_key_name = class_info.primary_key_name
         
         # Check if the object exists in the database
-        table = parent_merge_args.storage_engine.metadata.tables[parent_merge_args.storage_engine.get_table_name(type(obj))]
+        table = parent_merge_args.storage_engine.get_table_by_type(type(obj))
         primary_key = obj.get_primary_key()
         existing_obj = personal_merge_args.session.query(table).filter(getattr(table.c, primary_key_name) == primary_key).first()
         
@@ -268,7 +262,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
                 continue
             
             value = getattr(obj, field.name)
-            transcoder = obj.__transcoders__[field.name]
+            transcoder = parent_merge_args.storage_engine.get_transcoder_type(field.type)
             field_merge_args = personal_merge_args.new(
                 base_name = field.name,
                 type = field.type
@@ -307,13 +301,6 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         type_name = decode_args.encodes[f"{decode_args.base_name}_type"]
         obj_type = decode_args.storage_engine.data_decorator.registry[type_name]
         return decode_args.storage_engine.query(obj_type).filter_by_id(id_value)
-    
-    @classmethod
-    def hash_values(cls, value: Any, type_:Type, deep: bool = False) -> List[str]:
-        class_info = ClassInfo.get(type(value))
-        if deep and class_info.id_type == ID_Type.HASHID:
-            value.new_id(deep=True)
-        return [value.get_primary_key()]
     
     @classmethod
     def create_lazy_instance(cls, cf_instance: CFInstance) -> Any:
@@ -358,10 +345,6 @@ class EnumTranscoder(Transcoder):
     def decode(cls, decode_args: DecodeArgs) -> Enum:
         enum_value = decode_args.encodes[decode_args.base_name]
         return decode_args.type[enum_value]
-    
-    @classmethod
-    def hash_values(cls, value: Enum, type_:Type, deep: bool = False) -> List[str]:
-        return [str(value)]
     
 @sql_transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
@@ -468,15 +451,6 @@ class ListTranscoder(LazyLoadingTranscoder):
         # Pre-populate the list with placeholder objects
         lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
         return lazy_list
-    
-    @classmethod
-    def hash_values(cls, value: List[Any], type_:Type, deep: bool = False) -> List[Any]:
-        h = []
-        value_type = get_args(type_)[0]
-        value_transcoder = cls.decode_args.storage_engine.get_transcoder_type(value_type)
-        for item in value:
-            h.extend(value_transcoder.hash_values(item, value_type, deep))
-        return h
 
 @sql_transcoder_collection.add
 class DictionaryTranscoder(LazyLoadingTranscoder):
@@ -575,16 +549,5 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
             dict_id = str(uuid.uuid4())
             cls.dict_id_mapping[id(value)] = dict_id
         return dict_id
-    
-    @classmethod
-    def hash_values(cls, value: Dict[Any, Any], type_:Type, deep: bool = False) -> List[Any]:
-        h = []
-        key_type, value_type = get_args(type_)
-        key_transcoder = cls.decode_args.storage_engine.get_transcoder_type(key_type)
-        value_transcoder = cls.decode_args.storage_engine.get_transcoder_type(value_type)
-        for k, v in value.items():
-            h.extend(key_transcoder.hash_values(k, key_type, deep))
-            h.extend(value_transcoder.hash_values(v, value_type, deep))
-        return h
 
     dict_id_mapping: Dict[int, str] = {}
