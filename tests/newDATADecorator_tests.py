@@ -367,8 +367,8 @@ class newDATADecorator_tests(unittest.TestCase):
 
 		# Create families
 		smith_family = ImmediateFamily("Smith", [alice, bob], [eve, adam], [[gma_eve, gpa_eve], [gma_adam, gpa_adam]])
-		eve_family = ImmediateFamily("Eve's Maiden", [], [gma_eve, gpa_eve], [])
-		adam_family = ImmediateFamily("Adam's Maiden", [], [gma_adam, gpa_adam], [])
+		eve_family = ImmediateFamily("Eve's Maiden", [eve], [gma_eve, gpa_eve], [])
+		adam_family = ImmediateFamily("Adam's Maiden", [adam], [gma_adam, gpa_adam], [])
 
 		# Set circular references
 		alice.family = smith_family
@@ -381,9 +381,7 @@ class newDATADecorator_tests(unittest.TestCase):
 		gpa_adam.family = adam_family
 
 		# Merge into database
-		data_engine.merge(smith_family)
-		data_engine.merge(eve_family)
-		data_engine.merge(adam_family)
+		data_engine.merge(alice)
 
 		# Query from database
 		queried_family = data_engine.query(ImmediateFamily).filter_by_id(smith_family.get_primary_key())
@@ -420,16 +418,19 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertIs(queried_family.grandparents, adam_queried.family.grandparents)
 
 		# Validate grandparents through immediate families
-		self.assertEqual(eve_queried.family.parents[0].name, gma_eve_queried.name)
-		self.assertEqual(eve_queried.family.parents[1].name, gpa_eve_queried.name)
-		self.assertEqual(adam_queried.family.parents[0].name, gma_adam_queried.name)
-		self.assertEqual(adam_queried.family.parents[1].name, gpa_adam_queried.name)
+		self.assertEqual(eve_queried.family.parents[0].name, eve.name)
+		self.assertEqual(eve_queried.family.parents[1].name, adam.name)
+		self.assertEqual(adam_queried.family.parents[0].name, eve.name)
+		self.assertEqual(adam_queried.family.parents[1].name, adam.name)
 
 		# Check object identity
-		self.assertIs(eve_queried.family.parents[0], gma_eve_queried)
-		self.assertIs(eve_queried.family.parents[1], gpa_eve_queried)
-		self.assertIs(adam_queried.family.parents[0], gma_adam_queried)
-		self.assertIs(adam_queried.family.parents[1], gpa_adam_queried)
+		self.assertIs(eve_queried.family.parents[0], eve_queried)
+		self.assertIs(eve_queried.family.parents[1], adam_queried)
+		self.assertIs(adam_queried.family.parents[0], eve_queried)
+		self.assertIs(adam_queried.family.parents[1], adam_queried)
+		
+		self.assertEqual(gma_eve_queried.family.children[0].family.children[0].age, alice.age)
+		self.assertEqual(gpa_adam_queried.family.children[0].family.children[1].age, bob.age)
 		
 	def test_hash_id(self):
 		DATA = DATADecorator()
@@ -468,9 +469,9 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_obj.name, "Test Object")
 		self.assertEqual(queried_obj.number, 42)
 		self.assertEqual(queried_obj.date, datetime(2023, 7, 21, 12, 0))
-		self.assertEqual(queried_obj.colors[0], Color.RED)
-		self.assertEqual(queried_obj.colors[1], Color.BLUE)
-		# self.assertEqual(queried_obj.colors, [Color.RED, Color.BLUE]) #TODO, this does not work, the above does
+		# self.assertEqual(queried_obj.colors[0], Color.RED)
+		# self.assertEqual(queried_obj.colors[1], Color.BLUE)
+		self.assertEqual(queried_obj.colors, [Color.RED, Color.BLUE])
 		self.assertEqual(queried_obj.metadata, {"x": 1.5, "y": 2.7})
 
 		# Store the initial ID
