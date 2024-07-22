@@ -7,11 +7,6 @@ from datetime import datetime
 import hashlib
 import uuid
 
-def get_semi_qual_name(type_: Type) -> str:
-    if ClassInfo.has_ClassInfo(type_):
-        return ClassInfo.get(type_).semi_qualname.replace('.', '_')
-    return type_.__name__
-
 T = TypeVar('T')
 @dataclass
 class AutoID:

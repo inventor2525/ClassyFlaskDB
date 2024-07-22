@@ -102,3 +102,9 @@ class ClassInfo:
 
 	def is_primary_key(self, field: Field) -> bool:
 		return field.name == self.primary_key_name
+	
+	@staticmethod
+	def get_semi_qual_name(type_: Type) -> str:
+		if ClassInfo.has_ClassInfo(type_):
+			return ClassInfo.get(type_).semi_qualname.replace('.', '_')
+		return type_.__name__
