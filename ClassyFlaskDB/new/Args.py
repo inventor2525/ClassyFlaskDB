@@ -58,7 +58,6 @@ class DecodeArgs(Args):
 	encodes: Dict[str, Any] = field(kw_only=True)
 	base_name: str = field(kw_only=True)
 	type: Type = field(kw_only=True)
-	#TODO: depth:int (one of the things that makes these args classes great is now in new we can incorporate a auto incremented number for 'depth' and only merge up to a depth limit)
 	
 @dataclass
 class CFInstance(Args):

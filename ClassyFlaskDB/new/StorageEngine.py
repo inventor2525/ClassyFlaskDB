@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple
 from abc import ABC, abstractmethod, abstractproperty
+from dataclasses import dataclass, field
 from .ClassInfo import *
 
 T = TypeVar('T')

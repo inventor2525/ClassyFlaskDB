@@ -162,11 +162,9 @@ class InstrumentedDict(dict):
 			pass
 
 	def __eq__(self, other):
+		self._ensure_fully_loaded()
 		if isinstance(other, InstrumentedDict):
-			self._ensure_fully_loaded()
 			other._ensure_fully_loaded()
-		elif isinstance(other, dict):
-			self._ensure_fully_loaded()
 		return super().__eq__(other)
 
 	def __ne__(self, other):

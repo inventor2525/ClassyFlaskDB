@@ -76,3 +76,21 @@ class InstrumentedList(list):
 	def __iter__(self):
 		for i in range(len(self)):
 			yield self[i]
+	
+	def _ensure_fully_loaded(self):
+		"""Ensure all items are loaded before comparison."""
+		for item in self:
+			pass
+
+	def __eq__(self, other):
+		self._ensure_fully_loaded()
+		if isinstance(other, InstrumentedList):
+			other._ensure_fully_loaded()
+		return super().__eq__(other)
+
+	def __ne__(self, other):
+		return not self.__eq__(other)
+
+	def __hash__(self):
+		self._ensure_fully_loaded()
+		return super().__hash__()

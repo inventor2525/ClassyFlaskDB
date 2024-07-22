@@ -1,6 +1,6 @@
 from .ClassInfo import *
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
-from typing import TypeVar, Type, Protocol, Any, get_origin, get_args
+from typing import List, Dict, TypeVar, Type, Any, get_origin, get_args, Callable
 from dataclasses import dataclass, Field, MISSING
 from enum import Enum
 from datetime import datetime
@@ -22,7 +22,7 @@ class AutoID:
 	
 	class Interface(ClassInfo.Interface):
 		auto_id:str
-		def new_id(self):
+		def new_id(self, deep: bool = False):
 			pass
 		def get_primary_key(self) -> Any:
 			pass
@@ -44,7 +44,8 @@ class AutoID:
 		else:
 			def add_id(classInfo:ClassInfo, new_id:Callable[[],None]):
 				classInfo.primary_key_name = "auto_id"
-				setattr(classInfo.cls, "new_id", new_id)
+				if not hasattr(classInfo.cls, "new_id"):
+					setattr(classInfo.cls, "new_id", new_id)
 				setattr(classInfo.cls, classInfo.primary_key_name, None)
 				classInfo.cls.__annotations__[classInfo.primary_key_name] = str
 				f = Field(default=MISSING, default_factory=new_id, init=True, repr=True, hash=None, compare=True, metadata=None, kw_only=MISSING)
@@ -53,7 +54,7 @@ class AutoID:
 				classInfo.fields[f.name] = f
 			
 			if self.id_type == ID_Type.UUID:
-				def new_id(self):
+				def new_id(self, deep: bool = False):
 					self.auto_id = str(uuid.uuid4())
 				add_id(classInfo, new_id)
 			elif self.id_type == ID_Type.HASHID:

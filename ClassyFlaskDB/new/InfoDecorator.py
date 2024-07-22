@@ -1,3 +1,5 @@
+from typing import TypeVar, Dict, Iterable, overload, List, ForwardRef, Callable
+from dataclasses import dataclass, field
 from .ClassInfo import *
 
 T = TypeVar('T')
