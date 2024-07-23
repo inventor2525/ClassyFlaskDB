@@ -39,7 +39,7 @@ class DATADecorator(InfoDecorator):
 
 	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Union[Type[T], Type[AutoID.Interface]]:
 		cls = super().decorate(cls, included_fields, excluded_fields)
-		cls = AutoID(id_type)(cls)
+		cls = AutoID(id_type, None if hashed_fields is None else set(hashed_fields))(cls)
 		#more cls mods in finalize!
 		return cls
 	

@@ -1,7 +1,7 @@
 from .ClassInfo import *
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
-from typing import List, Dict, TypeVar, Type, Any, get_origin, get_args, Callable
-from dataclasses import dataclass, Field, MISSING
+from typing import List, Dict, TypeVar, Type, Set, Any, get_origin, get_args, Callable
+from dataclasses import dataclass, Field, MISSING, field
 from enum import Enum
 from datetime import datetime
 import hashlib
@@ -17,6 +17,9 @@ class AutoID:
 	This also modifies the init to create an initial id.
 	'''
 	id_type:ID_Type
+	hashed_fields:Set[str] = field(default=None)
+	
+	#static variables (because dataclass doesn't touch things without type hints):
 	_hash_functions = {}
 	_hash_function_list = []
 	
@@ -58,13 +61,15 @@ class AutoID:
 					self.auto_id = str(uuid.uuid4())
 				add_id(classInfo, new_id)
 			elif self.id_type == ID_Type.HASHID:
+				hashed_fields = self.hashed_fields
 				def new_id(self, deep: bool = False):
 					fields = []
 					for field_name, field_info in classInfo.fields.items():
 						if field_name != classInfo.primary_key_name:
-							value = getattr(self, field_name)
-							hash_func = AutoID.get_hash_function(field_info.type)
-							fields.extend(hash_func(value, field_info.type, deep))
+							if hashed_fields is None or field_name in hashed_fields:
+								value = getattr(self, field_name)
+								hash_func = AutoID.get_hash_function(field_info.type)
+								fields.extend(hash_func(value, field_info.type, deep))
 					self.auto_id = hashlib.sha256(",".join(map(str, fields)).encode("utf-8")).hexdigest()
 				add_id(classInfo, new_id)
 			else:
