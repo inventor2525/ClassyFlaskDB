@@ -41,7 +41,7 @@ class SQLStorageEngine(StorageEngine):
         self.transcoder_map:Dict[Type,Transcoder] = {}
         
         self.data_decorator = data_decorator
-        self.data_decorator.finalize(self)
+        self.data_decorator.finalize()
         self.setup(self.data_decorator)
 
     def setup(self, data_decorator: DATADecorator):
@@ -125,7 +125,29 @@ class SQLStorageEngineQuery(StorageEngineQuery[T]):
             if result:
                 return self._create_lazy_instance(result._asdict())
             return None
-
+    
+    def first(self) -> T:
+        # Create query:
+        class_info = ClassInfo.get(self.cls)
+        primary_key_name = class_info.primary_key_name
+        query = select(self.table)
+        
+        # Run query:
+        with self.storage_engine.session_maker() as session:
+            result = session.execute(query).first()
+            
+            if result:
+                encodes = result._asdict()
+                
+                # Check context first:
+                obj_id = encodes[primary_key_name]
+                context_obj = self._get_from_context(obj_id)
+                if context_obj is not MISSING:
+                    return context_obj
+                
+                return self._create_lazy_instance(encodes)
+            return None
+    
     def all(self) -> Iterator[T]:
         with self.storage_engine.session_maker() as session:
             results = session.execute(select(self.table))

@@ -10,6 +10,10 @@ class StorageEngineQuery(ABC, Generic[T]):
 		...
 	
 	@abstractmethod
+	def first(self) -> T:
+		...
+		
+	@abstractmethod
 	def all(self) -> Iterator[T]:
 		...
 

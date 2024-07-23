@@ -43,9 +43,8 @@ class DATADecorator(InfoDecorator):
 		#more cls mods in finalize!
 		return cls
 	
-	def finalize(self, storage_engine: StorageEngine):
+	def finalize(self):
 		super().finalize()
-		self.storage_engine = storage_engine
 		
 		for cls in self.registry.values():
 			old_getattr = cls.__getattribute__

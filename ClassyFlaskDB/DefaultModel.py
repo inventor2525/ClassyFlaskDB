@@ -1,4 +1,4 @@
-from ClassyFlaskDB.DATA import *
+from ClassyFlaskDB.new.SQLStorageEngine import *
 from datetime import datetime
 from typing import Any, List, TypeVar
 import tzlocal
@@ -41,7 +41,7 @@ class ObjectTagsProxy():
 			self._tags_by_key[name] = new_tag
 			self._tags.append(new_tag)
 
-DATA = DATADecorator(auto_decorate_as_dataclass=False)
+DATA = DATADecorator()
 
 T = TypeVar('T')
 @DATA
