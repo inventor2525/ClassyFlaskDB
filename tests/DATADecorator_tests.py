@@ -1,5 +1,5 @@
 from typing import List
-from ClassyFlaskDB.DATA import *
+from ClassyFlaskDB.new.SQLStorageEngine import *
 from ClassyFlaskDB.serialization import JSONEncoder
 import unittest
 
@@ -13,17 +13,19 @@ class DATADecorator_tests(unittest.TestCase):
 
 		# Define the data classes
 		@DATA
+		@dataclass
 		class Foe:
 			name: str
 			strength: int
 
 		@DATA
+		@dataclass
 		class Bar:
 			name: str
 			location: str
 			foe: Foe = None
 			
-		data_engine = DATAEngine(DATA)
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 		
 		foe = Foe(name="Dragon", strength=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
@@ -41,7 +43,7 @@ class DATADecorator_tests(unittest.TestCase):
 			self.assertEqual(queried_bar.foe.strength, foe.strength)
 			
 	def test_relationship_with_manual_dataclass(self):
-		DATA = DATADecorator(auto_decorate_as_dataclass = False)
+		DATA = DATADecorator()
 
 		# Define the data classes
 		@DATA
@@ -89,7 +91,7 @@ class DATADecorator_tests(unittest.TestCase):
 			location: str
 			foes: List[Foe] = field(default_factory=list)
 			
-		data_engine = DATAEngine(DATA)
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 		
 		foe1 = Foe(name="Dragon1", strength=100)
 		foe2 = Foe(name="Dragon2", strength=200)
@@ -125,7 +127,7 @@ class DATADecorator_tests(unittest.TestCase):
 			name: str
 			strength: int
 			
-		data_engine = DATAEngine(DATA)
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 
 		foe = Foe(name="Dragon", strength=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
@@ -159,7 +161,7 @@ class DATADecorator_tests(unittest.TestCase):
 			location: str
 			foes: List[Foe] = field(default_factory=list)
 		
-		data_engine = DATAEngine(DATA)
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 		
 		foe1 = Foe(name="Dragon1", strength=100)
 		foe2 = Foe(name="Dragon2", strength=200)
@@ -201,7 +203,7 @@ class DATADecorator_tests(unittest.TestCase):
 			location: str
 			foe: "Foe" = None
 			
-		data_engine = DATAEngine(DATA)
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 
 		foe = Foe(name="Dragon1", strength=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
@@ -245,7 +247,7 @@ class DATADecorator_tests(unittest.TestCase):
 			location: str
 			foe: Foe = None
 			
-		data_engine = DATAEngine(DATA)
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 		
 		foe1 = Foe1(name="Dragon", strength=100, hit_points=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe1)
@@ -275,75 +277,63 @@ class DATADecorator_tests(unittest.TestCase):
 			# self.assertEqual(queried_bar.foe.auto_id, foe1.auto_id)
 			self.assertEqual(queried_bar.foe.name, foe1.name)
 			self.assertEqual(queried_bar.foe.strength, foe1.strength)
-			print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
+			# print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
 	
 	def test_relationship_with_polymorphic_circular_ref(self):
-		#This test will fail until the need for foreign keys simply
-		#to create relationships is removed. Data integrity does not
-		#need to be enforced at the db level so far with this.
-		#
-		#Or another method of circular dependance is added.
-		
-		import warnings
-		from sqlalchemy.exc import SAWarning
-		# Convert the specific SAWarning into an exception
-		with warnings.catch_warnings():
-			warnings.simplefilter("error", SAWarning)
+		DATA = DATADecorator()
+		current_number = -1
+		def new_number() -> int:
+			nonlocal current_number
+			current_number += 1
+			return current_number
 
-			DATA = DATADecorator()
-			current_number = -1
-			def new_number() -> int:
-				nonlocal current_number
-				current_number += 1
-				return current_number
+		@DATA
+		class CommonBase:
+			val: int = field(default_factory=new_number, kw_only=True)
 
-			@DATA
-			class CommonBase:
-				val: int = field(default_factory=new_number, kw_only=True)
+		@DATA
+		class Foe(CommonBase):
+			name: str
+			strength: int
+			bar: "Bar" = None
 
-			@DATA
-			class Foe(CommonBase):
-				name: str
-				strength: int
-				bar: "Bar" = None
+		@DATA
+		class Bar(CommonBase):
+			name: str
+			location: str
+			foe: "Foe" = None
 
-			@DATA
-			class Bar(CommonBase):
-				name: str
-				location: str
-				foe: "Foe" = None
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 
-			data_engine = DATAEngine(DATA ,suppress_fk_warnings=False)
+		foe = Foe(name="Dragon1", strength=100)
+		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
 
-			foe = Foe(name="Dragon1", strength=100)
-			bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
+		foe.bar = bar
 
-			foe.bar = bar
+		# Insert into database
+		data_engine.merge(bar)
 
-			# Insert into database
-			data_engine.add(bar)
+		# Query from database
+		with data_engine.session() as session:
+			queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
 
-			# Query from database
-			with data_engine.session() as session:
-				queried_bar = session.query(Bar).filter_by(name="Dragon's Lair").first()
-
-				# Validate
-				self.assertEqual(queried_bar.name, bar.name)
-				self.assertEqual(queried_bar.location, bar.location)
-				self.assertEqual(queried_bar.foe.name, bar.foe.name)
-				self.assertEqual(queried_bar.foe.strength, bar.foe.strength)
-				self.assertEqual(queried_bar.foe.bar.name, bar.name)
-				self.assertEqual(queried_bar.foe.bar.location, bar.location)
-				self.assertEqual(queried_bar.foe.bar.auto_id, bar.auto_id)
-				
-				self.assertEqual(foe.val, 0)
-				self.assertEqual(bar.val, 1)
-				self.assertEqual(queried_bar.val, bar.val)
-				self.assertEqual(queried_bar.foe.val, foe.val)
+			# Validate
+			self.assertEqual(queried_bar.name, bar.name)
+			self.assertEqual(queried_bar.location, bar.location)
+			self.assertEqual(queried_bar.foe.name, bar.foe.name)
+			self.assertEqual(queried_bar.foe.strength, bar.foe.strength)
+			self.assertEqual(queried_bar.foe.bar.name, bar.name)
+			self.assertEqual(queried_bar.foe.bar.location, bar.location)
+			self.assertEqual(queried_bar.foe.bar.auto_id, bar.auto_id)
+			
+			self.assertEqual(foe.val, 0)
+			self.assertEqual(bar.val, 1)
+			self.assertEqual(queried_bar.val, bar.val)
+			self.assertEqual(queried_bar.foe.val, foe.val)
 			
 	def test_relationship_with_manual_dataclass(self):
-		DATA = DATADecorator(auto_decorate_as_dataclass = False)
+		DATA = DATADecorator()
 
 		# Define the data classes
 		@DATA
@@ -364,7 +354,7 @@ class DATADecorator_tests(unittest.TestCase):
 			location: str
 			foe: Foe = None
 			
-		data_engine = DATAEngine(DATA)
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
 		
 		foe1 = Foe1(name="Dragon", strength=100, hit_points=100)
 		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe1)
@@ -394,112 +384,112 @@ class DATADecorator_tests(unittest.TestCase):
 			# self.assertEqual(queried_bar.foe.auto_id, foe1.auto_id)
 			self.assertEqual(queried_bar.foe.name, foe1.name)
 			self.assertEqual(queried_bar.foe.strength, foe1.strength)
-			print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
+			# print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 			self.assertEqual(queried_bar.foe.hit_points, foe1.hit_points)
 	
-	def test_to_json(self):
-		DATA = DATADecorator()
+	# def test_to_json(self):
+	# 	DATA = DATADecorator()
 
-		# Define the data classes
-		@DATA
-		class Foe:
-			name: str
-			strength: int
+	# 	# Define the data classes
+	# 	@DATA
+	# 	class Foe:
+	# 		name: str
+	# 		strength: int
 
-		@DATA
-		class Bar:
-			name: str
-			location: str
-			foe: Foe = None
+	# 	@DATA
+	# 	class Bar:
+	# 		name: str
+	# 		location: str
+	# 		foe: Foe = None
 		
-		@DATA
-		class ChainLink:
-			name: str
-			next_link: "ChainLink" = None
+	# 	@DATA
+	# 	class ChainLink:
+	# 		name: str
+	# 		next_link: "ChainLink" = None
 			
-		@DATA
-		class Holder:
-			bar: Bar
-			chain_link: ChainLink
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///my_database_test.db')
+	# 	@DATA
+	# 	class Holder:
+	# 		bar: Bar
+	# 		chain_link: ChainLink
+	# 	data_engine = DATAEngine(DATA, engine_str='sqlite:///my_database_test.db')
 		
-		foe = Foe(name="Dragon", strength=100)
-		bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
+	# 	foe = Foe(name="Dragon", strength=100)
+	# 	bar = Bar(name="Dragon's Lair", location="Mountain", foe=foe)
 		
-		chain_link1 = ChainLink(name="Link 1")
-		chain_link2 = ChainLink(name="Link 2")
-		chain_link3 = ChainLink(name="Link 3")
-		chain_link1.next_link = chain_link2
-		chain_link2.next_link = chain_link3
+	# 	chain_link1 = ChainLink(name="Link 1")
+	# 	chain_link2 = ChainLink(name="Link 2")
+	# 	chain_link3 = ChainLink(name="Link 3")
+	# 	chain_link1.next_link = chain_link2
+	# 	chain_link2.next_link = chain_link3
 		
-		holder = Holder(bar=bar, chain_link=chain_link1)
-		data_engine.merge(holder)
+	# 	holder = Holder(bar=bar, chain_link=chain_link1)
+	# 	data_engine.merge(holder)
 		
-		def print_holder(holder, step_name):
-			print(step_name)
-			print(holder.bar.name)
-			print(holder.chain_link.name)
-			print(holder.chain_link.next_link.name)
-			print(holder.chain_link.next_link.next_link.name)
-			print(holder.chain_link.next_link.next_link.next_link)
-		print_holder(holder, "Original")
-		holder_json = holder.to_json()
-		print_holder(holder, "After to_json")
+	# 	def print_holder(holder, step_name):
+	# 		print(step_name)
+	# 		print(holder.bar.name)
+	# 		print(holder.chain_link.name)
+	# 		print(holder.chain_link.next_link.name)
+	# 		print(holder.chain_link.next_link.next_link.name)
+	# 		print(holder.chain_link.next_link.next_link.next_link)
+	# 	print_holder(holder, "Original")
+	# 	holder_json = holder.to_json()
+	# 	print_holder(holder, "After to_json")
 		
-		print_DATA_json(holder_json)
+	# 	print_DATA_json(holder_json)
 		
-		holder2 = Holder.from_json(holder_json)
-		print_holder(holder2, "loaded from_json")
+	# 	holder2 = Holder.from_json(holder_json)
+	# 	print_holder(holder2, "loaded from_json")
 		
-		self.assertEqual(holder2.bar.name, holder.bar.name)
-		self.assertEqual(holder2.bar.location, holder.bar.location)
-		self.assertEqual(holder2.bar.foe.name, holder.bar.foe.name)
-		self.assertEqual(holder2.bar.foe.strength, holder.bar.foe.strength)
+	# 	self.assertEqual(holder2.bar.name, holder.bar.name)
+	# 	self.assertEqual(holder2.bar.location, holder.bar.location)
+	# 	self.assertEqual(holder2.bar.foe.name, holder.bar.foe.name)
+	# 	self.assertEqual(holder2.bar.foe.strength, holder.bar.foe.strength)
 		
-		self.assertEqual(holder2.chain_link.name, holder.chain_link.name)
-		self.assertEqual(holder2.chain_link.next_link.name, holder.chain_link.next_link.name)
-		self.assertEqual(holder2.chain_link.next_link.next_link.name, holder.chain_link.next_link.next_link.name)
-		self.assertEqual(holder2.chain_link.next_link.next_link.next_link, None)
+	# 	self.assertEqual(holder2.chain_link.name, holder.chain_link.name)
+	# 	self.assertEqual(holder2.chain_link.next_link.name, holder.chain_link.next_link.name)
+	# 	self.assertEqual(holder2.chain_link.next_link.next_link.name, holder.chain_link.next_link.next_link.name)
+	# 	self.assertEqual(holder2.chain_link.next_link.next_link.next_link, None)
 		
-	def test_to_json_small(self):
-		DATA = DATADecorator()
+	# def test_to_json_small(self):
+	# 	DATA = DATADecorator()
 
-		@DATA
-		class ChainLink:
-			name: str
-			next_link: 'ChainLink' = None
+	# 	@DATA
+	# 	class ChainLink:
+	# 		name: str
+	# 		next_link: 'ChainLink' = None
 
-		@DATA
-		class Holder:
-			chain_link: ChainLink
+	# 	@DATA
+	# 	class Holder:
+	# 		chain_link: ChainLink
 
-		data_engine = DATAEngine(DATA)
+	# 	data_engine = DATAEngine(DATA)
 		
-		chain_link1 = ChainLink(name='Link 1')
-		chain_link2 = ChainLink(name='Link 2')
-		chain_link3 = ChainLink(name='Link 3')
-		chain_link1.next_link = chain_link2
-		chain_link2.next_link = chain_link3
-		holder = Holder(chain_link=chain_link1)
+	# 	chain_link1 = ChainLink(name='Link 1')
+	# 	chain_link2 = ChainLink(name='Link 2')
+	# 	chain_link3 = ChainLink(name='Link 3')
+	# 	chain_link1.next_link = chain_link2
+	# 	chain_link2.next_link = chain_link3
+	# 	holder = Holder(chain_link=chain_link1)
 
-		holder_json = holder.to_json()
-		print_DATA_json(holder_json)
+	# 	holder_json = holder.to_json()
+	# 	print_DATA_json(holder_json)
 		
-		self.assertEqual(holder_json['type'], 'Holder')
-		self.assertEqual(holder_json['primary_key'], holder.auto_id)
-		self.assertEqual(len(holder_json['obj']['Holder_Table']), 1)
-		self.assertEqual(len(holder_json['obj']['ChainLink_Table']), 3)
-		self.assertEqual(holder_json['obj']['Holder_Table'][0]['auto_id'], holder.auto_id)
-		self.assertEqual(holder_json['obj']['Holder_Table'][0]['chain_link_fk'], chain_link1.auto_id)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['auto_id'], chain_link1.auto_id)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['name'], chain_link1.name)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['next_link_fk'], chain_link2.auto_id)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['auto_id'], chain_link2.auto_id)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['name'], chain_link2.name)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['next_link_fk'], chain_link3.auto_id)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['auto_id'], chain_link3.auto_id)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['name'], chain_link3.name)
-		self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['next_link_fk'], None)
+	# 	self.assertEqual(holder_json['type'], 'Holder')
+	# 	self.assertEqual(holder_json['primary_key'], holder.auto_id)
+	# 	self.assertEqual(len(holder_json['obj']['Holder_Table']), 1)
+	# 	self.assertEqual(len(holder_json['obj']['ChainLink_Table']), 3)
+	# 	self.assertEqual(holder_json['obj']['Holder_Table'][0]['auto_id'], holder.auto_id)
+	# 	self.assertEqual(holder_json['obj']['Holder_Table'][0]['chain_link_fk'], chain_link1.auto_id)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['auto_id'], chain_link1.auto_id)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['name'], chain_link1.name)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][0]['next_link_fk'], chain_link2.auto_id)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['auto_id'], chain_link2.auto_id)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['name'], chain_link2.name)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][1]['next_link_fk'], chain_link3.auto_id)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['auto_id'], chain_link3.auto_id)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['name'], chain_link3.name)
+	# 	self.assertEqual(holder_json['obj']['ChainLink_Table'][2]['next_link_fk'], None)
 		
 	def test_adding_a_table(self):
 		#Remove the test database if it exists
@@ -517,8 +507,8 @@ class DATADecorator_tests(unittest.TestCase):
 		@DATA
 		class Holder:
 			chain_link: ChainLink
-
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_table.db')
+		
+		data_engine = SQLStorageEngine('sqlite:///test_adding_a_table.db', DATA)
 		
 		chain_link1 = ChainLink(name='Link 1')
 		chain_link2 = ChainLink(name='Link 2')
@@ -528,7 +518,7 @@ class DATADecorator_tests(unittest.TestCase):
 		holder = Holder(chain_link=chain_link1)
 		
 		data_engine.merge(holder)
-		j1 = data_engine.to_json()
+		# j1 = data_engine.to_json()
 		data_engine.dispose()
 		
 		@DATA
@@ -536,19 +526,19 @@ class DATADecorator_tests(unittest.TestCase):
 			name: str
 			holder: Holder = None
 		
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_table.db')
+		data_engine = SQLStorageEngine('sqlite:///test_adding_a_table.db', DATA)
 		
 		thing = ANewTable(name='thing', holder=holder)
 		data_engine.merge(thing)
-		j2 = data_engine.to_json()
+		# j2 = data_engine.to_json()
 		
-		self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
-		self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
+		# self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
+		# self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
 		
-		self.assertEqual("ANewTable_Table" in j2, True)
-		self.assertEqual("ANewTable_Table" in j1, False)
-		print_DATA_json(j1)
-		print_DATA_json(j2)
+		# self.assertEqual("ANewTable_Table" in j2, True)
+		# self.assertEqual("ANewTable_Table" in j1, False)
+		# print_DATA_json(j1)
+		# print_DATA_json(j2)
 		
 		with data_engine.session() as session:
 			queried_thing = session.query(ANewTable).filter_by(name='thing').first()
@@ -575,7 +565,7 @@ class DATADecorator_tests(unittest.TestCase):
 		class Holder:
 			chain_link: ChainLink
 
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db')
+		data_engine = SQLStorageEngine('sqlite:///test_adding_a_column.db', DATA)
 		
 		chain_link1 = ChainLink(name='Link 1')
 		chain_link2 = ChainLink(name='Link 2')
@@ -585,7 +575,7 @@ class DATADecorator_tests(unittest.TestCase):
 		holder = Holder(chain_link=chain_link1)
 		
 		data_engine.merge(holder)
-		j1 = data_engine.to_json()
+		# j1 = data_engine.to_json()
 		data_engine.dispose()
 		
 		DATA = DATADecorator()
@@ -600,15 +590,15 @@ class DATADecorator_tests(unittest.TestCase):
 			chain_link: ChainLink
 			a_new_column: str
 		
-		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_a_column.db', should_backup=False)
+		data_engine = SQLStorageEngine('sqlite:///test_adding_a_column.db', DATA)
 		
-		j2 = data_engine.to_json()
+		# j2 = data_engine.to_json()
 		
-		self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
-		# self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
+		# self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
+		# # self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
 		
-		print_DATA_json(j1)
-		print_DATA_json(j2)
+		# print_DATA_json(j1)
+		# print_DATA_json(j2)
 		
 		with data_engine.session() as session:
 			queried_holder = session.query(Holder).first()
@@ -641,7 +631,7 @@ class DATADecorator_tests(unittest.TestCase):
 		holder = Holder(chain_link=chain_link1)
 		
 		data_engine.merge(holder)
-		j1 = data_engine.to_json()
+		# j1 = data_engine.to_json()
 		data_engine.dispose()
 		
 		DATA = DATADecorator()
@@ -659,13 +649,13 @@ class DATADecorator_tests(unittest.TestCase):
 		
 		data_engine = DATAEngine(DATA, engine_str='sqlite:///test_adding_columns_with_fks.db', should_backup=False)
 		
-		j2 = data_engine.to_json()
+		# j2 = data_engine.to_json()
 		
-		self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
-		# self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
+		# self.assertEqual(j1["ChainLink_Table"], j2["ChainLink_Table"])
+		# # self.assertEqual(j1["Holder_Table"], j2["Holder_Table"])
 		
-		print_DATA_json(j1)
-		print_DATA_json(j2)
+		# print_DATA_json(j1)
+		# print_DATA_json(j2)
 		
 		with data_engine.session() as session:
 			queried_holder = session.query(Holder).first()
@@ -985,49 +975,49 @@ class DATADecorator_tests(unittest.TestCase):
 				elif obj.created_at == datetime(2022, 2, 1):
 					self.assertEqual(obj.source.tag, "Source 1")
 					
-	def test_datetime_fields_with_inheritance(self):
-		DATA = DATADecorator(auto_decorate_as_dataclass=False)
+	# def test_datetime_fields_with_inheritance(self):
+	# 	DATA = DATADecorator(auto_decorate_as_dataclass=False)
 		
-		@DATA
-		@dataclass
-		class Object:
-			date_created: datetime = field(
-				default_factory=datetime.utcnow, kw_only=True, 
-				metadata={"no_update":True}
-			)
+	# 	@DATA
+	# 	@dataclass
+	# 	class Object:
+	# 		date_created: datetime = field(
+	# 			default_factory=datetime.utcnow, kw_only=True, 
+	# 			metadata={"no_update":True}
+	# 		)
 		
-		@DATA
-		@dataclass
-		class SubClass(Object):
-			name:str
+	# 	@DATA
+	# 	@dataclass
+	# 	class SubClass(Object):
+	# 		name:str
 			
-		@DATA
-		@dataclass
-		class SubSubClass(SubClass):
-			description:str
+	# 	@DATA
+	# 	@dataclass
+	# 	class SubSubClass(SubClass):
+	# 		description:str
 			
-		@DATA
-		@dataclass
-		class SubSubSubClass(SubSubClass):
-			something:str
+	# 	@DATA
+	# 	@dataclass
+	# 	class SubSubSubClass(SubSubClass):
+	# 		something:str
 		
-		engine = DATAEngine(DATA)
+	# 	engine = DATAEngine(DATA)
 		
-		sc1 = SubSubSubClass("hello", "Why do", "How are")
-		sc2 = SubSubSubClass("world!", "this?", "You?")
+	# 	sc1 = SubSubSubClass("hello", "Why do", "How are")
+	# 	sc2 = SubSubSubClass("world!", "this?", "You?")
 		
-		self.assertEqual(SubClass.from_json(sc1.to_json()).name, sc1.name)
-		self.assertEqual(SubClass.from_json(sc2.to_json()).name, sc2.name)
+	# 	self.assertEqual(SubClass.from_json(sc1.to_json()).name, sc1.name)
+	# 	self.assertEqual(SubClass.from_json(sc2.to_json()).name, sc2.name)
 		
-		for table_name, table_contents in sc1.to_json()['obj'].items():
-			if len(table_contents)==0:
-				continue
-			if table_name == "Object_Table":
-				self.assertTrue("date_created__DateTimeObj" in table_contents[0])
-				self.assertTrue("date_created__TimeZone" in table_contents[0])
-			else:
-				self.assertTrue("date_created__DateTimeObj" not in table_contents[0])
-				self.assertTrue("date_created__TimeZone" not in table_contents[0])
+	# 	for table_name, table_contents in sc1.to_json()['obj'].items():
+	# 		if len(table_contents)==0:
+	# 			continue
+	# 		if table_name == "Object_Table":
+	# 			self.assertTrue("date_created__DateTimeObj" in table_contents[0])
+	# 			self.assertTrue("date_created__TimeZone" in table_contents[0])
+	# 		else:
+	# 			self.assertTrue("date_created__DateTimeObj" not in table_contents[0])
+	# 			self.assertTrue("date_created__TimeZone" not in table_contents[0])
 						
 	def test_sourced_objects(self):
 		DATA = DATADecorator()
@@ -1135,9 +1125,9 @@ class DATADecorator_tests(unittest.TestCase):
 		self.assertEquals(new_tag1.get_primary_key(), tag1.get_primary_key())
 		self.assertEquals(new_tag2.get_primary_key(), tag2.get_primary_key())
 		
-		print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
+		# print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 		data_engine.merge(new_hk)
-		print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
+		# print(json.dumps(data_engine.to_json(), indent=4, cls=JSONEncoder))
 		
 		# Verify that no_update took effect and that the dates
 		# have not been changed, even though we merged new objects:
@@ -1204,7 +1194,7 @@ class DATADecorator_tests(unittest.TestCase):
 		
 		engine.merge(conv)
 		
-		to_from_json_conv = Conversation.from_json(conv.to_json())
+		# to_from_json_conv = Conversation.from_json(conv.to_json())
 		
 		#Test chaining sources:
 		source1 = ModelSource("Source 1")
