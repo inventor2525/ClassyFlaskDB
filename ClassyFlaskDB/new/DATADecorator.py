@@ -46,26 +46,29 @@ class DATADecorator(InfoDecorator):
 	def finalize(self):
 		super().finalize()
 		
+		data_decorator_applied = object()
 		for cls in self.registry.values():
 			old_getattr = cls.__getattribute__
-			
-			def __getattribute__(self:'DATADecorator.Interface', field_name:str):
-				cf_instance = CFInstance.get(self)
-				if cf_instance is not MISSING and cf_instance is not None:
-					class_info = ClassInfo.get(type(self))
-					
-					if field_name in class_info.fields and field_name not in cf_instance.loaded_fields:
-						field = class_info.fields[field_name]
-						transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type)
-						decode_args = cf_instance.decode_args.new(
-							base_name = field_name,
-							type = field.type
-						)
-						value = transcoder.decode(decode_args)
-						object.__setattr__(self, field_name, value)
-						cf_instance.loaded_fields.add(field_name)
-						return value
-					
-				return old_getattr(self, field_name)
+			if not hasattr(old_getattr, "data_decorator_applied"):
+				def __getattribute__(self:'DATADecorator.Interface', field_name:str):
+					cf_instance = CFInstance.get(self)
+					if cf_instance is not MISSING and cf_instance is not None:
+						class_info = ClassInfo.get(type(self))
+						
+						if field_name in class_info.fields and field_name not in cf_instance.loaded_fields:
+							field = class_info.fields[field_name]
+							transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type)
+							decode_args = cf_instance.decode_args.new(
+								base_name = field_name,
+								type = field.type
+							)
+							value = transcoder.decode(decode_args)
+							object.__setattr__(self, field_name, value)
+							cf_instance.loaded_fields.add(field_name)
+							return value
+						
+					return object.__getattribute__(self, field_name)
 
-			cls.__getattribute__ = __getattribute__
+				cls.__getattribute__ = __getattribute__
+				cls.__getattribute__.data_decorator_applied = data_decorator_applied
+		print("done")

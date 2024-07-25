@@ -1,8 +1,9 @@
-from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData
+from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData, JSON
 from sqlalchemy.orm import sessionmaker
 from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
+from dateutil import tz
 import uuid
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
@@ -226,13 +227,25 @@ class DateTimeTranscoder(Transcoder):
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: datetime) -> None:
         merge_args.encodes[f"{merge_args.base_name}_datetime"] = value.replace(tzinfo=None)
-        merge_args.encodes[f"{merge_args.base_name}_timezone"] = str(value.tzinfo) if value.tzinfo else None
+        
+        if value.tzinfo:
+            # Store IANA timezone identifier if available
+            tz_str = getattr(value.tzinfo, 'zone', None)
+            if hasattr(value.tzinfo, 'tzname'):
+                tz_str = value.tzinfo.tzname(value)
+        else:
+            tz_str = None
+            
+        merge_args.encodes[f"{merge_args.base_name}_timezone"] = tz_str
+        # merge_args.encodes[f"{merge_args.base_name}_timezone"] = str(value.tzinfo) if value.tzinfo else None
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> datetime:
         dt = decode_args.encodes[f"{decode_args.base_name}_datetime"]
-        tz = decode_args.encodes[f"{decode_args.base_name}_timezone"]
-        return dt.replace(tzinfo=tz) if tz else dt
+        tz_str = decode_args.encodes[f"{decode_args.base_name}_timezone"]
+        if tz_str:
+            dt.replace(tzinfo=tz.gettz(tz_str))
+        return dt
     
 @sql_transcoder_collection.add
 class ObjectTranscoder(LazyLoadingTranscoder):
@@ -321,6 +334,9 @@ class ObjectTranscoder(LazyLoadingTranscoder):
     def decode(cls, decode_args: DecodeArgs) -> Any:
         id_value = decode_args.encodes[f"{decode_args.base_name}_id"]
         type_name = decode_args.encodes[f"{decode_args.base_name}_type"]
+        if id_value is None or type_name is None:
+            return None
+        
         obj_type = decode_args.storage_engine.data_decorator.registry[type_name]
         return decode_args.storage_engine.query(obj_type).filter_by_id(id_value)
     
@@ -474,7 +490,8 @@ class ListTranscoder(LazyLoadingTranscoder):
         lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
         return lazy_list
 
-@sql_transcoder_collection.add
+
+# @sql_transcoder_collection.add  Temporarilly disabled to support AbstractAI. -- field needs to have a meta data option to choose between DictionaryTranscoder and JsonDictTranscoder
 class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
@@ -573,3 +590,22 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         return dict_id
 
     dict_id_mapping: Dict[int, str] = {}
+
+@sql_transcoder_collection.add
+class JsonDictTranscoder(LazyLoadingTranscoder):
+    @classmethod
+    def validate(cls, type_: Type) -> bool:
+        return get_origin(type_) is dict
+
+    @classmethod
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
+        return [Column(name, JSON, primary_key=is_primary_key)]
+    
+    @classmethod
+    def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
+        merge_args.encodes[merge_args.base_name] = value
+
+    @classmethod
+    def decode(cls, decode_args: DecodeArgs) -> Any:
+        value = decode_args.encodes[decode_args.base_name]
+        return value

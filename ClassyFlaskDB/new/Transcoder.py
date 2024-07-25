@@ -31,6 +31,9 @@ class Transcoder:
 
     @classmethod
     def merge(cls, merge_args: MergeArgs, value: Any) -> None:
+        if value is None:
+            return
+        
         if cls.check_overridden(Transcoder._merge):
             different_storage_engine = False
             cf_instance = CFInstance.get(value)
