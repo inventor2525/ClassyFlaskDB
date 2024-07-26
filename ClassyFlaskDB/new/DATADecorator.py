@@ -4,6 +4,7 @@ from .Transcoder import *
 from .StorageEngine import *
 from .AutoID import *
 from .DirtyDecorator import *
+from copy import deepcopy
 
 @dataclass
 class DATADecorator(InfoDecorator):
@@ -21,11 +22,12 @@ class DATADecorator(InfoDecorator):
 	class Interface(AutoID.Interface, DirtyDecorator.Interface):
 		_cf_instance: Optional['CFInstance'] = None
 		
+		
 	@overload
-	def __call__(self, cls:Type[T]) -> Union[Type[T], Type[AutoID.Interface]]:
+	def __call__(self, cls:Type[T]) -> Union[Type[T], Type['DATADecorator.Interface']]:
 		pass
 	@overload
-	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = [], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Callable[[Type[T]], Union[Type[T], Type[AutoID.Interface]]]:
+	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = [], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Callable[[Type[T]], Union[Type[T], Type['DATADecorator.Interface']]]:
 		pass
 	def __call__(self, *args, **kwargs):
 		'''
@@ -37,7 +39,7 @@ class DATADecorator(InfoDecorator):
 		'''
 		return super().__call__(*args, **kwargs)
 
-	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Union[Type[T], Type[AutoID.Interface]]:
+	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Union[Type[T], Type['DATADecorator.Interface']]:
 		cls = super().decorate(cls, included_fields, excluded_fields)
 		cls = AutoID(id_type, None if hashed_fields is None else set(hashed_fields))(cls)
 		#more cls mods in finalize!
@@ -46,8 +48,12 @@ class DATADecorator(InfoDecorator):
 	def finalize(self):
 		super().finalize()
 		
+		from .InstrumentedList import InstrumentedList
+		from .InstrumentedDict import InstrumentedDict
+
 		data_decorator_applied = object()
 		for cls in self.registry.values():
+			#Apply a new get attribute to cls:
 			old_getattr = cls.__getattribute__
 			if not hasattr(old_getattr, "data_decorator_applied"):
 				def __getattribute__(self:'DATADecorator.Interface', field_name:str):
@@ -71,4 +77,42 @@ class DATADecorator(InfoDecorator):
 
 				cls.__getattribute__ = __getattribute__
 				cls.__getattribute__.data_decorator_applied = data_decorator_applied
+			
+			#Add a deepcopy method to cls:
+			def __deepcopy__(self, memo):
+				if id(self) in memo:
+					return memo[id(self)]
+
+				class_info = ClassInfo.get(self.__class__)
+				
+				# Create a new instance directly
+				cls_copy = object.__new__(self.__class__)
+				memo[id(self)] = cls_copy
+
+				for field_name, field_info in class_info.fields.items():
+					value = getattr(self, field_name, None)
+					if value is not None:
+						if isinstance(value, InstrumentedList):
+							setattr(cls_copy, field_name, deepcopy(list(value), memo))
+						elif isinstance(value, InstrumentedDict):
+							setattr(cls_copy, field_name, deepcopy(dict(value), memo))
+						else:
+							try:
+								setattr(cls_copy, field_name, deepcopy(value, memo))
+							except:
+								try:
+									setattr(cls_copy, field_name, None)
+								except:
+									pass
+					elif field_info.default is not MISSING:
+						setattr(cls_copy, field_name, field_info.default)
+					elif field_info.default_factory is not MISSING:
+						setattr(cls_copy, field_name, field_info.default_factory())
+
+				if hasattr(cls_copy, '__post_init__'):
+					cls_copy.__post_init__()
+
+				return cls_copy
+
+			setattr(cls, '__deepcopy__', __deepcopy__)
 		print("done")
