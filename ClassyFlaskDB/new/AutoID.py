@@ -47,8 +47,7 @@ class AutoID:
 		else:
 			def add_id(classInfo:ClassInfo, new_id:Callable[[],None]):
 				classInfo.primary_key_name = "auto_id"
-				if not hasattr(classInfo.cls, "new_id"):
-					setattr(classInfo.cls, "new_id", new_id)
+				setattr(classInfo.cls, "new_id", new_id)
 				setattr(classInfo.cls, classInfo.primary_key_name, None)
 				classInfo.cls.__annotations__[classInfo.primary_key_name] = str
 				f = Field(default=MISSING, default_factory=new_id, init=True, repr=True, hash=None, compare=True, metadata=None, kw_only=MISSING)
@@ -68,8 +67,11 @@ class AutoID:
 						if field_name != classInfo.primary_key_name:
 							if hashed_fields is None or field_name in hashed_fields:
 								value = getattr(self, field_name)
-								hash_func = AutoID.get_hash_function(field_info.type)
-								fields.extend(hash_func(value, field_info.type, deep))
+								if value is None:
+									fields.extend([None])
+								else:
+									hash_func = AutoID.get_hash_function(field_info.type)
+									fields.extend(hash_func(value, field_info.type, deep))
 					self.auto_id = hashlib.sha256(",".join(map(str, fields)).encode("utf-8")).hexdigest()
 				add_id(classInfo, new_id)
 			else:
