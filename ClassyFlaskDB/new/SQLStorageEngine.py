@@ -55,8 +55,6 @@ class SQLStorageEngine(StorageEngine):
         self.metadata.create_all(self.engine)
 
     def merge(self, obj: Any, persist: bool = False, merge_depth_limit:int=-1):
-        print(f"Starting merge for object of type: {type(obj).__name__}")
-        print(f"Object content: {getattr(obj, 'content', 'N/A')}")
         context = self.context if persist else {}
         with self.session_maker() as session:
             merge_args = SQLMergeArgs(
@@ -72,7 +70,6 @@ class SQLStorageEngine(StorageEngine):
             transcoder = self.get_transcoder_type(type(obj))
             transcoder.merge(merge_args, obj)
             session.commit()
-        print(f"Finished merge for object of type: {type(obj).__name__}")
     
     def query(self, cls: Type[T]) -> 'SQLStorageEngineQuery[T]':
         return SQLStorageEngineQuery(self, cls)
@@ -312,8 +309,6 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             return
         
         # Update the table with our personal encodes
-        print(f"merging... {type(obj)} ... {personal_merge_args.depth}")
-        print(personal_merge_args.encodes)
         if is_update:
             personal_merge_args.session.query(table).filter(getattr(table.c, primary_key_name) == primary_key).update(personal_merge_args.encodes)
         else:
