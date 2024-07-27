@@ -54,7 +54,7 @@ class SQLStorageEngine(StorageEngine):
 
         self.metadata.create_all(self.engine)
 
-    def merge(self, obj: Any, persist: bool = False):
+    def merge(self, obj: Any, persist: bool = False, merge_depth_limit:int=-1):
         print(f"Starting merge for object of type: {type(obj).__name__}")
         print(f"Object content: {getattr(obj, 'content', 'N/A')}")
         context = self.context if persist else {}
@@ -66,6 +66,7 @@ class SQLStorageEngine(StorageEngine):
                 encodes={},
                 base_name='id',
                 type=type(obj),
+                merge_depth_limit=merge_depth_limit,
                 session=session
             )
             transcoder = self.get_transcoder_type(type(obj))
@@ -281,7 +282,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
     def _merge(cls, parent_merge_args: SQLMergeArgs, obj: DATADecorator.Interface) -> None:
         # Create a personal merge_args for this object
-        personal_merge_args = parent_merge_args.new(encodes={})
+        personal_merge_args = parent_merge_args.new(same_depth=True, encodes={})
         
         # Get the class info and primary key name
         class_info = ClassInfo.get(type(obj))
@@ -306,6 +307,9 @@ class ObjectTranscoder(LazyLoadingTranscoder):
                 type = field.type
             )
             transcoder.merge(field_merge_args, value)
+        
+        if len(personal_merge_args.encodes) == 0:
+            return
         
         # Update the table with our personal encodes
         print(f"merging... {type(obj)} ... {personal_merge_args.depth}")
@@ -436,6 +440,7 @@ class ListTranscoder(LazyLoadingTranscoder):
         
         for index, item in enumerate(value):
             item_merge_args = merge_args.new(
+                same_depth=True,
                 encodes={},
                 base_name='value',
                 type=value_type
@@ -540,8 +545,8 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         merge_args.session.query(table).filter(table.c.dict_id == dict_id).delete()
         
         for key, item in value.items():
-            key_merge_args = merge_args.new(encodes={}, base_name='key', type=key_type)
-            value_merge_args = merge_args.new(encodes={}, base_name='value', type=value_type)
+            key_merge_args = merge_args.new(same_depth=True, encodes={}, base_name='key', type=key_type)
+            value_merge_args = merge_args.new(same_depth=True, encodes={}, base_name='value', type=value_type)
             
             key_transcoder.merge(key_merge_args, key)
             value_transcoder.merge(value_merge_args, item)

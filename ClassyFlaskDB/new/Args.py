@@ -46,6 +46,18 @@ class MergeArgs(Args):
 	encodes: Dict[str, Any] = field(kw_only=True)
 	base_name: str = field(kw_only=True)
 	type: Type = field(kw_only=True)
+	merge_depth_limit:int = field(default=-1, kw_only=True)
+	depth:int = field(default=0, kw_only=True)
+	
+	def new(self: T, *, same_depth: bool = False, **kwargs) -> T:
+		if same_depth:
+			if self.merge_depth_limit > -1:
+				# we need to re-consider depth limits here so we don't end up deleting the list and then get limited out of merging it
+				kwargs['depth'] = kwargs.get("depth", self.depth - 1)
+		
+		args_ = super().new(**kwargs)
+		args_.depth += 1
+		return args_
 
 @dataclass
 class SetupArgs(Args):

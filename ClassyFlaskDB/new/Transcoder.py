@@ -34,6 +34,10 @@ class Transcoder:
         if value is None:
             return
         
+        if merge_args.merge_depth_limit > -1:
+            if merge_args.depth > merge_args.merge_depth_limit:
+                return
+        
         if cls.check_overridden(Transcoder._merge):
             different_storage_engine = False
             cf_instance = CFInstance.get(value)
