@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData, JSON
+from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData, JSON, text
 from sqlalchemy.orm import sessionmaker
 from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union
 from dataclasses import dataclass, field, Field, MISSING
@@ -150,9 +150,12 @@ class SQLStorageEngineQuery(StorageEngineQuery[T]):
                 return self._create_lazy_instance(encodes)
             return None
     
-    def all(self) -> Iterator[T]:
+    def all(self, where: Optional[str] = None) -> Iterator[T]:
         with self.storage_engine.session_maker() as session:
-            results = session.execute(select(self.table))
+            query = select(self.table)
+            if where:
+                query = query.where(text(where))
+            results = session.execute(query)
             for row in results:
                 encoded_values = row._asdict()
                 obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
