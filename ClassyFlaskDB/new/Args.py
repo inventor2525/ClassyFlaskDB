@@ -74,7 +74,7 @@ class DecodeArgs(Args):
 @dataclass
 class CFInstance(Args):
 	decode_args: DecodeArgs = field(kw_only=True)
-	loaded_fields: Set[str] = field(default_factory=set, kw_only=True)
+	unloaded_fields: Set[str] = field(default_factory=set, kw_only=True)
 	
 	@staticmethod
 	def get(self) -> Union['CFInstance',Literal[MISSING]]:

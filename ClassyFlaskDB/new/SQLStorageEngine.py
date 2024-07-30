@@ -171,17 +171,19 @@ class SQLStorageEngineQuery(StorageEngineQuery[T]):
         return self.storage_engine.context.get(self.cls, {}).get(id_value, MISSING)
     
     def _create_lazy_instance(self, encoded_values: Dict[str, Any]) -> T:
+        class_info = ClassInfo.get(self.cls)
         instance = self.transcoder.create_lazy_instance(cf_instance = CFInstance(
             decode_args=DecodeArgs(
                 storage_engine=self.storage_engine,
                 encodes=encoded_values,
                 base_name=None,
                 type=self.cls
-            )
+            ),
+            unloaded_fields = set(class_info.fields.keys())
         ))
         
         # Add to context
-        obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
+        obj_id = encoded_values[class_info.primary_key_name]
         if self.cls not in self.storage_engine.context:
             self.storage_engine.context[self.cls] = {}
         self.storage_engine.context[self.cls][obj_id] = instance
@@ -295,11 +297,15 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         
         is_update = existing_obj is not None
         
+        cf_instance = CFInstance.get(obj)
         # Iterate through fields and merge
         for field in class_info.fields.values():
             if is_update and field.metadata.get('no_update', False):
                 continue
-            
+            if cf_instance is not MISSING:
+                if field.name in cf_instance.unloaded_fields:
+                    continue
+                
             value = getattr(obj, field.name)
             transcoder = parent_merge_args.storage_engine.get_transcoder_type(field.type)
             field_merge_args = personal_merge_args.new(

@@ -61,7 +61,7 @@ class DATADecorator(InfoDecorator):
 					if cf_instance is not MISSING and cf_instance is not None:
 						class_info = ClassInfo.get(type(self))
 						
-						if field_name in class_info.fields and field_name not in cf_instance.loaded_fields:
+						if field_name in cf_instance.unloaded_fields:
 							field = class_info.fields[field_name]
 							transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type)
 							decode_args = cf_instance.decode_args.new(
@@ -70,7 +70,7 @@ class DATADecorator(InfoDecorator):
 							)
 							value = transcoder.decode(decode_args)
 							object.__setattr__(self, field_name, value)
-							cf_instance.loaded_fields.add(field_name)
+							cf_instance.unloaded_fields.remove(field_name)
 							return value
 						
 					return object.__getattribute__(self, field_name)
