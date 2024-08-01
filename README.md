@@ -10,7 +10,7 @@ ClassyFlaskDB is not a full ORM, it sits on-top of SQLAlchemy to make prototypin
 **Installation**
 
 To use ClassyFlaskDB, you'll need to install it using pip:
-```
+```bash
 #clone the repo
 #cd into the repo
 pip install -e ./

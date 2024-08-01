@@ -19,7 +19,7 @@ class FlaskifyDecorator(AnyParam):
     Call make_client or make_server to initialize the decorator, then use it as a decorator on a class with Route decorated methods.
     
     Example:
-    ```
+    ```python
     from ClassyFlaskDB.Flaskify import Flaskify
     from ClassyFlaskDB.Flaskify.Route import Route
     
@@ -37,6 +37,7 @@ class FlaskifyDecorator(AnyParam):
         @Route()
         def my_method(self, arg1: int, arg2: str) -> int:
             pass
+    ```
     '''
     def __init__(self):
         self.decorator = None
