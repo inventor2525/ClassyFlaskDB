@@ -20,19 +20,26 @@ class ClassInfo:
 		Nothing will ever actually be this type.
 		'''
 		__class_info__:"ClassInfo"
-		
-	def __init__(self, cls:type, included_fields:Set[str], excluded_fields:Set[str]):
-		self.cls = cls
-		self.qualname = cls.__qualname__
-		self.semi_qualname = self.qualname
+	
+	@staticmethod
+	def get_semi_qual_name(cls:Type) -> str:
 		'''
 		Similar to cls.__qualname__ except it cleans up type hints for
 		nested classes defined inside functions (like in a unit test!).
 		
 		It's not as specific though so... beware name collisions.
 		'''
-		while "<locals>." in self.semi_qualname:
-			self.semi_qualname = re.sub(r"""^(.*?<locals>\.)?(.*?$)""", r'\2', self.semi_qualname)
+		
+		semi_qualname = cls.qualname
+		
+		while "<locals>." in semi_qualname:
+			semi_qualname = re.sub(r"""^(.*?<locals>\.)?(.*?$)""", r'\2', semi_qualname)
+		return semi_qualname
+	
+	def __init__(self, cls:type, included_fields:Set[str], excluded_fields:Set[str]):
+		self.cls = cls
+		self.qualname = cls.__qualname__
+		self.semi_qualname = ClassInfo.get_semi_qual_name(cls)
 		
 		# Get fields:
 		self.all_fields = fields(cls)
