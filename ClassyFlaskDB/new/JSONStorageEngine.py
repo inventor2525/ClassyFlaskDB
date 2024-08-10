@@ -66,14 +66,14 @@ class JSONObjectTranscoder(LazyLoadingTranscoder):
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> None:
-        table_name = f"obj_{ClassInfo.get_semi_qual_name(type_)}"
+        table_name = f"obj_{ClassInfo.get_nice_semi_qual_name(type_)}"
         if table_name not in setup_args.storage_engine.root_dict:
             setup_args.storage_engine.root_dict[table_name] = {}
 
     @classmethod
     def _merge(cls, merge_args: JSONMergeArgs, obj: Any) -> None:
         class_info = ClassInfo.get(type(obj))
-        table_name = f"obj_{ClassInfo.get_semi_qual_name(type(obj))}"
+        table_name = f"obj_{ClassInfo.get_nice_semi_qual_name(type(obj))}"
         row = {}
         
         for field_name, field_info in class_info.fields.items():
@@ -88,7 +88,7 @@ class JSONObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
     def _encode(cls, merge_args: JSONMergeArgs, obj: Any) -> None:
         merge_args.encodes[f"{merge_args.base_name}_id"] = obj.get_primary_key()
-        merge_args.encodes[f"{merge_args.base_name}_type"] = ClassInfo.get_semi_qual_name(type(obj))
+        merge_args.encodes[f"{merge_args.base_name}_type"] = ClassInfo.get_nice_semi_qual_name(type(obj))
 
     @classmethod
     def decode(cls, decode_args: JSONDecodeArgs) -> Any:
@@ -135,7 +135,7 @@ class JSONListTranscoder(LazyLoadingTranscoder):
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> None:
         value_type = get_args(type_)[0]
-        table_name = f"list_{ClassInfo.get_semi_qual_name(value_type)}"
+        table_name = f"list_{ClassInfo.get_nice_semi_qual_name(value_type)}"
         if table_name not in setup_args.storage_engine.root_dict:
             setup_args.storage_engine.root_dict[table_name] = {}
 
@@ -143,7 +143,7 @@ class JSONListTranscoder(LazyLoadingTranscoder):
     def _merge(cls, merge_args: JSONMergeArgs, value: List[Any]) -> None:
         value_type = get_args(merge_args.type)[0]
         value_transcoder = merge_args.storage_engine.get_transcoder_type(value_type)
-        table_name = f"list_{ClassInfo.get_semi_qual_name(value_type)}"
+        table_name = f"list_{ClassInfo.get_nice_semi_qual_name(value_type)}"
         
         list_id = cls._get_or_create_list_id(value)
         
@@ -174,7 +174,7 @@ class JSONListTranscoder(LazyLoadingTranscoder):
         lazy_list = []
         value_type = get_args(cf_instance.decode_args.type)[0]
         value_transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(value_type)
-        table_name = f"list_{ClassInfo.get_semi_qual_name(value_type)}"
+        table_name = f"list_{ClassInfo.get_nice_semi_qual_name(value_type)}"
         list_id = cf_instance.decode_args.encodes[f"{cf_instance.decode_args.base_name}_id"]
         
         rows = cf_instance.decode_args.root_dict[table_name][list_id]

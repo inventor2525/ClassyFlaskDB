@@ -30,7 +30,7 @@ class ClassInfo:
 		It's not as specific though so... beware name collisions.
 		'''
 		
-		semi_qualname = cls.qualname
+		semi_qualname = cls.__qualname__
 		
 		while "<locals>." in semi_qualname:
 			semi_qualname = re.sub(r"""^(.*?<locals>\.)?(.*?$)""", r'\2', semi_qualname)
@@ -111,7 +111,7 @@ class ClassInfo:
 		return field.name == self.primary_key_name
 	
 	@staticmethod
-	def get_semi_qual_name(type_: Type) -> str:
+	def get_nice_semi_qual_name(type_: Type) -> str:
 		if ClassInfo.has_ClassInfo(type_):
 			return ClassInfo.get(type_).semi_qualname.replace('.', '_')
 		return type_.__name__
