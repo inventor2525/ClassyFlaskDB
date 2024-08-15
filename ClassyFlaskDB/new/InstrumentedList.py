@@ -5,6 +5,7 @@ from .Args import DecodeArgs, CFInstance
 from dataclasses import dataclass
 from typing import Type
 from .Transcoder import Transcoder
+from copy import deepcopy
 
 @dataclass
 class ListCFInstance(CFInstance):
@@ -94,3 +95,16 @@ class InstrumentedList(list):
 	def __hash__(self):
 		self._ensure_fully_loaded()
 		return super().__hash__()
+
+	def __deepcopy__(self, memo):
+		# Check memo first
+		if id(self) in memo:
+			return memo[id(self)]
+
+		# Create a new regular list using a generator
+		result = list(deepcopy(item, memo) for item in self)
+		
+		# Store the result in memo
+		memo[id(self)] = result
+		
+		return result

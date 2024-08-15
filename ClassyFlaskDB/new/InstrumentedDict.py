@@ -4,6 +4,7 @@ from .Args import DecodeArgs, CFInstance
 from .DirtyDecorator import DirtyDecorator
 from .Transcoder import Transcoder
 from typing import get_args
+from copy import deepcopy
 
 MISSING = object()
 
@@ -173,3 +174,17 @@ class InstrumentedDict(dict):
 	def __hash__(self):
 		self._ensure_fully_loaded()
 		return super().__hash__()
+	
+	def __deepcopy__(self, memo):
+		# Check memo first
+		if id(self) in memo:
+			return memo[id(self)]
+
+		# Create a new regular dict using a generator
+		result = dict((deepcopy(key, memo), deepcopy(value, memo))
+					for key, value in self.items())
+		
+		# Store the result in memo
+		memo[id(self)] = result
+		
+		return result
