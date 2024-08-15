@@ -54,8 +54,15 @@ class Object:
 	source: "Object" = field(default=None, kw_only=True)
 	tags: List["Tag"] = field(default_factory=list, kw_only=True)
 	
-	def __post_init__(self):
-		self.props = ObjectTagsProxy(self)
+	@property
+	def props(self) -> ObjectTagsProxy:
+		try:
+			props = object.__getattribute__(self, "__props__")
+			return props
+		except:
+			props = ObjectTagsProxy(self)
+			object.__setattr__(self, "__props__", props)
+			return props
 		
 	def add_source(self:T, other:"Object") -> T:
 		s = self
