@@ -1,6 +1,7 @@
 from ClassyFlaskDB.new.SQLStorageEngine import *
 import unittest
 from enum import Enum
+import os
 
 class newDATADecorator_tests(unittest.TestCase):
 	def test_relationship(self):
@@ -515,5 +516,80 @@ class newDATADecorator_tests(unittest.TestCase):
 
 		# Confirm we have two distinct objects in the database
 		self.assertNotEqual(queried_new.get_primary_key(), queried_original.get_primary_key())
+	
+	def test_schema_evolution(self):
+		DB_FILE = 'test_schema_evolution.db'
+
+		# Delete the database if it exists
+		if os.path.exists(DB_FILE):
+			os.remove(DB_FILE)
+
+		# Initial schema
+		DATA1 = DATADecorator()
+
+		@DATA1
+		@dataclass
+		class Person:
+			name: str
+			age: int
+
+		@DATA1
+		@dataclass
+		class Book:
+			title: str
+			author: Person
+
+		# Create initial data
+		engine1 = SQLStorageEngine(f"sqlite:///{DB_FILE}", DATA1)
+		author = Person(name="John Doe", age=30)
+		book = Book(title="Sample Book", author=author)
+		engine1.merge(book)
+
+		# New schema with additional fields
+		DATA2 = DATADecorator()
+
+		@DATA2
+		@dataclass
+		class Person:
+			name: str
+			age: int
+			email: str = field(default=None)
+
+		@DATA2
+		@dataclass
+		class Book:
+			title: str
+			author: Person
+			publication_year: int = field(default=None)
+
+		# Create new engine with updated schema
+		engine2 = SQLStorageEngine(f"sqlite:///{DB_FILE}", DATA2)
+
+		# Query existing data
+		queried_book = engine2.query(Book).filter_by_id(book.get_primary_key())
+
+		# Assert existing data is preserved
+		self.assertEqual(queried_book.title, "Sample Book")
+		self.assertEqual(queried_book.author.name, "John Doe")
+		self.assertEqual(queried_book.author.age, 30)
+
+		# Assert new fields exist but are None for existing data
+		self.assertTrue(hasattr(queried_book, 'publication_year'))
+		self.assertTrue(hasattr(queried_book.author, 'email'))
+
+		# Create new data with new fields
+		new_author = Person(name="Jane Smith", age=28, email="jane@example.com")
+		new_book = Book(title="New Book", author=new_author, publication_year=2023)
+		engine2.merge(new_book)
+
+		# Query new data
+		queried_new_book = engine2.query(Book).filter_by_id(new_book.get_primary_key())
+
+		# Assert new data is correctly stored and retrieved
+		self.assertEqual(queried_new_book.title, "New Book")
+		self.assertEqual(queried_new_book.author.name, "Jane Smith")
+		self.assertEqual(queried_new_book.author.age, 28)
+		self.assertEqual(queried_new_book.author.email, "jane@example.com")
+		self.assertEqual(queried_new_book.publication_year, 2023)
 if __name__ == '__main__':
 	unittest.main()
