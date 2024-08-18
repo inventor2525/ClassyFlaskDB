@@ -68,7 +68,15 @@ class DATADecorator(InfoDecorator):
 								base_name = field_name,
 								type = field.type
 							)
-							value = transcoder.decode(decode_args)
+							try:
+								value = transcoder.decode(decode_args)
+							except Exception as e:
+								if field.default is not MISSING:
+									value = field.default
+								elif field.default_factory is not MISSING:
+									value = field.default_factory()
+								else:
+									raise ValueError(f"We attempted to deserialize a value for {class_info.semi_qualname}.{field_name} but could not because of {e}, and {field_name} does not provide for a default or default_factory.")
 							object.__setattr__(self, field_name, value)
 							cf_instance.unloaded_fields.remove(field_name)
 							return value
