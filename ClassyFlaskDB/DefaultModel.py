@@ -74,7 +74,7 @@ class Object:
 	def create_edit(self, new:"Object") -> "EditSource":
 		edit = EditSource(self, new)
 		new.add_source(edit)
-		return new
+		return edit
 		
 	def __or__(self:T, other:"Object") -> T:
 		return self.add_source(other)
