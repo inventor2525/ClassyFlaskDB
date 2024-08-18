@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData, JSON, text
 from sqlalchemy.orm import sessionmaker
-from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union
+import sqlalchemy as sa
+from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union, Set
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
 from dateutil import tz
@@ -98,6 +99,12 @@ class SQLStorageEngine(StorageEngine):
     def get_table_by_type(self, type_:Type) -> Table:
         table_name = self.get_table_name(type_)
         return self.get_table_by_name(table_name)
+    
+    def get_existing_columns(self, table_name: str) -> Set[str]:
+        inspector = sa.inspect(self.engine)
+        if inspector.has_table(table_name):
+            return set(column['name'] for column in inspector.get_columns(table_name))
+        return None
 
 T = TypeVar('T')
 class SQLStorageEngineQuery(StorageEngineQuery[T]):
@@ -269,6 +276,16 @@ class ObjectTranscoder(LazyLoadingTranscoder):
                 transcoder = setup_args.storage_engine.get_transcoder_type(field_info.type)
                 new_columns = transcoder.setup(setup_args, field_name, field_info.type, setup_args.class_info.is_primary_key(field_info))
                 columns.extend(new_columns)
+
+            existing_columns = setup_args.storage_engine.get_existing_columns(table_name)
+            if existing_columns is not None:
+                new_columns = [col for col in columns if col.name not in existing_columns]
+                if new_columns:
+                    with setup_args.storage_engine.engine.begin() as connection:
+                        for column in new_columns:
+                            sql = f"ALTER TABLE {table_name} ADD COLUMN {column.compile(dialect=setup_args.storage_engine.engine.dialect)}"
+                            connection.execute(text(sql))
+
             Table(table_name, setup_args.storage_engine.metadata, *columns, extend_existing=True)
             return columns
         else:
