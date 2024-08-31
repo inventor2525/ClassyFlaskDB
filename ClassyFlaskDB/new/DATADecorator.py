@@ -45,8 +45,8 @@ class DATADecorator(InfoDecorator):
 		#more cls mods in finalize!
 		return cls
 	
-	def finalize(self):
-		super().finalize()
+	def _finalize(self):
+		super()._finalize()
 		
 		from .InstrumentedList import InstrumentedList
 		from .InstrumentedDict import InstrumentedDict

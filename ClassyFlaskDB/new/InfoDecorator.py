@@ -30,8 +30,14 @@ class InfoDecorator:
 		setattr(cls, ClassInfo.field_name, class_info)
 		self.registry[class_info.semi_qualname] = cls
 		return cls
-
+	
 	def finalize(self):
+		if getattr(self, "is_finalized", False):
+			return
+		self._finalize()
+		self.is_finalized = True
+		
+	def _finalize(self):
 		'''
 		Resolve forward references.
 		
