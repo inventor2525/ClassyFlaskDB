@@ -4,7 +4,8 @@ import sqlalchemy as sa
 from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union, Set
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
-from dateutil import tz
+from zoneinfo import ZoneInfo
+from dateutil.zoneinfo import get_zonefile_instance
 import uuid
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
@@ -245,19 +246,31 @@ class DateTimeTranscoder(Transcoder):
             # Store IANA timezone identifier if available
             tz_str = getattr(value.tzinfo, 'zone', None)
             if hasattr(value.tzinfo, 'tzname'):
-                tz_str = value.tzinfo.tzname(value)
+                tz_str = str(value.tzinfo)
         else:
             tz_str = None
             
         merge_args.encodes[f"{merge_args.base_name}_timezone"] = tz_str
         # merge_args.encodes[f"{merge_args.base_name}_timezone"] = str(value.tzinfo) if value.tzinfo else None
-
+    
+    @staticmethod
+    def find_timezone_for_abbreviation(abbr):
+        for tz in get_zonefile_instance().zones:
+            zone = ZoneInfo(tz)
+            current_time = datetime.now(zone)
+            if current_time.tzname() == abbr:
+                return zone
+        return None
+    
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> datetime:
         dt = decode_args.encodes[f"{decode_args.base_name}_datetime"]
         tz_str = decode_args.encodes[f"{decode_args.base_name}_timezone"]
         if tz_str:
-            dt.replace(tzinfo=tz.gettz(tz_str))
+            try:
+                return dt.replace(tzinfo=ZoneInfo(tz_str))
+            except Exception as e:
+                return dt.replace(tzinfo=DateTimeTranscoder.find_timezone_for_abbreviation(tz_str))
         return dt
     
 @sql_transcoder_collection.add
