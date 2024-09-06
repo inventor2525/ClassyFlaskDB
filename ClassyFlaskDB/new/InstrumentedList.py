@@ -60,6 +60,9 @@ class InstrumentedList(list):
 		super().clear()
 
 	def __getitem__(self, index):
+		if isinstance(index, slice):
+			self._ensure_fully_loaded()
+			return super().__getitem__(index)
 		value = super().__getitem__(index)
 		if self._cf_instance is None:
 			return value
