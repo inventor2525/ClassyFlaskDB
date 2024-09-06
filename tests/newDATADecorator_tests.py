@@ -1,4 +1,6 @@
+from zoneinfo import ZoneInfo
 from ClassyFlaskDB.new.SQLStorageEngine import *
+from ClassyFlaskDB.DefaultModel import get_local_time
 import unittest
 from enum import Enum
 import os
@@ -36,7 +38,45 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_bar.location, bar.location)
 		self.assertEqual(queried_bar.foe.name, foe.name)
 		self.assertEqual(queried_bar.foe.strength, foe.strength)
+	
+	def test_datetime_with_timezone(self):
+		DATA = DATADecorator()
 
+		@DATA
+		@dataclass
+		class DateTimeObject:
+			created_at: datetime
+
+		data_engine = SQLStorageEngine("sqlite:///:memory:", DATA)
+
+		# Create a datetime with timezone information
+		original_dt = get_local_time()
+		
+		# Create and merge object
+		dt_obj = DateTimeObject(created_at=original_dt)
+		data_engine.merge(dt_obj)
+
+		# Query and validate
+		queried_obj = data_engine.query(DateTimeObject).filter_by_id(dt_obj.get_primary_key())
+
+		# Check if the queried datetime has timezone information
+		self.assertIsNotNone(queried_obj.created_at.tzinfo, "Deserialized datetime should have timezone information")
+
+		# Check if the timezone matches the original
+		self.assertEqual(queried_obj.created_at.tzinfo, original_dt.tzinfo, "Timezone information should match")
+
+		# Check if the datetime values match (ignoring timezone)
+		self.assertEqual(queried_obj.created_at.replace(tzinfo=None), 
+						original_dt.replace(tzinfo=None), 
+						"Datetime values should match when ignoring timezone")
+
+		# Check if the complete datetime objects match (including timezone)
+		self.assertEqual(queried_obj.created_at, original_dt, "Complete datetime objects should match")
+
+		# Print for debugging
+		print(f"Original datetime: {original_dt}")
+		print(f"Queried datetime: {queried_obj.created_at}")
+		
 	def test_enum(self):
 		class TestColor(Enum):
 			RED = 1
