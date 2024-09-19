@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from dateutil.zoneinfo import get_zonefile_instance
 import uuid
+import os
 
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.StorageEngine import StorageEngine, StorageEngineQuery, TranscoderCollection
@@ -33,19 +34,30 @@ class SQLStorageEngine(StorageEngine):
         for transcoder in sql_transcoder_collection.transcoders:
             yield transcoder
     
-    def __init__(self, connection_string: str, data_decorator: DATADecorator, extra_transcoders: List[Transcoder]=[]):
-        super().__init__()
+    def __init__(self, connection_string: str, data_decorator: DATADecorator, extra_transcoders: List[Transcoder] = [], files_dir: Optional[str] = None):
+        super().__init__(files_dir=files_dir)
         self.engine = create_engine(connection_string)
         self.session_maker = sessionmaker(bind=self.engine)
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)
         
         self._extra_transcoders = extra_transcoders
-        self.transcoder_map:Dict[Type,Transcoder] = {}
+        self.transcoder_map: Dict[Type, Transcoder] = {}
         
         self.data_decorator = data_decorator
         self.data_decorator.finalize()
         self.setup(self.data_decorator)
+
+        if self.files_dir is None:
+            if connection_string.startswith('sqlite:///'):
+                db_path = connection_string.split('sqlite:///', 1)[1]
+                if db_path != ':memory:':
+                    self.files_dir = os.path.join(os.path.dirname(db_path), 'binaries')
+                    try:
+                        os.makedirs(self.files_dir, exist_ok=True)
+                    except Exception as e:
+                        print(f"Failed to create directory {self.files_dir}: {e}")
+                        self.files_dir = None
 
     def setup(self, data_decorator: DATADecorator):
         for cls in data_decorator.registry.values():

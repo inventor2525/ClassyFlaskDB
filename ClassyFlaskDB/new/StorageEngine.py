@@ -1,7 +1,8 @@
-from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple
+from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple, Optional
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass, field
 from .ClassInfo import *
+import os
 
 T = TypeVar('T')
 class StorageEngineQuery(ABC, Generic[T]):
@@ -22,7 +23,21 @@ T = TypeVar('T')
 @dataclass
 class StorageEngine(ABC):
 	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
-	
+	files_dir: Optional[str] = field(default=None, kw_only=True)
+
+	def __post_init__(self):
+		if self.files_dir:
+			if isinstance(self.files_dir, str) and len(self.files_dir) > 0:
+				self.files_dir = os.path.expanduser(self.files_dir)
+				try:
+					os.makedirs(self.files_dir, exist_ok=True)
+				except Exception as e:
+					print(f"Failed to create files directory {self.files_dir}: {e}")
+					self.files_dir = None
+			else:
+				print("Invalid files_dir provided. Setting to None.")
+				self.files_dir = None
+				
 	@abstractproperty
 	def transcoders(self) -> Iterator['Transcoder']:
 		...
