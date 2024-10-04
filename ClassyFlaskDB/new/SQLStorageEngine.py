@@ -651,7 +651,7 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
 class JsonDictTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
-        return get_origin(type_) is dict
+        return get_origin(type_) is dict or type_ is dict
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
