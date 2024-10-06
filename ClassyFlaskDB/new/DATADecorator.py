@@ -57,9 +57,11 @@ class DATADecorator(InfoDecorator):
 			old_getattr = cls.__getattribute__
 			if not hasattr(old_getattr, "data_decorator_applied"):
 				def __getattribute__(self:'DATADecorator.Interface', field_name:str):
+					print(f"Getting {field_name}")
 					cf_instance = CFInstance.get(self)
 					if cf_instance is not MISSING and cf_instance is not None:
 						class_info = ClassInfo.get(type(self))
+						print(f"   has cf instance")
 						
 						if field_name in cf_instance.unloaded_fields:
 							field = class_info.fields[field_name]
@@ -68,8 +70,10 @@ class DATADecorator(InfoDecorator):
 								base_name = field_name,
 								type = field.type
 							)
+							print(f"       is in un-loaded fields")
 							try:
 								value = transcoder.decode(decode_args)
+								print(f"           decoded!")
 							except Exception as e:
 								if field.default is not MISSING:
 									value = field.default
@@ -77,15 +81,35 @@ class DATADecorator(InfoDecorator):
 									value = field.default_factory()
 								else:
 									raise ValueError(f"We attempted to deserialize a value for {class_info.semi_qualname}.{field_name} but could not because of {e}, and {field_name} does not provide for a default or default_factory.")
+							print("   setting...")
 							object.__setattr__(self, field_name, value)
+							print("   getter set value!")
 							cf_instance.unloaded_fields.remove(field_name)
+							print(" removed from unloaded_fields!")
 							return value
-						
+					print(" defaulting to old getter...")
 					return object.__getattribute__(self, field_name)
 
 				cls.__getattribute__ = __getattribute__
 				cls.__getattribute__.data_decorator_applied = data_decorator_applied
 			
+			# Apply a new __setattr__ to cls:
+			old_setattr = cls.__setattr__
+			if not hasattr(old_setattr, "data_decorator_applied"):
+				def __setattr__(self, name, value):
+					if getattr(self, '__custom_setter_enabled__', False):
+						print(f"Setting {name} to {value}")
+						cf_instance = CFInstance.get(self)
+						if cf_instance is not MISSING and cf_instance is not None:
+							if name in cf_instance.unloaded_fields:
+								cf_instance.unloaded_fields.remove(name)
+								print("    removed from unloaded_fields")
+					old_setattr(self, name, value)
+					if getattr(self, '__custom_setter_enabled__', False):
+						print(" set!")
+
+				cls.__setattr__ = __setattr__
+				cls.__setattr__.data_decorator_applied = data_decorator_applied
 			#Add a deepcopy method to cls:
 			def __deepcopy__(self, memo):
 				if id(self) in memo:

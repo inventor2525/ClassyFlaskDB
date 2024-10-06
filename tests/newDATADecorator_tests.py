@@ -63,6 +63,7 @@ class newDATADecorator_tests(unittest.TestCase):
 		)
 		engine.merge(initial_obj)
 
+		print("-----------")
 		# Query the object from the database
 		queried_obj = engine.query(ComplexObject).filter_by_id(initial_obj.get_primary_key())
 		
@@ -73,7 +74,7 @@ class newDATADecorator_tests(unittest.TestCase):
 		
 		# queried_obj.string_field
 		# queried_obj.int_field
-		
+		print("------------------------------")
 		# Set values without accessing them first
 		queried_obj.string_field = "new_string"
 		queried_obj.int_field = 100
