@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, 
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass, field
 from .ClassInfo import *
+import uuid
 import os
 
 T = TypeVar('T')
@@ -24,7 +25,8 @@ T = TypeVar('T')
 class StorageEngine(ABC):
 	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
 	files_dir: Optional[str] = field(default=None, kw_only=True)
-
+	id_mapping: Dict[int, str] = field(default_factory=dict, kw_only=True)
+	
 	def __post_init__(self):
 		if self.files_dir:
 			if isinstance(self.files_dir, str) and len(self.files_dir) > 0:
@@ -57,6 +59,42 @@ class StorageEngine(ABC):
 	@abstractmethod
 	def query(self, cls: Type[T]) -> StorageEngineQuery[T]:
 		...
+	
+	def get_id(self, obj:Any):
+		'''
+		Get's obj's primary key if it exists,
+		else returns a key from id_mapping and
+		creates one if there isn't one there yet.
+		'''
+		try:
+			return obj.get_primary_key()
+		except:
+			pass
+		
+		try:
+			return self.id_mapping[id(obj)]
+		except:
+			new_id = str(uuid.uuid4())
+			self.id_mapping[id(obj)] = new_id
+			return new_id
+		
+	def get_binary_path(self, obj:Any) -> Optional[str]:
+		'''
+		Determines the path the obj would be saved at
+		(if it's Transcoder would save it as a separate
+		file), and returns a complete path to it, or None
+		if it would not be saved as a file.
+		'''
+		transcoder = self.get_transcoder_type(type(obj))
+		if transcoder is None:
+			return None
+		
+		extension = transcoder.extension()
+		if extension is None:
+			return None
+		
+		id = str(self.get_id(obj))
+		return os.path.join(self.files_dir, f"{id}.{extension}")
 
 @dataclass
 class TranscoderCollection:

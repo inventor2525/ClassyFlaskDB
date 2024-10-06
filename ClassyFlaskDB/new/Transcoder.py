@@ -13,6 +13,10 @@ class Transcoder:
                 return True
         return False
     
+    @staticmethod
+    def extension() -> Optional[str]:
+        return None
+    
     @abstractclassmethod
     def validate(cls, type_: Type) -> bool:
         return False

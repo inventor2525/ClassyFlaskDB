@@ -64,7 +64,8 @@ class SQLStorageEngine(StorageEngine):
             class_info = ClassInfo.get(cls)
             setup_args = SetupArgs(storage_engine=self, class_info=class_info)
             transcoder = self.get_transcoder_type(cls)
-            transcoder.setup(setup_args, None, cls, False)
+            if transcoder:
+                transcoder.setup(setup_args, None, cls, False)
 
         self.metadata.create_all(self.engine)
 
@@ -101,7 +102,7 @@ class SQLStorageEngine(StorageEngine):
                     return transcoder
             except:
                 pass
-        raise ValueError(f"No suitable transcoder found for {type_}")
+        return None
     
     def get_table_by_name(self, table_name: str) -> Table:
         if table_name in self.metadata.tables:
@@ -375,6 +376,19 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         if obj_type not in parent_merge_args.context:
             parent_merge_args.context[obj_type] = {}
         parent_merge_args.context[obj_type][obj_id] = obj
+        
+        # Add CF_Instance:
+        if cf_instance is MISSING:
+            cf_instance = CFInstance(
+                decode_args=DecodeArgs(
+                    storage_engine=personal_merge_args.storage_engine,
+                    encodes=personal_merge_args.encodes,
+                    base_name=personal_merge_args.base_name,
+                    type=personal_merge_args.type
+                ),
+                unloaded_fields=set()
+            )
+            object.__setattr__(obj, '_cf_instance', cf_instance)
         
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
