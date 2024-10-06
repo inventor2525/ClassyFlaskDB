@@ -63,18 +63,9 @@ class newDATADecorator_tests(unittest.TestCase):
 		)
 		engine.merge(initial_obj)
 
-		print("-----------")
 		# Query the object from the database
 		queried_obj = engine.query(ComplexObject).filter_by_id(initial_obj.get_primary_key())
 		
-		# Add these 2 lines and this test passes:
-		#TODO: Why do I have to pre-read these for them to not get set to initial immediately 
-        #after setting them, some sort of weird race condition, probably from it still
-        #loading from the db, for some reason, after having complete the set operation?
-		
-		# queried_obj.string_field
-		# queried_obj.int_field
-		print("------------------------------")
 		# Set values without accessing them first
 		queried_obj.string_field = "new_string"
 		queried_obj.int_field = 100

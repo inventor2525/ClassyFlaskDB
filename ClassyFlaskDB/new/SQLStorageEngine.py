@@ -430,22 +430,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         if hasattr(instance, '__post_init__'):
             instance.__post_init__()
         
-        #Apply a new set attribute to cls:
-        # old_setattr = instance.__setattr__
-        # if not hasattr(old_setattr, "data_decorator_applied"):
-        #     def __setattr__(self:'DATADecorator.Interface', field_name:str, value:Any):
-        #         print(f"setting field '{field_name}' to '{value}...'")
-        #         cf_instance = CFInstance.get(self)
-        #         if cf_instance is not MISSING and cf_instance is not None:
-        #             if field_name in cf_instance.unloaded_fields:
-        #                 cf_instance.unloaded_fields.remove(field_name)
-        #                 print("    removed from unloaded_fields")
-        #         old_setattr(self, field_name, value)
-        #         print(" set!")
-        #     __setattr__.data_decorator_applied = True
-        #     instance.__setattr__ = __setattr__
-        #     print("new setter applied!")
-        # Enable custom setter
+        #Apply a new set attribute logic to instance:
         object.__setattr__(instance, '__custom_setter_enabled__', True)
         return instance
 
