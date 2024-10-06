@@ -89,12 +89,15 @@ class DATADecorator(InfoDecorator):
 			old_setattr = cls.__setattr__
 			if not hasattr(old_setattr, "data_decorator_applied"):
 				def __setattr__(self, name, value):
-					if getattr(self, '__custom_setter_enabled__', False):
-						cf_instance = CFInstance.get(self)
-						if cf_instance is not MISSING and cf_instance is not None:
-							if name in cf_instance.unloaded_fields:
-								cf_instance.unloaded_fields.remove(name)
-					old_setattr(self, name, value)
+					try:
+						if object.__getattribute__(self, '__custom_setter_enabled__'):
+							cf_instance = CFInstance.get(self)
+							if cf_instance is not MISSING and cf_instance is not None:
+								if name in cf_instance.unloaded_fields:
+									cf_instance.unloaded_fields.remove(name)
+					except:
+						pass
+					object.__setattr__(self, name, value)
 
 				cls.__setattr__ = __setattr__
 				cls.__setattr__.data_decorator_applied = data_decorator_applied
