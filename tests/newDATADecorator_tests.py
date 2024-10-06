@@ -3,6 +3,8 @@ from ClassyFlaskDB.new.SQLStorageEngine import *
 from ClassyFlaskDB.DefaultModel import get_local_time
 import unittest
 from enum import Enum
+import time
+import threading
 import os
 
 class newDATADecorator_tests(unittest.TestCase):
@@ -39,6 +41,90 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_bar.foe.name, foe.name)
 		self.assertEqual(queried_bar.foe.strength, foe.strength)
 	
+	def test_set_before_read(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class ComplexObject:
+			string_field: str = "default_string"
+			int_field: int = 0
+			dict_field: Dict[str, int] = field(default_factory=dict)
+			list_field: List[str] = field(default_factory=list)
+
+		engine = SQLStorageEngine("sqlite:///:memory:", DATA)
+
+		# Create and store initial object
+		initial_obj = ComplexObject(
+			string_field="initial_string",
+			int_field=42,
+			dict_field={"key1": 1, "key2": 2},
+			list_field=["item1", "item2"]
+		)
+		engine.merge(initial_obj)
+
+		# Query the object from the database
+		queried_obj = engine.query(ComplexObject).filter_by_id(initial_obj.get_primary_key())
+		
+		# Add these 2 lines and this test passes:
+		#TODO: Why do I have to pre-read these for them to not get set to initial immediately 
+        #after setting them, some sort of weird race condition, probably from it still
+        #loading from the db, for some reason, after having complete the set operation?
+		
+		# queried_obj.string_field
+		# queried_obj.int_field
+		
+		# Set values without accessing them first
+		queried_obj.string_field = "new_string"
+		queried_obj.int_field = 100
+
+		# Assert that the new values are set correctly
+		self.assertEqual(queried_obj.string_field, "new_string")
+		self.assertEqual(queried_obj.int_field, 100)
+
+		# Check that unmodified fields retain their original values
+		self.assertEqual(queried_obj.dict_field, {"key1": 1, "key2": 2})
+		self.assertEqual(queried_obj.list_field, ["item1", "item2"])
+
+		# Modify fields after accessing them
+		original_dict = queried_obj.dict_field
+		self.assertEqual(original_dict, {"key1": 1, "key2": 2})
+		queried_obj.dict_field = {"new_key": 3}
+		self.assertEqual(queried_obj.dict_field, {"new_key": 3})
+
+		original_list = queried_obj.list_field
+		self.assertEqual(original_list, ["item1", "item2"])
+		queried_obj.list_field = ["new_item"]
+		self.assertEqual(queried_obj.list_field, ["new_item"])
+
+		# Threaded modifications
+		def modify_in_thread():
+			time.sleep(0.1)  # Small delay to ensure the main thread has started
+			queried_obj.string_field = "thread_string"
+			queried_obj.int_field = 200
+
+		thread = threading.Thread(target=modify_in_thread)
+		thread.start()
+
+		# Modify in main thread
+		queried_obj.dict_field = {"main_key": 4}
+		queried_obj.list_field = ["main_item"]
+
+		thread.join()
+
+		# Assert final state after threaded modifications
+		self.assertEqual(queried_obj.string_field, "thread_string")
+		self.assertEqual(queried_obj.int_field, 200)
+		self.assertEqual(queried_obj.dict_field, {"main_key": 4})
+		self.assertEqual(queried_obj.list_field, ["main_item"])
+
+		# Requery to check persistence
+		requeried_obj = engine.query(ComplexObject).filter_by_id(initial_obj.get_primary_key())
+		self.assertEqual(requeried_obj.string_field, "thread_string")
+		self.assertEqual(requeried_obj.int_field, 200)
+		self.assertEqual(requeried_obj.dict_field, {"main_key": 4})
+		self.assertEqual(requeried_obj.list_field, ["main_item"])
+		
 	def test_datetime_with_timezone(self):
 		DATA = DATADecorator()
 
