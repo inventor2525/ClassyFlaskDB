@@ -71,6 +71,21 @@ class Object:
 		s.source = other
 		return self
 	
+	def get_source(self, source_type:Type[T]) -> Optional[T]:
+		'''
+		Finds the source of the specified type,
+		regardless how many sources this object has.
+		'''
+		if self.source is None:
+			return None
+		if isinstance(self.source, source_type):
+			return self.source
+		if isinstance(self.source, MultiSource):
+			for source in self.source:
+				if isinstance(source, source_type):
+					return source
+		return None
+	
 	def create_edit(self, new:"Object") -> "EditSource":
 		edit = EditSource(self, new)
 		new.add_source(edit)
@@ -78,8 +93,22 @@ class Object:
 		
 	def __or__(self:T, other:"Object") -> T:
 		return self.add_source(other)
-	def __and__(self, new:"Object") -> "EditSource":
+	def __gt__(self, new:"Object") -> "EditSource":
 		return self.create_edit(new)
+	def __and__(self, new:"Object") -> "MultiSource":
+		if new is None:
+			return
+		
+		if isinstance(self, MultiSource):
+			self.sources.append(new)
+			return self
+		else:
+			old_source = self.source
+			self.source = MultiSource()
+			if old_source:
+				self.source.sources.append(old_source)
+			self.source.sources.append(new)
+			return self.source
 	
 @DATA
 @dataclass
@@ -112,3 +141,9 @@ class EditSource(Object):
 		Returns the most original object source in the edit chain.
 		"""
 		return self.original_object().source
+
+@DATA
+@dataclass
+class MultiSource(Object):
+	sources: List[Object] = field(default_factory=list)
+	
