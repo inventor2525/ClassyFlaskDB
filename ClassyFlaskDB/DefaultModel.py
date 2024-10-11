@@ -71,7 +71,7 @@ class Object:
 		s.source = other
 		return self
 	
-	def get_source(self, source_type:Type[T]) -> Optional[T]:
+	def get_source(self, source_type:Type[T], expand_edits:bool=False) -> Optional[T]:
 		'''
 		Finds the source of the specified type,
 		regardless how many sources this object has.
@@ -80,10 +80,18 @@ class Object:
 			return None
 		if isinstance(self.source, source_type):
 			return self.source
+		if expand_edits and isinstance(self.source, EditSource):
+			og = self.source.original_source()
+			if isinstance(og, source_type):
+				return og
 		if isinstance(self.source, MultiSource):
 			for source in self.source:
 				if isinstance(source, source_type):
 					return source
+				if expand_edits and isinstance(source, EditSource):
+					og = source.original_source()
+					if isinstance(og, source_type):
+						return og
 		return None
 	
 	def create_edit(self, new:"Object") -> "EditSource":
@@ -109,6 +117,11 @@ class Object:
 				self.source.sources.append(old_source)
 			self.source.sources.append(new)
 			return self.source
+	
+	
+	expand edit option add to the get method
+	
+	
 	
 @DATA
 @dataclass
