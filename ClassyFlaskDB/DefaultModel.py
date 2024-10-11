@@ -81,6 +81,8 @@ class Object:
 		if isinstance(self.source, source_type):
 			return self.source
 		if expand_edits and isinstance(self.source, EditSource):
+			if isinstance(self.source.source, source_type):
+				return self.source.source
 			og = self.source.original_source()
 			if isinstance(og, source_type):
 				return og
@@ -89,6 +91,8 @@ class Object:
 				if isinstance(source, source_type):
 					return source
 				if expand_edits and isinstance(source, EditSource):
+					if isinstance(source.source, source_type):
+						return source.source
 					og = source.original_source()
 					if isinstance(og, source_type):
 						return og
