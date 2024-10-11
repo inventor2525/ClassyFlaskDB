@@ -122,11 +122,6 @@ class Object:
 			self.source.sources.append(new)
 			return self.source
 	
-	
-	expand edit option add to the get method
-	
-	
-	
 @DATA
 @dataclass
 class Tag(Object):
