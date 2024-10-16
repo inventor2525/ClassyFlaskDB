@@ -80,13 +80,13 @@ class Object:
 		if expand_copies:
 			self_type = type(self)
 			if self_type is not source_type and isinstance(source, self_type):
-				closed_set = set() #prevent infinite loop, incase dumb happens.
+				closed_set = [] #prevent infinite loop, incase dumb happens.
 				while isinstance(source, self_type):
 					source = source.source
 					if source:
 						if source in closed_set:
 							break
-						closed_set.add(source)
+						closed_set.append(source)
 		
 		if source is None:
 			return None
