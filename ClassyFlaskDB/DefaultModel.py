@@ -71,29 +71,44 @@ class Object:
 		s.source = other
 		return self
 	
-	def get_source(self, source_type:Type[T], expand_edits:bool=False) -> Optional[T]:
+	def get_source(self, source_type:Type[T], expand_edits:bool=False, expand_copies:bool=True) -> Optional[T]:
 		'''
 		Finds the source of the specified type,
 		regardless how many sources this object has.
 		'''
-		if self.source is None:
+		source = self.source
+		if expand_copies:
+			self_type = type(self)
+			if self_type is not source_type and isinstance(source, self_type):
+				closed_set = set() #prevent infinite loop, incase dumb happens.
+				while isinstance(source, self_type):
+					source = source.source
+					if source:
+						if source in closed_set:
+							break
+						closed_set.add(source)
+		
+		if source is None:
 			return None
-		if isinstance(self.source, source_type):
-			return self.source
-		if expand_edits and isinstance(self.source, EditSource):
-			if isinstance(self.source.source, source_type):
-				return self.source.source
-			og = self.source.original_source()
+		
+		if isinstance(source, source_type):
+			return source
+		
+		if expand_edits and isinstance(source, EditSource):
+			if isinstance(source.source, source_type):
+				return source.source
+			og = source.original_source()
 			if isinstance(og, source_type):
 				return og
-		if isinstance(self.source, MultiSource):
-			for source in self.source:
-				if isinstance(source, source_type):
-					return source
-				if expand_edits and isinstance(source, EditSource):
-					if isinstance(source.source, source_type):
-						return source.source
-					og = source.original_source()
+		
+		if isinstance(source, MultiSource):
+			for s in source:
+				if isinstance(s, source_type):
+					return s
+				if expand_edits and isinstance(s, EditSource):
+					if isinstance(s.source, source_type):
+						return s.source
+					og = s.original_source()
 					if isinstance(og, source_type):
 						return og
 		return None
