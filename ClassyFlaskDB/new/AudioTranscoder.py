@@ -33,7 +33,8 @@ class AudioTranscoder(Transcoder):
 		merge_args.storage_engine.id_mapping[id(value)] = audio_id
 
 		file_path = os.path.join(merge_args.storage_engine.files_dir, f"{audio_id}.mp3")
-		value.export(file_path, format="mp3")
+		if not os.path.exists(file_path):
+			value.export(file_path, format="mp3")
 
 		merge_args.encodes[f"{merge_args.base_name}_id"] = audio_id
 
