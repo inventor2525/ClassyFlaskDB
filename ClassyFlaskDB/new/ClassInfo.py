@@ -1,5 +1,5 @@
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
-from typing import Protocol, Type, Union, Tuple, Set
+from typing import Protocol, Type, Union, Tuple, Set, List
 from dataclasses import fields, Field
 import re
 
@@ -115,3 +115,18 @@ class ClassInfo:
 		if ClassInfo.has_ClassInfo(type_):
 			return ClassInfo.get(type_).semi_qualname.replace('.', '_')
 		return type_.__name__
+	
+	@staticmethod
+	def parent_infos(cls:Type) -> List['ClassInfo']:
+		bases = list(cls.__bases__)
+		base_ClassInfos = []
+		while len(bases)>0:
+			base = bases.pop()
+			if base is object:
+				continue
+			
+			bases.extend(base.__bases__)
+			ci = ClassInfo.get(base)
+			if ci:
+				base_ClassInfos.append(ci)
+		return base_ClassInfos
