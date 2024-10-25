@@ -7,6 +7,14 @@ def get_local_time():
 	local_tz = tzlocal.get_localzone()
 	return datetime.now(local_tz)
 
+def default(mutable_default_value) -> Field:
+	'''
+	Creates a dataclasses.field that accepts
+	any value, including mutable ones, as a default
+	without raising a pointless exception.
+	'''
+	return field(default_factory=lambda:mutable_default_value)
+
 class ObjectTagsProxy():
 	'''
 	Maps an object's Tags into dot syntax.
