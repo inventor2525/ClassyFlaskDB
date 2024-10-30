@@ -483,5 +483,85 @@ class JSONStorageEngine_tests(unittest.TestCase):
 
 		# Cleanup
 		shutil.rmtree(storage_dir)
+		
+	def test_complex_dict(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class Person:
+			name: str
+			age: int
+
+		@DATA
+		@dataclass
+		class Department:
+			employee_data: Dict[Person, List[str]]
+			reporting_chain: Dict[str, Person]
+
+		storage = JSONStorageEngine(
+			storage_path="test_storage.json",
+			data_decorator=DATA
+		)
+
+		# Create test data
+		alice = Person("Alice", 30)
+		bob = Person("Bob", 25)
+		charlie = Person("Charlie", 35)
+
+		dept = Department(
+			employee_data={
+				alice: ["Python", "JavaScript"],
+				bob: ["Java", "C++"],
+				charlie: ["Rust", "Go"]
+			},
+			reporting_chain={
+				"team_lead": alice,
+				"senior_dev": bob,
+				"architect": charlie
+			}
+		)
+
+		storage.merge(dept)
+
+		# Debug print
+		if storage.use_folders:
+			with open(storage.storage_path / f"obj_Department/{dept.get_primary_key()}.json") as f:
+				print("Stored JSON:", json.load(f))
+		else:
+			print("Storage data:", storage._data)
+
+		# Query and verify
+		queried = storage.query(Department).filter_by_id(dept.get_primary_key())
+		
+		# Verify employee_data
+		self.assertEqual(len(queried.employee_data), 3)
+		for person, skills in queried.employee_data.items():
+			original_person = next(p for p in [alice, bob, charlie] if p.name == person.name)
+			self.assertEqual(person.age, original_person.age)
+			self.assertEqual(queried.employee_data[person], dept.employee_data[original_person])
+
+		# Verify reporting_chain
+		self.assertEqual(len(queried.reporting_chain), 3)
+		self.assertEqual(queried.reporting_chain["team_lead"].name, "Alice")
+		self.assertEqual(queried.reporting_chain["senior_dev"].name, "Bob")
+		self.assertEqual(queried.reporting_chain["architect"].name, "Charlie")
+
+		# Test modifications
+		dave = Person("Dave", 28)
+		queried.employee_data[dave] = ["PHP", "MySQL"]
+		queried.reporting_chain["new_hire"] = dave
+
+		storage.merge(queried)
+
+		# Verify modifications
+		requeried = storage.query(Department).filter_by_id(dept.get_primary_key())
+		self.assertEqual(len(requeried.employee_data), 4)
+		self.assertEqual(requeried.employee_data[dave], ["PHP", "MySQL"])
+		self.assertEqual(requeried.reporting_chain["new_hire"].name, "Dave")
+
+		# Cleanup
+		if os.path.exists("test_storage.json"):
+			os.remove("test_storage.json")
 if __name__ == '__main__':
 	unittest.main()
