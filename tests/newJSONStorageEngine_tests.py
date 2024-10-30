@@ -267,6 +267,12 @@ class JSONStorageEngine_tests(unittest.TestCase):
 		)
 
 		storage.merge(settings)
+		# Debug prints
+		if storage.use_folders:
+			with open(storage.storage_path / f"obj_Settings/{settings.get_primary_key()}.json") as f:
+				print("Stored JSON:", json.load(f))
+		else:
+			print("Storage data:", storage._data)
 
 		# Query and verify
 		queried = storage.query(Settings).filter_by_id(settings.get_primary_key())

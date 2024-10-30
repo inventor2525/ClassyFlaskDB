@@ -530,13 +530,18 @@ class JsonDictTranscoder(Transcoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
         origin = get_origin(type_)
-        if origin is not dict:
+        print(f"JsonDictTranscoder.validate called for type {type_}, origin: {origin}")
+        if origin is not dict and origin is not Dict:
             return False
         
         key_type, value_type = get_args(type_)
+        print(f"key_type: {key_type}, value_type: {value_type}")
+        
         # Check if both key and value types are JSON serializable
-        return (key_type in (str, int, float) and 
-                value_type in (str, int, float, bool, None))
+        json_types = (str, int, float, bool, type(None))
+        is_valid = key_type in json_types and value_type in json_types
+        print(f"JsonDictTranscoder validation result: {is_valid}")
+        return is_valid
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
@@ -544,8 +549,13 @@ class JsonDictTranscoder(Transcoder):
 
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Dict[Any, Any]) -> None:
+        print(f"JsonDictTranscoder._encode called with value: {value}")
+        print(f"base_name: {merge_args.base_name}")
         merge_args.encodes[merge_args.base_name] = value
+        print(f"encodes after: {merge_args.encodes}")
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> Dict[Any, Any]:
+        print(f"JsonDictTranscoder.decode called with base_name: {decode_args.base_name}")
+        print(f"encodes: {decode_args.encodes}")
         return decode_args.encodes[decode_args.base_name]
