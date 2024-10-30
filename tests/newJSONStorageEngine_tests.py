@@ -3,7 +3,7 @@ from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from datetime import datetime
 from enum import Enum
 from typing import List, Dict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import unittest
@@ -138,6 +138,167 @@ class JSONStorageEngine_tests(unittest.TestCase):
 		# Verify object identity
 		self.assertIs(queried_node.next.next.next, queried_node)
 		self.assertIs(queried_node.prev.prev.prev, queried_node)
+
+		# Cleanup
+		if os.path.exists("test_storage.json"):
+			os.remove("test_storage.json")
+	
+		def test_list_types(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class Person:
+			name: str
+			friends: List['Person'] = field(default_factory=list)
+
+		@DATA
+		@dataclass
+		class Container:
+			numbers: List[int]
+			strings: List[str]
+			people: List[Person]
+
+		storage = JSONStorageEngine(
+			storage_path="test_storage.json",
+			data_decorator=DATA
+		)
+
+		# Create circular reference in people
+		alice = Person("Alice")
+		bob = Person("Bob")
+		charlie = Person("Charlie")
+		
+		alice.friends = [bob, charlie]
+		bob.friends = [alice, charlie]
+		charlie.friends = [alice, bob]
+
+		container = Container(
+			numbers=[1, 2, 3, 4, 5],
+			strings=["hello", "world"],
+			people=[alice, bob, charlie]
+		)
+
+		storage.merge(container)
+
+		# Query and verify
+		queried = storage.query(Container).filter_by_id(container.get_primary_key())
+		
+		# Check simple lists
+		self.assertEqual(queried.numbers, [1, 2, 3, 4, 5])
+		self.assertEqual(queried.strings, ["hello", "world"])
+		
+		# Check object list
+		self.assertEqual(len(queried.people), 3)
+		self.assertEqual(queried.people[0].name, "Alice")
+		self.assertEqual(queried.people[1].name, "Bob")
+		self.assertEqual(queried.people[2].name, "Charlie")
+		
+		# Verify circular references in friends lists
+		alice_queried = queried.people[0]
+		bob_queried = queried.people[1]
+		charlie_queried = queried.people[2]
+		
+		# Check Alice's friends
+		self.assertEqual(len(alice_queried.friends), 2)
+		self.assertIs(alice_queried.friends[0], bob_queried)
+		self.assertIs(alice_queried.friends[1], charlie_queried)
+		
+		# Check Bob's friends
+		self.assertEqual(len(bob_queried.friends), 2)
+		self.assertIs(bob_queried.friends[0], alice_queried)
+		self.assertIs(bob_queried.friends[1], charlie_queried)
+		
+		# Check Charlie's friends
+		self.assertEqual(len(charlie_queried.friends), 2)
+		self.assertIs(charlie_queried.friends[0], alice_queried)
+		self.assertIs(charlie_queried.friends[1], bob_queried)
+
+		# Test modification of lists
+		queried.numbers.append(6)
+		queried.strings.extend(["!", "?"])
+		dave = Person("Dave")
+		queried.people.append(dave)
+		
+		storage.merge(queried)
+		
+		# Verify modifications
+		requeried = storage.query(Container).filter_by_id(container.get_primary_key())
+		self.assertEqual(requeried.numbers, [1, 2, 3, 4, 5, 6])
+		self.assertEqual(requeried.strings, ["hello", "world", "!", "?"])
+		self.assertEqual(len(requeried.people), 4)
+		self.assertEqual(requeried.people[3].name, "Dave")
+
+		# Cleanup
+		if os.path.exists("test_storage.json"):
+			os.remove("test_storage.json")
+
+	def test_json_dict(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class Settings:
+			config: Dict[str, str]
+			counts: Dict[str, int]
+			metrics: Dict[str, float]
+
+		storage = JSONStorageEngine(
+			storage_path="test_storage.json",
+			data_decorator=DATA
+		)
+
+		settings = Settings(
+			config={
+				"host": "localhost",
+				"port": "8080",
+				"mode": "debug"
+			},
+			counts={
+				"errors": 0,
+				"warnings": 5,
+				"info": 100
+			},
+			metrics={
+				"latency": 0.123,
+				"uptime": 99.99,
+				"memory": 45.6
+			}
+		)
+
+		storage.merge(settings)
+
+		# Query and verify
+		queried = storage.query(Settings).filter_by_id(settings.get_primary_key())
+		
+		self.assertEqual(queried.config, {
+			"host": "localhost",
+			"port": "8080",
+			"mode": "debug"
+		})
+		self.assertEqual(queried.counts, {
+			"errors": 0,
+			"warnings": 5,
+			"info": 100
+		})
+		self.assertEqual(queried.metrics, {
+			"latency": 0.123,
+			"uptime": 99.99,
+			"memory": 45.6
+		})
+
+		# Test modifications
+		queried.config["env"] = "production"
+		queried.counts["errors"] += 1
+		queried.metrics["memory"] = 50.0
+
+		storage.merge(queried)
+
+		# Verify modifications
+		requeried = storage.query(Settings).filter_by_id(settings.get_primary_key())
+		self.assertEqual(requeried.config["env"], "production")
+		self.assertEqual(requeried.counts["errors"], 1)
+		self.assertEqual(requeried.metrics["memory"], 50.0)
 
 		# Cleanup
 		if os.path.exists("test_storage.json"):
