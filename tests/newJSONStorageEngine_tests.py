@@ -143,7 +143,7 @@ class JSONStorageEngine_tests(unittest.TestCase):
 		if os.path.exists("test_storage.json"):
 			os.remove("test_storage.json")
 	
-		def test_list_types(self):
+	def test_list_types(self):
 		DATA = DATADecorator()
 
 		@DATA
