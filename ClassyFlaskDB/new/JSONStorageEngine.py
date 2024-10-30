@@ -261,33 +261,55 @@ class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
     def _merge(cls, merge_args: MergeArgs, obj: Any) -> None:
         if obj is None:
+            merge_args.encodes[f"{merge_args.base_name}_id"] = None
+            merge_args.encodes[f"{merge_args.base_name}_type"] = None
             return
 
         class_info = ClassInfo.get(type(obj))
         
-        # Add the primary key directly to the encodes
-        merge_args.encodes[class_info.primary_key_name] = obj.get_primary_key()
-        
-        cf_instance = CFInstance.get(obj)
-        for field in class_info.fields.values():
-            if cf_instance is not MISSING:
-                if field.name in cf_instance.unloaded_fields:
-                    continue
+        # For top-level objects
+        if merge_args.base_name == 'id':
+            merge_args.encodes[class_info.primary_key_name] = obj.get_primary_key()
             
-            value = getattr(obj, field.name)
-            if value is not None:
+            cf_instance = CFInstance.get(obj)
+            for field in class_info.fields.values():
+                if cf_instance is not MISSING and field.name in cf_instance.unloaded_fields:
+                    continue
+                
+                value = getattr(obj, field.name)
                 transcoder = merge_args.storage_engine.get_transcoder_type(field.type)
                 field_merge_args = merge_args.new(
                     base_name=field.name,
-                    type=field.type
+                    type=field.type,
+                    encodes={}
                 )
-                if ClassInfo.has_ClassInfo(field.type):
-                    # For object references, use _encode instead of merge
-                    transcoder._encode(field_merge_args, value)
-                else:
-                    # For non-object fields, use normal merge
-                    transcoder.merge(field_merge_args, value)
+                transcoder.merge(field_merge_args, value)
                 merge_args.encodes.update(field_merge_args.encodes)
+        else:
+            # For referenced objects
+            merge_args.encodes[f"{merge_args.base_name}_id"] = obj.get_primary_key()
+            merge_args.encodes[f"{merge_args.base_name}_type"] = class_info.semi_qualname
+            
+            # Also merge the referenced object
+            ref_merge_args = merge_args.new(
+                base_name='id',
+                type=type(obj),
+                encodes={}
+            )
+            cls._merge(ref_merge_args, obj)
+            
+            # Store in the current data or folder
+            if isinstance(merge_args, JSONMergeArgs):
+                if merge_args.root_path:
+                    table_path = merge_args.root_path / merge_args.storage_engine.get_table_name(type(obj))
+                    table_path.mkdir(parents=True, exist_ok=True)
+                    with open(table_path / f"{obj.get_primary_key()}.json", 'w') as f:
+                        json.dump(ref_merge_args.encodes, f, indent=2)
+                else:
+                    table_name = merge_args.storage_engine.get_table_name(type(obj))
+                    if table_name not in merge_args.current_data:
+                        merge_args.current_data[table_name] = {}
+                    merge_args.current_data[table_name][obj.get_primary_key()] = ref_merge_args.encodes
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
         if value is None:
@@ -351,7 +373,7 @@ class DateTimeTranscoder(Transcoder):
             
         tz_str = value.tzinfo.key if value.tzinfo else None
         merge_args.encodes[merge_args.base_name] = {
-            'timestamp': value.timestamp(),
+            'timestamp': value.astimezone(ZoneInfo("UTC")).timestamp(),  # Convert to UTC first
             'timezone': tz_str
         }
 
@@ -361,9 +383,9 @@ class DateTimeTranscoder(Transcoder):
         if value is None:
             return None
             
-        dt = datetime.fromtimestamp(value['timestamp'])
+        dt = datetime.fromtimestamp(value['timestamp'], ZoneInfo("UTC"))
         if value['timezone']:
-            dt = dt.replace(tzinfo=ZoneInfo(value['timezone']))
+            dt = dt.astimezone(ZoneInfo(value['timezone']))
         return dt
 
 @json_transcoder_collection.add
