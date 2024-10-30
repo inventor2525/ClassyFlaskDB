@@ -72,10 +72,11 @@ class JSONStorageEngine(StorageEngine):
 
     def setup(self, data_decorator: 'DATADecorator'):
         if self.use_folders:
+            self.storage_path.mkdir(parents=True, exist_ok=True)
             for cls in data_decorator.registry.values():
                 class_info = ClassInfo.get(cls)
                 table_path = self.storage_path / self.get_table_name(cls)
-                table_path.mkdir(exist_ok=True)
+                table_path.mkdir(parents=True, exist_ok=True)
 
     def merge(self, obj: Any, persist: bool = False):
         context = self.context if persist else {}
@@ -267,6 +268,9 @@ class ObjectTranscoder(LazyLoadingTranscoder):
 
         class_info = ClassInfo.get(type(obj))
         
+        # Add this line to ensure auto_id is encoded
+        personal_merge_args.encodes[class_info.primary_key_name] = obj.get_primary_key()
+        
         cf_instance = CFInstance.get(obj)
         for field in class_info.fields.values():
             if cf_instance is not MISSING:
@@ -287,7 +291,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             if merge_args.root_path:
                 # Folder-based storage
                 obj_path = merge_args.root_path / table_name / f"{obj.get_primary_key()}.json"
-                obj_path.parent.mkdir(exist_ok=True)
+                obj_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(obj_path, 'w') as f:
                     json.dump(personal_merge_args.encodes, f, indent=2)
             else:
