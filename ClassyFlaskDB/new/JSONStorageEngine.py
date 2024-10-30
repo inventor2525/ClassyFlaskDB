@@ -94,10 +94,12 @@ class JSONStorageEngine(StorageEngine):
         )
         
         transcoder = self.get_transcoder_type(type(obj))
-        transcoder.merge(merge_args, obj)
+        # Call _merge directly instead of merge to avoid the _encode step
+        transcoder._merge(merge_args, obj)
         
         if self.use_folders:
             table_path = self.storage_path / self.get_table_name(type(obj))
+            table_path.mkdir(parents=True, exist_ok=True)
             obj_path = table_path / f"{obj.get_primary_key()}.json"
             with open(obj_path, 'w') as f:
                 json.dump(merge_args.encodes, f, indent=2)
@@ -261,15 +263,10 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         if obj is None:
             return
 
-        personal_merge_args = merge_args.new(
-            same_depth=True,
-            encodes={}
-        )
-
         class_info = ClassInfo.get(type(obj))
         
-        # Add this line to ensure auto_id is encoded
-        personal_merge_args.encodes[class_info.primary_key_name] = obj.get_primary_key()
+        # Add the primary key directly to the encodes
+        merge_args.encodes[class_info.primary_key_name] = obj.get_primary_key()
         
         cf_instance = CFInstance.get(obj)
         for field in class_info.fields.values():
@@ -278,28 +275,19 @@ class ObjectTranscoder(LazyLoadingTranscoder):
                     continue
             
             value = getattr(obj, field.name)
-            transcoder = personal_merge_args.storage_engine.get_transcoder_type(field.type)
-            field_merge_args = personal_merge_args.new(
-                base_name=field.name,
-                type=field.type
-            )
-            transcoder.merge(field_merge_args, value)
-
-        # Handle JSON storage engine specific logic
-        if isinstance(merge_args, JSONMergeArgs):
-            table_name = merge_args.storage_engine.get_table_name(type(obj))
-            if merge_args.root_path:
-                # Folder-based storage
-                obj_path = merge_args.root_path / table_name / f"{obj.get_primary_key()}.json"
-                obj_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(obj_path, 'w') as f:
-                    json.dump(personal_merge_args.encodes, f, indent=2)
-            else:
-                # Dictionary-based storage
-                if table_name not in merge_args.current_data:
-                    merge_args.current_data[table_name] = {}
-                merge_args.current_data[table_name][obj.get_primary_key()] = personal_merge_args.encodes
-
+            if value is not None:
+                transcoder = merge_args.storage_engine.get_transcoder_type(field.type)
+                field_merge_args = merge_args.new(
+                    base_name=field.name,
+                    type=field.type
+                )
+                if ClassInfo.has_ClassInfo(field.type):
+                    # For object references, use _encode instead of merge
+                    transcoder._encode(field_merge_args, value)
+                else:
+                    # For non-object fields, use normal merge
+                    transcoder.merge(field_merge_args, value)
+                merge_args.encodes.update(field_merge_args.encodes)
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
         if value is None:
