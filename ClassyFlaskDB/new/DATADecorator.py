@@ -139,3 +139,19 @@ class DATADecorator(InfoDecorator):
 				return cls_copy
 
 			setattr(cls, '__deepcopy__', __deepcopy__)
+			
+			def _hash_implementation(self):
+				"""Generate a hash based on the object's ID or dataclass fields."""
+				# if hasattr(self.__class__, '__orig_hash__'):
+				# 	# Use original dataclass-generated hash if it exists
+				# 	return self.__class__.__orig_hash__(self)
+				
+				# Otherwise, hash the primary key
+				return hash(self.get_primary_key())
+			
+			# Preserve any existing dataclass-generated hash
+			# if hasattr(cls, '__hash__'):
+			# 	setattr(cls, '__orig_hash__', cls.__hash__)
+			
+			# Set our new hash implementation
+			setattr(cls, '__hash__', _hash_implementation)

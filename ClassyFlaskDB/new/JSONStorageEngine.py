@@ -122,10 +122,11 @@ class JSONStorageEngine(StorageEngine):
         for transcoder in self.transcoders:
             try:
                 if transcoder.validate(type_):
+                    print(f"Transcoder for {type_} is: {transcoder}")
                     self.transcoder_map[type_] = transcoder
                     return transcoder
-            except:
-                pass
+            except Exception as e:
+                print(f"Transcoder validate {type_} error {e}")
         return None
 
     def query(self, cls: Type[T]) -> 'JSONStorageEngineQuery[T]':
@@ -411,7 +412,39 @@ class EnumTranscoder(Transcoder):
 class ListTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
-        return get_origin(type_) is list
+        origin = get_origin(type_)
+        if origin is not list:
+            return False
+            
+        def check_type(t: Type, seen: Set[Type] = None) -> bool:
+            if seen is None:
+                seen = set()
+            
+            if t in seen:
+                return False
+            seen.add(t)
+            
+            # Simplified validation: check if it's a basic type or DATA object
+            if ClassInfo.has_ClassInfo(t):
+                return True
+                
+            origin = get_origin(t)
+            if origin is None:
+                return BasicsTranscoder.validate(t)
+                
+            if origin is list:
+                value_type = get_args(t)[0]
+                return check_type(value_type, seen)
+                
+            if origin is dict:
+                key_type, value_type = get_args(t)
+                return (check_type(key_type, seen) and 
+                       check_type(value_type, seen))
+            
+            return False
+            
+        value_type = get_args(type_)[0]
+        return check_type(value_type)
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
@@ -465,10 +498,96 @@ class ListTranscoder(LazyLoadingTranscoder):
         return lazy_list
 
 @json_transcoder_collection.add
+class JsonDictTranscoder(Transcoder):
+    @classmethod
+    def is_json_primitive(cls, type_: Type) -> bool:
+        return type_ in (str, int, float, bool, type(None))
+
+    @classmethod
+    def _validate_type(cls, type_: Type, seen: Set[Type] = None) -> bool:
+        if seen is None:
+            seen = set()
+        
+        if type_ in seen:
+            return False
+        seen.add(type_)
+
+        origin = get_origin(type_)
+        if origin is None:
+            return cls.is_json_primitive(type_)
+        
+        if origin is list:
+            value_type = get_args(type_)[0]
+            return cls._validate_type(value_type, seen)
+        
+        if origin is dict:
+            key_type, value_type = get_args(type_)
+            return (cls.is_json_primitive(key_type) and 
+                   cls._validate_type(value_type, seen))
+        
+        return False
+
+    @classmethod
+    def validate(cls, type_: Type) -> bool:
+        origin = get_origin(type_)
+        if origin is not dict:
+            return False
+        
+        key_type, value_type = get_args(type_)
+        return cls._validate_type(type_)
+
+    @classmethod
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
+        return []
+
+    @classmethod
+    def _encode(cls, merge_args: MergeArgs, value: Dict[Any, Any]) -> None:
+        if value is None:
+            merge_args.encodes[merge_args.base_name] = None
+            return
+        merge_args.encodes[merge_args.base_name] = dict(value)  # Create a copy of the dictionary
+
+    @classmethod
+    def decode(cls, decode_args: DecodeArgs) -> Dict[Any, Any]:
+        value = decode_args.encodes[decode_args.base_name]
+        return dict(value) if value is not None else None
+    
+@json_transcoder_collection.add
 class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
-        return get_origin(type_) is dict
+        origin = get_origin(type_)
+        if origin is not dict:
+            return False
+            
+        def check_type(t: Type, seen: Set[Type] = None) -> bool:
+            if seen is None:
+                seen = set()
+                
+            if t in seen:
+                return False
+            seen.add(t)
+            
+            if ClassInfo.has_ClassInfo(t):
+                return True
+                
+            origin = get_origin(t)
+            if origin is None:
+                return BasicsTranscoder.validate(t)
+                
+            if origin is list:
+                value_type = get_args(t)[0]
+                return check_type(value_type, seen)
+                
+            if origin is dict:
+                key_type, value_type = get_args(t)
+                return (check_type(key_type, seen) and 
+                       check_type(value_type, seen))
+            
+            return False
+            
+        key_type, value_type = get_args(type_)
+        return check_type(key_type) and check_type(value_type)
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
@@ -524,38 +643,16 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
             key_transcoder=key_transcoder,
             value_transcoder=value_transcoder
         ))
-
-@json_transcoder_collection.add
-class JsonDictTranscoder(Transcoder):
+    
     @classmethod
-    def validate(cls, type_: Type) -> bool:
-        origin = get_origin(type_)
-        print(f"JsonDictTranscoder.validate called for type {type_}, origin: {origin}")
-        if origin is not dict and origin is not Dict:
-            return False
+    def create_lazy_instance(cls, cf_instance: DictCFInstance) -> InstrumentedDict:
+        from .InstrumentedDict import InstrumentedItem
+        lazy_dict = InstrumentedDict()
+        lazy_dict._cf_instance = cf_instance
         
-        key_type, value_type = get_args(type_)
-        print(f"key_type: {key_type}, value_type: {value_type}")
-        
-        # Check if both key and value types are JSON serializable
-        json_types = (str, int, float, bool, type(None))
-        is_valid = key_type in json_types and value_type in json_types
-        print(f"JsonDictTranscoder validation result: {is_valid}")
-        return is_valid
-
-    @classmethod
-    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
-        return []
-
-    @classmethod
-    def _encode(cls, merge_args: MergeArgs, value: Dict[Any, Any]) -> None:
-        print(f"JsonDictTranscoder._encode called with value: {value}")
-        print(f"base_name: {merge_args.base_name}")
-        merge_args.encodes[merge_args.base_name] = value
-        print(f"encodes after: {merge_args.encodes}")
-
-    @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> Dict[Any, Any]:
-        print(f"JsonDictTranscoder.decode called with base_name: {decode_args.base_name}")
-        print(f"encodes: {decode_args.encodes}")
-        return decode_args.encodes[decode_args.base_name]
+        # Pre-populate with InstrumentedItems
+        lazy_dict.__items__ = []
+        for encoded_item in cf_instance.decode_args.encodes.get(f"{cf_instance.decode_args.base_name}_items", []):
+            lazy_dict.__items__.append(InstrumentedItem(encodes_row=encoded_item))
+            
+        return lazy_dict
