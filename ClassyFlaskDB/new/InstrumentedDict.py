@@ -31,10 +31,12 @@ class InstrumentedDict(dict):
 	def from_cf_instance(cls, cf_instance: DictCFInstance) -> 'InstrumentedDict':
 		instance = cls()
 		instance._cf_instance = cf_instance
-		instance.__items__ = [
-			InstrumentedItem(encodes_row=row)
-			for row in cf_instance.decode_args.encodes
-		]
+		instance.__items__ = []
+		
+		# cf_instance.decode_args.encodes is already the list of items
+		for encoded_item in cf_instance.decode_args.encodes:
+			instance.__items__.append(InstrumentedItem(encodes_row=encoded_item))
+		
 		return instance
 	
 	def __setitem__(self, key, value) -> None:

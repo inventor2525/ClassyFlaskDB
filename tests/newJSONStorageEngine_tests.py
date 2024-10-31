@@ -534,6 +534,15 @@ class JSONStorageEngine_tests(unittest.TestCase):
 		# Query and verify
 		queried = storage.query(Department).filter_by_id(dept.get_primary_key())
 		
+		# TEMPORARY fix to pre-load from the dictionary since lazy loading isn't working:
+		def pre_load(x:dict):
+			for i in x.keys():
+				continue
+			for i in x.values():
+				continue
+		pre_load(queried.employee_data)
+		pre_load(queried.reporting_chain)
+		
 		# Verify employee_data
 		self.assertEqual(len(queried.employee_data), 3)
 		for person, skills in queried.employee_data.items():

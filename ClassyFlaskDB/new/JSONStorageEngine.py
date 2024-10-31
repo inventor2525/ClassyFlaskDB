@@ -633,26 +633,22 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         key_transcoder = decode_args.storage_engine.get_transcoder_type(key_type)
         value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
         
-        encoded_items = decode_args.encodes.get(f"{decode_args.base_name}_items", [])
+        # Get the dict's ID and items
+        dict_id = decode_args.encodes.get(f"{decode_args.base_name}_id")
+        items = decode_args.encodes.get(f"{decode_args.base_name}_items", [])
         
-        return cls.create_lazy_instance(DictCFInstance(
-            decode_args=decode_args.new(
-                encodes=encoded_items
-            ),
-            dict_id=str(uuid.uuid4()),
+        # Create new decode args with just the items
+        items_decode_args = decode_args.new(
+            encodes=items
+        )
+        
+        return InstrumentedDict.from_cf_instance(DictCFInstance(
+            decode_args=items_decode_args,
+            dict_id=dict_id,
             key_transcoder=key_transcoder,
             value_transcoder=value_transcoder
         ))
     
     @classmethod
     def create_lazy_instance(cls, cf_instance: DictCFInstance) -> InstrumentedDict:
-        from .InstrumentedDict import InstrumentedItem
-        lazy_dict = InstrumentedDict()
-        lazy_dict._cf_instance = cf_instance
-        
-        # Pre-populate with InstrumentedItems
-        lazy_dict.__items__ = []
-        for encoded_item in cf_instance.decode_args.encodes.get(f"{cf_instance.decode_args.base_name}_items", []):
-            lazy_dict.__items__.append(InstrumentedItem(encodes_row=encoded_item))
-            
-        return lazy_dict
+        return InstrumentedDict.from_cf_instance(cf_instance)
