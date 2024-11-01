@@ -113,6 +113,300 @@ class LazyLoadingTests(unittest.TestCase):
 			queried = setup_and_query(engine_type)
 			flat_list = [item for sublist in queried.matrix for item in sublist]
 			self.assertEqual(flat_list, [1, 2, 3, 4, 5, 6])
+	
+	def test_complex_list_lazy_loading(self):
+		def setup_and_query(engine_type: int):
+			if os.path.exists("test_lazy_storage.json"):
+				os.remove("test_lazy_storage.json")
+			DATA = DATADecorator()
+			
+			@DATA
+			@dataclass
+			class Person:
+				first_name: str
+				age: int
+				family: 'Family' = None
+
+			@DATA
+			@dataclass
+			class Family:
+				last_name: str
+				members: List[Person]
+
+			@DATA
+			@dataclass
+			class FamilyContainer:
+				families: List[Family]
+
+			storage = self.create_storage(DATA, engine_type)
+			
+			smith_family = Family("Smith", [])
+			doe_family = Family("Doe", [])
+			
+			alice = Person("Alice", 30, smith_family)
+			bob = Person("Bob", 32, smith_family)
+			charlie = Person("Charlie", 28, doe_family)
+			diana = Person("Diana", 26, doe_family)
+			
+			smith_family.members = [alice, bob]
+			doe_family.members = [charlie, diana]
+			
+			container = FamilyContainer([smith_family, doe_family])
+			storage.merge(container)
+			queried = storage.query(FamilyContainer).filter_by_id(container.get_primary_key())
+			return queried, Person, Family
+
+		for engine_type in range(0, 2):
+			# Test indexing and circular references
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(queried.families[0].members[0].family.last_name, "Smith")
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(queried.families[0].members[0].first_name, "Alice")
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertIs(queried.families[0].members[0].family, queried.families[0])
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(len(queried.families), 2)
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(list(queried.families), queried.families)
+
+			# Test insertion
+			def insert_family():
+				queried, Person, Family = setup_and_query(engine_type)
+				new_family = Family("Johnson", [Person("Eve", 22, None)])
+				new_family.members[0].family = new_family
+				queried.families.insert(1, new_family)
+				return queried
+
+			inserted = insert_family()
+			self.assertEqual(inserted.families[1].members[0].first_name, "Eve")
+			inserted = insert_family()
+			self.assertIs(inserted.families[1].members[0].family, inserted.families[1])
+			inserted = insert_family()
+			self.assertEqual(inserted.families[1].last_name, "Johnson")
+			inserted = insert_family()
+			self.assertEqual(len(inserted.families), 3)
+
+			# Test appending
+			def append_family():
+				queried, Person, Family = setup_and_query(engine_type)
+				new_family = Family("Brown", [Person("Frank", 40, None)])
+				new_family.members[0].family = new_family
+				queried.families.append(new_family)
+				return queried
+
+			appended = append_family()
+			self.assertEqual(appended.families[-1].members[0].first_name, "Frank")
+			appended = append_family()
+			self.assertIs(appended.families[-1].members[0].family, appended.families[-1])
+			appended = append_family()
+			self.assertEqual(appended.families[-1].last_name, "Brown")
+			appended = append_family()
+			self.assertEqual(len(appended.families), 3)
+
+	def test_complex_dict_lazy_loading(self):
+		def setup_and_query(engine_type: int):
+			if os.path.exists("test_lazy_storage.json"):
+				os.remove("test_lazy_storage.json")
+			DATA = DATADecorator()
+			
+			@DATA
+			@dataclass
+			class Person:
+				first_name: str
+				age: int
+				family: 'Family' = None
+
+			@DATA
+			@dataclass
+			class Family:
+				last_name: str
+				members: Dict[str, Person]
+
+			@DATA
+			@dataclass
+			class FamilyContainer:
+				families: Dict[str, Family]
+
+			storage = self.create_storage(DATA, engine_type)
+			
+			smith_family = Family("Smith", {})
+			doe_family = Family("Doe", {})
+			
+			alice = Person("Alice", 30, smith_family)
+			bob = Person("Bob", 32, smith_family)
+			charlie = Person("Charlie", 28, doe_family)
+			diana = Person("Diana", 26, doe_family)
+			
+			smith_family.members = {"alice": alice, "bob": bob}
+			doe_family.members = {"charlie": charlie, "diana": diana}
+			
+			container = FamilyContainer({"smith": smith_family, "doe": doe_family})
+			storage.merge(container)
+			queried = storage.query(FamilyContainer).filter_by_id(container.get_primary_key())
+			return queried, Person, Family
+
+		for engine_type in range(0, 2):
+			# Test key access and circular references
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(queried.families["smith"].members["alice"].family.last_name, "Smith")
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(queried.families["smith"].members["alice"].first_name, "Alice")
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertIs(queried.families["smith"].members["alice"].family, queried.families["smith"])
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(len(queried.families), 2)
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(list(queried.families.values()), list(queried.families.values()))
+
+			# Test setting existing key
+			def set_existing_key():
+				queried, Person, Family = setup_and_query(engine_type)
+				new_family = Family("Johnson", {"eve": Person("Eve", 22, None)})
+				new_family.members["eve"].family = new_family
+				queried.families["smith"] = new_family
+				return queried
+
+			modified = set_existing_key()
+			self.assertEqual(modified.families["smith"].members["eve"].first_name, "Eve")
+			modified = set_existing_key()
+			self.assertIs(modified.families["smith"].members["eve"].family, modified.families["smith"])
+			modified = set_existing_key()
+			self.assertEqual(modified.families["smith"].last_name, "Johnson")
+			modified = set_existing_key()
+			self.assertEqual(len(modified.families), 2)
+
+			# Test setting new key
+			def set_new_key():
+				queried, Person, Family = setup_and_query(engine_type)
+				new_family = Family("Brown", {"frank": Person("Frank", 40, None)})
+				new_family.members["frank"].family = new_family
+				queried.families["brown"] = new_family
+				return queried
+
+			added = set_new_key()
+			self.assertEqual(added.families["brown"].members["frank"].first_name, "Frank")
+			added = set_new_key()
+			self.assertIs(added.families["brown"].members["frank"].family, added.families["brown"])
+			added = set_new_key()
+			self.assertEqual(added.families["brown"].last_name, "Brown")
+			added = set_new_key()
+			self.assertEqual(len(added.families), 3)
+
+	def test_nested_complex_structures_lazy_loading(self):
+		def setup_and_query(engine_type: int):
+			if os.path.exists("test_lazy_storage.json"):
+				os.remove("test_lazy_storage.json")
+			DATA = DATADecorator()
+			
+			@DATA
+			@dataclass
+			class Person:
+				first_name: str
+				age: int
+
+			@DATA
+			@dataclass
+			class Family:
+				last_name: str
+				members: List[Person]
+
+			@DATA
+			@dataclass
+			class ComplexContainer:
+				list_of_dicts: List[Dict[Person, Family]]
+				dict_of_lists: Dict[Family, List[Person]]
+
+			storage = self.create_storage(DATA, engine_type)
+			
+			smith_family = Family("Smith", [])
+			doe_family = Family("Doe", [])
+			
+			alice = Person("Alice", 30)
+			bob = Person("Bob", 32)
+			charlie = Person("Charlie", 28)
+			diana = Person("Diana", 26)
+			
+			smith_family.members = [alice, bob]
+			doe_family.members = [charlie, diana]
+			
+			list_of_dicts = [
+				{alice: smith_family, bob: smith_family},
+				{charlie: doe_family, diana: doe_family}
+			]
+			
+			dict_of_lists = {
+				smith_family: [alice, bob],
+				doe_family: [charlie, diana]
+			}
+			
+			container = ComplexContainer(list_of_dicts, dict_of_lists)
+			storage.merge(container)
+			queried = storage.query(ComplexContainer).filter_by_id(container.get_primary_key())
+			return queried, Person, Family
+
+		for engine_type in range(0, 2):
+			# Test nested list of dicts
+			queried, Person, Family = setup_and_query(engine_type)
+			first_person = next(iter(queried.list_of_dicts[0].keys()))
+			queried, Person, Family = setup_and_query(engine_type)
+			first_person = next(iter(queried.list_of_dicts[0].keys()))
+			self.assertEqual(queried.list_of_dicts[0][first_person].members[0].first_name, "Alice")
+			queried, Person, Family = setup_and_query(engine_type)
+			first_person = next(iter(queried.list_of_dicts[0].keys()))
+			self.assertEqual(first_person.first_name, "Alice")
+			queried, Person, Family = setup_and_query(engine_type)
+			first_person = next(iter(queried.list_of_dicts[0].keys()))
+			self.assertEqual(queried.list_of_dicts[0][first_person].last_name, "Smith")
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(len(queried.list_of_dicts), 2)
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(len(queried.list_of_dicts[0]), 2)
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(list(queried.list_of_dicts), queried.list_of_dicts)
+
+			# Test nested dict of lists
+			queried, Person, Family = setup_and_query(engine_type)
+			first_family = next(iter(queried.dict_of_lists.keys()))
+			self.assertEqual(queried.dict_of_lists[first_family][0].first_name, "Alice")
+			queried, Person, Family = setup_and_query(engine_type)
+			first_family = next(iter(queried.dict_of_lists.keys()))
+			self.assertEqual(first_family.last_name, "Smith")
+			queried, Person, Family = setup_and_query(engine_type)
+			first_family = next(iter(queried.dict_of_lists.keys()))
+			self.assertEqual(len(queried.dict_of_lists[first_family]), 2)
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(len(queried.dict_of_lists), 2)
+			queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(list(queried.dict_of_lists.values()), list(queried.dict_of_lists.values()))
+
+			# Test modifying nested structures
+			def modify_structures():
+				queried, Person, Family = setup_and_query(engine_type)
+				new_person = Person("Eve", 22)
+				new_family = Family("Johnson", [new_person])
+				
+				# Modify list of dicts
+				queried.list_of_dicts.append({new_person: new_family})
+				
+				# Modify dict of lists
+				queried.dict_of_lists[new_family] = [new_person]
+				return queried
+
+			modified = modify_structures()
+			self.assertEqual(modified.list_of_dicts[-1][next(iter(modified.list_of_dicts[-1].keys()))].members[0].first_name, "Eve")
+			modified = modify_structures()
+			self.assertEqual(next(iter(modified.list_of_dicts[-1].keys())).first_name, "Eve")
+			modified = modify_structures()
+			self.assertEqual(len(modified.list_of_dicts), 3)
+			
+			modified = modify_structures()
+			new_family = next(family for family in modified.dict_of_lists.keys() if family.last_name == "Johnson")
+			self.assertEqual(modified.dict_of_lists[new_family][0].first_name, "Eve")
+			modified = modify_structures()
+			new_family = next(family for family in modified.dict_of_lists.keys() if family.last_name == "Johnson")
+			self.assertEqual(new_family.last_name, "Johnson")
+			modified = modify_structures()
+			self.assertEqual(len(modified.dict_of_lists), 3)
 
 if __name__ == '__main__':
 	unittest.main()
