@@ -30,7 +30,7 @@ class LazyLoadingTests(unittest.TestCase):
 			storage.merge(container)
 			return storage.query(ListContainer).filter_by_id(container.get_primary_key())
 		
-		for engine_type in range(0,1):
+		for engine_type in range(0, 2):
 			# Test length
 			queried = setup_and_query(engine_type)
 			self.assertEqual(len(queried.items), 5)
@@ -61,7 +61,7 @@ class LazyLoadingTests(unittest.TestCase):
 			storage.merge(container)
 			return storage.query(DictContainer).filter_by_id(container.get_primary_key())
 
-		for engine_type in range(0,1):
+		for engine_type in range(0, 2):
 			# Test length
 			queried = setup_and_query(engine_type)
 			self.assertEqual(len(queried.mapping), 3)
@@ -100,7 +100,7 @@ class LazyLoadingTests(unittest.TestCase):
 			storage.merge(container)
 			return storage.query(NestedContainer).filter_by_id(container.get_primary_key())
 		
-		for engine_type in range(0,1):
+		for engine_type in range(0, 2):
 			# Test nested list
 			queried = setup_and_query(engine_type)
 			self.assertEqual(queried.matrix[1][1], 4)
