@@ -408,5 +408,9 @@ class LazyLoadingTests(unittest.TestCase):
 			modified = modify_structures()
 			self.assertEqual(len(modified.dict_of_lists), 3)
 
+	def tearDown(self):
+		if os.path.exists("test_lazy_storage.json"):
+			os.remove("test_lazy_storage.json")
+
 if __name__ == '__main__':
 	unittest.main()

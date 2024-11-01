@@ -572,5 +572,9 @@ class JSONStorageEngine_tests(unittest.TestCase):
 		# Cleanup
 		if os.path.exists("test_storage.json"):
 			os.remove("test_storage.json")
+
+	def tearDown(self):
+		if os.path.exists("test_storage.json"):
+			os.remove("test_storage.json")
 if __name__ == '__main__':
 	unittest.main()
