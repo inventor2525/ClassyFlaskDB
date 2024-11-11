@@ -393,7 +393,6 @@ class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
         value_type = type(value)
-        assert issubclass(value_type, merge_args.type), f"Type hint not obeyed. This is what we know {merge_args}"
         class_info = ClassInfo.get(value_type)
         primary_key = getattr(value, class_info.primary_key_name)
         merge_args.encodes[f"{merge_args.base_name}_id"] = primary_key

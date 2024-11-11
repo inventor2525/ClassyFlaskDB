@@ -156,7 +156,7 @@ class MultiStorageEngineTests(unittest.TestCase):
 
         # Test both orders
         run_test_with_engines(0, 1)  # JSON first, then SQL
-        #run_test_with_engines(1, 0)  # SQL first, then JSON
+        run_test_with_engines(1, 0)  # SQL first, then JSON
 
     def test_sequential_engine_creation(self):
         DATA, Person, Department, Team, Skill = self.create_model()
