@@ -94,8 +94,7 @@ class JSONStorageEngine(StorageEngine):
         )
         
         transcoder = self.get_transcoder_type(type(obj))
-        # Call _merge directly instead of merge to avoid the _encode step
-        transcoder._merge(merge_args, obj)
+        transcoder.merge(merge_args, obj)
         
         if self.use_folders:
             table_path = self.storage_path / self.get_table_name(type(obj))
