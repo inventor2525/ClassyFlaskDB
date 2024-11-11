@@ -345,7 +345,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         for field in class_info.fields.values():
             if is_update and field.metadata.get('no_update', False):
                 continue
-            if cf_instance is not MISSING:
+            if cf_instance is not MISSING and cf_instance.decode_args.storage_engine is parent_merge_args.storage_engine:
                 if field.name in cf_instance.unloaded_fields:
                     continue
                 

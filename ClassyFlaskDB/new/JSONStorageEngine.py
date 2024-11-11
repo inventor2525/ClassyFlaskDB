@@ -273,8 +273,9 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             
             cf_instance = CFInstance.get(obj)
             for field in class_info.fields.values():
-                if cf_instance is not MISSING and field.name in cf_instance.unloaded_fields:
-                    continue
+                if cf_instance is not MISSING and cf_instance.decode_args.storage_engine is merge_args.storage_engine:
+                    if field.name in cf_instance.unloaded_fields:
+                        continue
                 
                 value = getattr(obj, field.name)
                 transcoder = merge_args.storage_engine.get_transcoder_type(field.type)
