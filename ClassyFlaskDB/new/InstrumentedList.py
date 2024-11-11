@@ -1,4 +1,3 @@
-from .DirtyDecorator import DirtyDecorator
 from typing import Any, Iterable
 from dataclasses import MISSING
 from .Args import DecodeArgs, CFInstance
@@ -13,7 +12,6 @@ class ListCFInstance(CFInstance):
 	value_type: Type
 	value_transcoder: Type[Transcoder]
 
-@DirtyDecorator
 class InstrumentedList(list):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)

@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Type, Iterator
 from .Args import DecodeArgs, CFInstance
-from .DirtyDecorator import DirtyDecorator
 from .Transcoder import Transcoder
 from typing import get_args
 from copy import deepcopy
@@ -20,7 +19,6 @@ class DictCFInstance(CFInstance):
 	key_transcoder: Type[Transcoder]
 	value_transcoder: Type[Transcoder]
 
-@DirtyDecorator
 class InstrumentedDict(dict):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)

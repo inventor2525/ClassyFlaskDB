@@ -19,7 +19,7 @@ class DATADecorator(InfoDecorator):
 	Note: Remember to call finalize after every decorated class is imported!
 	'''
 	
-	class Interface(AutoID.Interface, DirtyDecorator.Interface):
+	class Interface(AutoID.Interface):
 		_cf_instance: Optional['CFInstance'] = None
 		
 		
