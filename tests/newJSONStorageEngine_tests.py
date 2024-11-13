@@ -1,4 +1,5 @@
 from ClassyFlaskDB.new.JSONStorageEngine import JSONStorageEngine
+from ClassyFlaskDB.new.StorageEngine import StorageEngine
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from datetime import datetime
 from enum import Enum
@@ -572,6 +573,90 @@ class JSONStorageEngine_tests(unittest.TestCase):
 		# Cleanup
 		if os.path.exists("test_storage.json"):
 			os.remove("test_storage.json")
+	
+	def test_object_id_persistence(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class SimpleObject:
+			name: str
+			value: int
+
+		storage = JSONStorageEngine(
+			storage_path="test_storage.json",
+			data_decorator=DATA
+		)
+
+		original = SimpleObject("test", 42)
+		original_id = original.get_primary_key()
+		
+		storage.merge(original)
+		queried = storage.query(SimpleObject).filter_by_id(original_id)
+		
+		self.assertEqual(queried.get_primary_key(), original_id)
+		
+		# Verify the object in context is the same
+		requeried = storage.query(SimpleObject).filter_by_id(original_id)
+		self.assertIs(queried, requeried)
+
+	def test_list_id_persistence(self):
+		DATA = DATADecorator()
+
+		@DATA
+		@dataclass
+		class ListContainer:
+			items: List[str]
+
+		storage = JSONStorageEngine(
+			storage_path="test_storage.json",
+			data_decorator=DATA
+		)
+
+		container = ListContainer(items=["a", "b", "c"])
+		storage.merge(container)
+		
+		# Get the list's ID before serialization
+		original_list = container.items
+		original_list_id = StorageEngine.get_id(original_list)
+		
+		queried = storage.query(ListContainer).filter_by_id(container.get_primary_key())
+		queried_list = queried.items
+		
+		self.assertEqual(StorageEngine.get_id(queried_list), original_list_id)
+		
+		# Verify subsequent queries return the same list instance
+		requeried = storage.query(ListContainer).filter_by_id(container.get_primary_key())
+		self.assertIs(queried_list, requeried.items)
+
+	def test_dict_id_persistence(self):
+		DATA = DATADecorator()
+		from ClassyFlaskDB.new.JSONStorageEngine import DictionaryTranscoder
+		@DATA
+		@dataclass
+		class DictContainer:
+			mapping: Dict[str, int] = field(metadata={'transcoder':DictionaryTranscoder})
+
+		storage = JSONStorageEngine(
+			storage_path="test_storage.json",
+			data_decorator=DATA
+		)
+
+		container = DictContainer(mapping={"one": 1, "two": 2})
+		storage.merge(container)
+		
+		# Get the dict's ID before serialization
+		original_dict = container.mapping
+		original_dict_id = StorageEngine.get_id(original_dict)
+		
+		queried = storage.query(DictContainer).filter_by_id(container.get_primary_key())
+		queried_dict = queried.mapping
+		
+		self.assertEqual(StorageEngine.get_id(queried_dict), original_dict_id)
+		
+		# Verify subsequent queries return the same dict instance
+		requeried = storage.query(DictContainer).filter_by_id(container.get_primary_key())
+		self.assertIs(queried_dict, requeried.mapping)
 
 	def tearDown(self):
 		if os.path.exists("test_storage.json"):
