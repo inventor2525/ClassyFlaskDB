@@ -422,7 +422,8 @@ class ListTranscoder(LazyLoadingTranscoder):
         return check_type(value_type)
     
     @classmethod
-    def get_table_name(cls, value_type: Type) -> str:
+    def get_table_name(cls, type__: Type) -> str:
+        value_type = get_args(type__)[0]
         origin = get_origin(value_type)
         return f"list_{origin.__name__ if origin else value_type.__name__}"
 
@@ -453,7 +454,7 @@ class ListTranscoder(LazyLoadingTranscoder):
             })
         
         merge_args.storage_engine._save_value_encodes(
-            cls.get_table_name(value_type),
+            cls.get_table_name(merge_args.type),
             StorageEngine.get_id(value),
             encoded_items
         )
@@ -471,7 +472,7 @@ class ListTranscoder(LazyLoadingTranscoder):
         list_id = decode_args.encodes[f"{decode_args.base_name}_id"]
         
         encoded_items = decode_args.storage_engine._get_value_encodes(
-            cls.get_table_name(value_type),
+            cls.get_table_name(decode_args.type),
             list_id, default=[]
         )
         
@@ -581,7 +582,8 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         return check_type(key_type) and check_type(value_type)
     
     @classmethod
-    def get_table_name(cls, key_type: Type, value_type: Type) -> str:
+    def get_table_name(cls, type_) -> str:
+        key_type, value_type = get_args(type_)
         return f"dict_{key_type.__name__}_{value_type.__name__}"
 
     @classmethod
@@ -621,7 +623,7 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
             })
         
         merge_args.storage_engine._save_value_encodes(
-            cls.get_table_name(key_type, value_type),
+            cls.get_table_name(merge_args.type),
             StorageEngine.get_id(value),
             encoded_items
         )
@@ -640,7 +642,7 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         # Get the dict's ID and items
         dict_id = decode_args.encodes.get(f"{decode_args.base_name}_id")
         items = decode_args.storage_engine._get_value_encodes(
-            cls.get_table_name(key_type, value_type),
+            cls.get_table_name(decode_args.type),
             dict_id, default={}
         )
         

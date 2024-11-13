@@ -462,14 +462,15 @@ class ListTranscoder(LazyLoadingTranscoder):
         return get_origin(type_) is list
 
     @classmethod
-    def get_table_name(cls, value_type: Type) -> str:
+    def get_table_name(cls, type__: Type) -> str:
+        value_type = get_args(type__)[0]
         origin = get_origin(value_type)
         return f"list_{origin.__name__ if origin else value_type.__name__}"
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
         value_type = get_args(type_)[0]
-        table_name = cls.get_table_name(value_type)
+        table_name = cls.get_table_name(type_)
         value_transcoder = setup_args.storage_engine.get_transcoder_type(value_type)
         
         columns = [
@@ -490,7 +491,7 @@ class ListTranscoder(LazyLoadingTranscoder):
         value_type = get_args(merge_args.type)[0]
         value_transcoder = merge_args.storage_engine.get_transcoder_type(value_type)
         
-        table_name = cls.get_table_name(value_type)
+        table_name = cls.get_table_name(merge_args.type)
         table = merge_args.storage_engine.get_table_by_name(table_name)
         
         list_id = StorageEngine.get_id(value)
@@ -524,7 +525,7 @@ class ListTranscoder(LazyLoadingTranscoder):
         value_type = get_args(decode_args.type)[0]
         value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
         
-        table_name = cls.get_table_name(value_type)
+        table_name = cls.get_table_name(decode_args.type)
         table = decode_args.storage_engine.get_table_by_name(table_name)
         
         list_id = decode_args.encodes[f"{decode_args.base_name}_id"]
@@ -627,13 +628,14 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         return check_type(key_type) and check_type(value_type)
 
     @classmethod
-    def get_table_name(cls, key_type: Type, value_type: Type) -> str:
+    def get_table_name(cls, type_) -> str:
+        key_type, value_type = get_args(type_)
         return f"dict_{key_type.__name__}_{value_type.__name__}"
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
         key_type, value_type = get_args(type_)
-        table_name = cls.get_table_name(key_type, value_type)
+        table_name = cls.get_table_name(type_)
         key_transcoder = setup_args.storage_engine.get_transcoder_type(key_type)
         value_transcoder = setup_args.storage_engine.get_transcoder_type(value_type)
         
@@ -656,7 +658,7 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         key_transcoder = merge_args.storage_engine.get_transcoder_type(key_type)
         value_transcoder = merge_args.storage_engine.get_transcoder_type(value_type)
         
-        table_name = cls.get_table_name(key_type, value_type)
+        table_name = cls.get_table_name(merge_args.type)
         table = merge_args.storage_engine.get_table_by_name(table_name)
         
         dict_id = StorageEngine.get_id(value)
@@ -688,7 +690,7 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         key_transcoder = decode_args.storage_engine.get_transcoder_type(key_type)
         value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
         
-        table_name = cls.get_table_name(key_type, value_type)
+        table_name = cls.get_table_name(decode_args.type)
         table = decode_args.storage_engine.get_table_by_name(table_name)
         
         dict_id = decode_args.encodes[f"{decode_args.base_name}_id"]

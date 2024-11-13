@@ -19,14 +19,16 @@ class CollectionDuplicationTests(unittest.TestCase):
 			return SQLStorageEngine("sqlite:///:memory:", DATA)
 
 	def verify_no_duplication(self, storage_engine, collection_type: type, field_name: str):
+		table_name = storage_engine.get_transcoder_type(collection_type).get_table_name(collection_type)
 		if isinstance(storage_engine, SQLStorageEngine):
-			table_name = storage_engine.get_transcoder_type(collection_type).get_table_name(get_args(collection_type)[0])
 			with storage_engine.engine.connect() as conn:
-				result = conn.execute(sa.text(f"SELECT DISTINCT list_id FROM {table_name}")).fetchall()
+				if table_name.startswith('dict'):
+					result = conn.execute(sa.text(f"SELECT DISTINCT dict_id FROM {table_name}")).fetchall()
+				else:
+					result = conn.execute(sa.text(f"SELECT DISTINCT list_id FROM {table_name}")).fetchall()
 				self.assertEqual(len(result), 1, f"Duplicate {collection_type.__name__} found in SQL storage")
 		elif isinstance(storage_engine, JSONStorageEngine):
 			try:
-				table_name = storage_engine.get_table_name(collection_type)
 				if table_name in storage_engine._data:
 					self.assertLessEqual(len(storage_engine._data[table_name]), 1, 
 										f"Duplicate {collection_type.__name__} found in JSON storage")
