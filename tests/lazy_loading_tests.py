@@ -3,7 +3,7 @@ import os
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.JSONStorageEngine import JSONStorageEngine
 from ClassyFlaskDB.new.SQLStorageEngine import SQLStorageEngine
-from ClassyFlaskDB.new.InstrumentedList import SerializedValue
+from ClassyFlaskDB.new.InstrumentedValue import InstrumentedValue
 from dataclasses import dataclass
 from typing import List, Dict
 
@@ -55,14 +55,14 @@ class LazyLoadingTests(unittest.TestCase):
 			for index, item in enumerate(queried.items):
 				self.assertEquals(index, prev_index+1)
 				self.assertEquals(item, items[index])
-				self.assertFalse(isinstance(item, SerializedValue))
+				self.assertFalse(isinstance(item, InstrumentedValue))
 				prev_index = index
 			
 			# Test zipping
 			queried = setup_and_query(engine_type)
 			for item, queried_item in zip(items, queried.items):
 				self.assertEquals(item, queried_item)
-				self.assertFalse(isinstance(queried_item, SerializedValue))
+				self.assertFalse(isinstance(queried_item, InstrumentedValue))
 			
 			# Test equality
 			queried = setup_and_query(engine_type)

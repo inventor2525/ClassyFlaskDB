@@ -4,6 +4,7 @@ from .Args import DecodeArgs, CFInstance
 from dataclasses import dataclass, field
 from typing import Type
 from .Transcoder import Transcoder
+from .InstrumentedValue import InstrumentedValue
 from copy import deepcopy
 
 @dataclass
@@ -11,46 +12,6 @@ class ListCFInstance(CFInstance):
 	list_id: str
 	value_type: Type
 	value_transcoder: Type[Transcoder]
-
-MISSING = object()
-@dataclass
-class SerializedValue:
-	encodes:dict = MISSING
-	value:Any = MISSING
-	loading_func:Callable[[dict],Any] = None
-	
-	@property
-	def loaded_value(self):
-		self.ensure_loaded()
-		return self.value
-	@loaded_value.setter
-	def loaded_value(self, new):
-		self.encodes = MISSING
-		self.value = new
-		
-	def ensure_loaded(self) -> bool:
-		if self.value is MISSING:
-			if self.loading_func and self.encodes is not MISSING:
-				self.value = self.loading_func(self.encodes)
-				return True
-			return False
-		return True
-		
-	def __eq__(self, __value: object) -> bool:
-		if isinstance(__value, SerializedValue):
-			if self.value is MISSING or __value.value is MISSING:
-				if self.encodes is not MISSING and __value.encodes is not MISSING:
-					return self.encodes == __value.encodes
-				if not (self.ensure_loaded() and __value.ensure_loaded()):
-					return False
-			return self.value == __value.value
-		else:
-			if self.ensure_loaded():
-				return self.value == __value
-			return False
-	
-	def __ne__(self, __value: object) -> bool:
-		return not self.__eq__(__value)
 
 class InstrumentedList(list):
 	@classmethod
@@ -65,7 +26,7 @@ class InstrumentedList(list):
 			)
 			return cf_instance.value_transcoder.decode(decode_args)
 		super(InstrumentedList, l).extend([
-			SerializedValue(encodes=value_encodes, loading_func=load)
+			InstrumentedValue(encodes=value_encodes, loading_func=load)
 			for value_encodes in cf_instance.decode_args.encodes
 		])
 		return l
@@ -76,19 +37,19 @@ class InstrumentedList(list):
 
 	def __setitem__(self, key: int, value: Any) -> None:
 		self._dirty = True
-		super().__setitem__(key, SerializedValue(value=value))
+		super().__setitem__(key, InstrumentedValue(value=value))
 
 	def append(self, item: Any) -> None:
 		self._dirty = True
-		super().append(SerializedValue(value=item))
+		super().append(InstrumentedValue(value=item))
 
 	def extend(self, items: Iterable[Any]) -> None:
 		self._dirty = True
-		super().extend([SerializedValue(value=item) for item in items])
+		super().extend([InstrumentedValue(value=item) for item in items])
 
 	def insert(self, index: int, item: Any) -> None:
 		self._dirty = True
-		super().insert(index, SerializedValue(value=item))
+		super().insert(index, InstrumentedValue(value=item))
 
 	def pop(self, index: int = -1) -> Any:
 		self._dirty = True
