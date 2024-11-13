@@ -188,3 +188,6 @@ class InstrumentedDict(dict):
 		memo[id(self)] = result
 		
 		return result
+	
+	def get_primary_key(self) -> str:
+		return self._cf_instance.dict_id

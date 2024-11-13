@@ -456,8 +456,6 @@ class EnumTranscoder(Transcoder):
     
 @sql_transcoder_collection.add
 class ListTranscoder(LazyLoadingTranscoder):
-    list_id_mapping: Dict[int, str] = {}
-
     @classmethod
     def validate(cls, type_: Type) -> bool:
         return get_origin(type_) is list
@@ -494,7 +492,7 @@ class ListTranscoder(LazyLoadingTranscoder):
         table_name = cls.get_table_name(value_type)
         table = merge_args.storage_engine.get_table_by_name(table_name)
         
-        list_id = cls._get_or_create_list_id(value)
+        list_id = StorageEngine.get_id(value)
         
         # Clear existing entries
         merge_args.session.query(table).filter(table.c.list_id == list_id).delete()
@@ -517,18 +515,8 @@ class ListTranscoder(LazyLoadingTranscoder):
 
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: List[Any]) -> None:
-        list_id = cls._get_or_create_list_id(value)
+        list_id = StorageEngine.get_id(value)
         merge_args.encodes[f"{merge_args.base_name}_id"] = list_id
-
-    @classmethod
-    def _get_or_create_list_id(cls, value: List[Any]) -> str:
-        if isinstance(value, InstrumentedList):
-            return value._cf_instance.list_id
-        list_id = cls.list_id_mapping.get(id(value), MISSING)
-        if list_id is MISSING:
-            list_id = str(uuid.uuid4())
-            cls.list_id_mapping[id(value)] = list_id
-        return list_id
 
     @classmethod
     def decode(cls, decode_args: DecodeArgs) -> InstrumentedList:
@@ -560,7 +548,6 @@ class ListTranscoder(LazyLoadingTranscoder):
         # Pre-populate the list with placeholder objects
         lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
         return lazy_list
-
 
 # @sql_transcoder_collection.add  Temporarilly disabled to support AbstractAI. -- field needs to have a meta data option to choose between DictionaryTranscoder and JsonDictTranscoder
 class DictionaryTranscoder(LazyLoadingTranscoder):
@@ -601,7 +588,7 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
         table_name = cls.get_table_name(key_type, value_type)
         table = merge_args.storage_engine.get_table_by_name(table_name)
         
-        dict_id = cls._get_or_create_dict_id(value)
+        dict_id = StorageEngine.get_id(value)
         
         merge_args.session.query(table).filter(table.c.dict_id == dict_id).delete()
         
@@ -621,7 +608,7 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
 
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: dict) -> None:
-        dict_id = cls._get_or_create_dict_id(value)
+        dict_id = StorageEngine.get_id(value)
         merge_args.encodes[f"{merge_args.base_name}_id"] = dict_id
 
     @classmethod
@@ -649,18 +636,6 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def create_lazy_instance(cls, cf_instance: DictCFInstance) -> 'InstrumentedDict':
         return InstrumentedDict.from_cf_instance(cf_instance)
-
-    @classmethod
-    def _get_or_create_dict_id(cls, value: dict) -> str:
-        if isinstance(value, InstrumentedDict):
-            return value._cf_instance.dict_id
-        dict_id = cls.dict_id_mapping.get(id(value), MISSING)
-        if dict_id is MISSING:
-            dict_id = str(uuid.uuid4())
-            cls.dict_id_mapping[id(value)] = dict_id
-        return dict_id
-
-    dict_id_mapping: Dict[int, str] = {}
 
 @sql_transcoder_collection.add
 class JsonDictTranscoder(LazyLoadingTranscoder):
