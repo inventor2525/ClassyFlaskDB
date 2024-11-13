@@ -546,11 +546,85 @@ class ListTranscoder(LazyLoadingTranscoder):
     def create_lazy_instance(cls, cf_instance:ListCFInstance) -> InstrumentedList:
         return InstrumentedList.from_cf_instance(cf_instance)
 
-# @sql_transcoder_collection.add  Temporarilly disabled to support AbstractAI. -- field needs to have a meta data option to choose between DictionaryTranscoder and JsonDictTranscoder
+@sql_transcoder_collection.add
+class JsonDictTranscoder(LazyLoadingTranscoder):
+    @classmethod
+    def is_json_primitive(cls, type_: Type) -> bool:
+        return type_ in (str, int, float, bool, type(None))
+
+    @classmethod
+    def _validate_type(cls, type_: Type, seen: Set[Type] = None) -> bool:
+        if seen is None:
+            seen = set()
+        
+        if type_ in seen:
+            return False
+        seen.add(type_)
+
+        origin = get_origin(type_)
+        if origin is None:
+            return cls.is_json_primitive(type_)
+        
+        if origin is list:
+            value_type = get_args(type_)[0]
+            return cls._validate_type(value_type, seen)
+        
+        if origin is dict:
+            key_type, value_type = get_args(type_)
+            return (cls.is_json_primitive(key_type) and 
+                   cls._validate_type(value_type, seen))
+        
+        return False
+
+    @classmethod
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
+        return [Column(name, JSON, primary_key=is_primary_key)]
+    
+    @classmethod
+    def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
+        merge_args.encodes[merge_args.base_name] = value
+
+    @classmethod
+    def decode(cls, decode_args: DecodeArgs) -> Any:
+        value = decode_args.encodes[decode_args.base_name]
+        return value
+
+@sql_transcoder_collection.add
 class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
-        return get_origin(type_) is dict
+        origin = get_origin(type_)
+        if origin is not dict:
+            return False
+            
+        def check_type(t: Type, seen: Set[Type] = None) -> bool:
+            if seen is None:
+                seen = set()
+                
+            if t in seen:
+                return False
+            seen.add(t)
+            
+            if ClassInfo.has_ClassInfo(t):
+                return True
+                
+            origin = get_origin(t)
+            if origin is None:
+                return BasicsTranscoder.validate(t)
+                
+            if origin is list:
+                value_type = get_args(t)[0]
+                return check_type(value_type, seen)
+                
+            if origin is dict:
+                key_type, value_type = get_args(t)
+                return (check_type(key_type, seen) and 
+                       check_type(value_type, seen))
+            
+            return False
+            
+        key_type, value_type = get_args(type_)
+        return check_type(key_type) and check_type(value_type)
 
     @classmethod
     def get_table_name(cls, key_type: Type, value_type: Type) -> str:
@@ -633,22 +707,3 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def create_lazy_instance(cls, cf_instance: DictCFInstance) -> 'InstrumentedDict':
         return InstrumentedDict.from_cf_instance(cf_instance)
-
-@sql_transcoder_collection.add
-class JsonDictTranscoder(LazyLoadingTranscoder):
-    @classmethod
-    def validate(cls, type_: Type) -> bool:
-        return get_origin(type_) is dict or type_ is dict
-
-    @classmethod
-    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
-        return [Column(name, JSON, primary_key=is_primary_key)]
-    
-    @classmethod
-    def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
-        merge_args.encodes[merge_args.base_name] = value
-
-    @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> Any:
-        value = decode_args.encodes[decode_args.base_name]
-        return value
