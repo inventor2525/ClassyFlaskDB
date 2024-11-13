@@ -40,7 +40,7 @@ class JSONStorageEngine(StorageEngine):
         self.use_folders = use_folders
         self.storage_path = Path(storage_path) if storage_path else None
         
-        self._data:Dict[str,Dict[str,dict]] = {}
+        self._data:Dict[str,Dict[str,Union[dict,list]]] = {}
         if initial_data:
             self._data = initial_data
         if storage_path:
@@ -111,7 +111,7 @@ class JSONStorageEngine(StorageEngine):
                     if value_id not in mem_table:
                         yield value_id
     
-    def _save_value_encodes(self, table_name:str, value_id:str, encodes:dict):
+    def _save_value_encodes(self, table_name:str, value_id:str, encodes:Union[dict,list]):
         if table_name not in self._data:
             self._data[table_name] = {}
         self._data[table_name][value_id] = encodes
@@ -121,7 +121,7 @@ class JSONStorageEngine(StorageEngine):
             with open(value_path, 'w') as f:
                 json.dump(encodes, f, indent=2)
     
-    def _get_value_encodes(self, table_name:str, value_id:str) -> dict:
+    def _get_value_encodes(self, table_name:str, value_id:str, default:Any=MISSING) -> Union[dict,list]:
         try:
             return self._data[table_name][value_id]
         except:
@@ -133,7 +133,9 @@ class JSONStorageEngine(StorageEngine):
                         self._data[table_name] = {}
                     self._data[table_name][value_id] = encodes
                     return encodes
-            raise KeyError(f"value id '{value_id}' not found in json table '{table_name}'")
+            if default == MISSING:
+                raise KeyError(f"value id '{value_id}' not found in json table '{table_name}'")
+        return default
             
     def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
         if type_ in self.transcoder_map:
@@ -156,6 +158,10 @@ class JSONMergeArgs(MergeArgs):
     storage_engine: JSONStorageEngine = field(kw_only=True)
     current_data: Dict[str, Any]  # Current JSON data being worked with
     root_path: Optional[Path] = None  # For folder-based storage
+    
+@dataclass
+class JSONDecodeArgs(DecodeArgs):
+    storage_engine: JSONStorageEngine = field(kw_only=True)
     
 class JSONStorageEngineQuery(StorageEngineQuery[T]):
     def __init__(self, storage_engine: 'JSONStorageEngine', cls: Type[T]):
@@ -224,11 +230,11 @@ class BasicsTranscoder(Transcoder):
         return []  # No setup needed for JSON
 
     @classmethod
-    def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
+    def _encode(cls, merge_args: JSONMergeArgs, value: Any) -> None:
         merge_args.encodes[merge_args.base_name] = value
 
     @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> Any:
+    def decode(cls, decode_args: JSONDecodeArgs) -> Any:
         return decode_args.type(decode_args.encodes[decode_args.base_name])
 
 @json_transcoder_collection.add
@@ -276,7 +282,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         )
 
     @classmethod
-    def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
+    def _encode(cls, merge_args: JSONMergeArgs, value: Any) -> None:
         if value is None:
             merge_args.encodes[f"{merge_args.base_name}_id"] = None
             merge_args.encodes[f"{merge_args.base_name}_type"] = None
@@ -287,7 +293,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
         merge_args.encodes[f"{merge_args.base_name}_type"] = class_info.semi_qualname
 
     @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> Any:
+    def decode(cls, decode_args: JSONDecodeArgs) -> Any:
         id_value = decode_args.encodes[f"{decode_args.base_name}_id"]
         type_name = decode_args.encodes[f"{decode_args.base_name}_type"]
         
@@ -331,7 +337,7 @@ class DateTimeTranscoder(Transcoder):
         return []
 
     @classmethod
-    def _encode(cls, merge_args: MergeArgs, value: datetime) -> None:
+    def _encode(cls, merge_args: JSONMergeArgs, value: datetime) -> None:
         if value is None:
             merge_args.encodes[merge_args.base_name] = None
             return
@@ -343,7 +349,7 @@ class DateTimeTranscoder(Transcoder):
         }
 
     @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> datetime:
+    def decode(cls, decode_args: JSONDecodeArgs) -> datetime:
         value = decode_args.encodes[decode_args.base_name]
         if value is None:
             return None
@@ -364,11 +370,11 @@ class EnumTranscoder(Transcoder):
         return []
 
     @classmethod
-    def _encode(cls, merge_args: MergeArgs, value: Enum) -> None:
+    def _encode(cls, merge_args: JSONMergeArgs, value: Enum) -> None:
         merge_args.encodes[merge_args.base_name] = value.name if value else None
 
     @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> Enum:
+    def decode(cls, decode_args: JSONDecodeArgs) -> Enum:
         value = decode_args.encodes[decode_args.base_name]
         return decode_args.type[value] if value is not None else None
 
@@ -409,13 +415,18 @@ class ListTranscoder(LazyLoadingTranscoder):
             
         value_type = get_args(type_)[0]
         return check_type(value_type)
+    
+    @classmethod
+    def get_table_name(cls, value_type: Type) -> str:
+        origin = get_origin(value_type)
+        return f"list_{origin.__name__ if origin else value_type.__name__}"
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
         return []
 
     @classmethod
-    def _merge(cls, merge_args: MergeArgs, value: List[Any]) -> None:
+    def _merge(cls, merge_args: JSONMergeArgs, value: List[Any]) -> None:
         if value is None:
             return
         
@@ -436,22 +447,34 @@ class ListTranscoder(LazyLoadingTranscoder):
                 **item_merge_args.encodes
             })
         
-        merge_args.encodes[f"{merge_args.base_name}_items"] = encoded_items
+        merge_args.storage_engine._save_value_encodes(
+            cls.get_table_name(value_type),
+            StorageEngine.get_id(value),
+            encoded_items
+        )
+        
+    @classmethod
+    def _encode(cls, merge_args: JSONMergeArgs, value: List[Any]) -> None:
+        list_id = StorageEngine.get_id(value)
+        merge_args.encodes[f"{merge_args.base_name}_id"] = list_id
 
     @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> InstrumentedList:
+    def decode(cls, decode_args: JSONDecodeArgs) -> InstrumentedList:
         value_type = get_args(decode_args.type)[0]
         value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
         
-        # list_id = decode_args.encodes[f"{decode_args.base_name}_id"]
+        list_id = decode_args.encodes[f"{decode_args.base_name}_id"]
         
-        encoded_items = decode_args.encodes.get(f"{decode_args.base_name}_items", [])
+        encoded_items = decode_args.storage_engine._get_value_encodes(
+            cls.get_table_name(value_type),
+            list_id, default=[]
+        )
         
         return cls.create_lazy_instance(ListCFInstance(
             decode_args=decode_args.new(
                 encodes=encoded_items
             ),
-            list_id=str(uuid.uuid4()),  # Generate a new ID for the list
+            list_id=list_id,  # Generate a new ID for the list
             value_type=value_type,
             value_transcoder=value_transcoder
         ))
@@ -507,14 +530,14 @@ class JsonDictTranscoder(Transcoder):
         return []
 
     @classmethod
-    def _encode(cls, merge_args: MergeArgs, value: Dict[Any, Any]) -> None:
+    def _encode(cls, merge_args: JSONMergeArgs, value: Dict[Any, Any]) -> None:
         if value is None:
             merge_args.encodes[merge_args.base_name] = None
             return
         merge_args.encodes[merge_args.base_name] = dict(value)  # Create a copy of the dictionary
 
     @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> Dict[Any, Any]:
+    def decode(cls, decode_args: JSONDecodeArgs) -> Dict[Any, Any]:
         value = decode_args.encodes[decode_args.base_name]
         return dict(value) if value is not None else None
     
@@ -554,13 +577,17 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
             
         key_type, value_type = get_args(type_)
         return check_type(key_type) and check_type(value_type)
+    
+    @classmethod
+    def get_table_name(cls, key_type: Type, value_type: Type) -> str:
+        return f"dict_{key_type.__name__}_{value_type.__name__}"
 
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
         return []
 
     @classmethod
-    def _merge(cls, merge_args: MergeArgs, value: Dict[Any, Any]) -> None:
+    def _merge(cls, merge_args: JSONMergeArgs, value: Dict[Any, Any]) -> None:
         if value is None:
             return
         
@@ -591,17 +618,29 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
                 **value_merge_args.encodes
             })
         
-        merge_args.encodes[f"{merge_args.base_name}_items"] = encoded_items
-
+        merge_args.storage_engine._save_value_encodes(
+            cls.get_table_name(key_type, value_type),
+            StorageEngine.get_id(value),
+            encoded_items
+        )
+    
     @classmethod
-    def decode(cls, decode_args: DecodeArgs) -> InstrumentedDict:
+    def _encode(cls, merge_args: JSONMergeArgs, value: Dict[Any, Any]) -> None:
+        dict_id = StorageEngine.get_id(value)
+        merge_args.encodes[f"{merge_args.base_name}_id"] = dict_id
+        
+    @classmethod
+    def decode(cls, decode_args: JSONDecodeArgs) -> InstrumentedDict:
         key_type, value_type = get_args(decode_args.type)
         key_transcoder = decode_args.storage_engine.get_transcoder_type(key_type)
         value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
         
         # Get the dict's ID and items
         dict_id = decode_args.encodes.get(f"{decode_args.base_name}_id")
-        items = decode_args.encodes.get(f"{decode_args.base_name}_items", [])
+        items = decode_args.storage_engine._get_value_encodes(
+            cls.get_table_name(key_type, value_type),
+            dict_id, default={}
+        )
         
         # Create new decode args with just the items
         items_decode_args = decode_args.new(

@@ -66,6 +66,9 @@ class StorageEngine(ABC):
 		else returns a key from id_mapping and
 		creates one if there isn't one there yet.
 		'''
+		if obj is None:
+			return None
+		
 		try:
 			return obj.get_primary_key()
 		except:
