@@ -52,7 +52,7 @@ class StorageEngine(ABC):
 		...
 	
 	@abstractmethod
-	def get_transcoder_type(self, type_: Type) -> Type['Transcoder']:
+	def get_transcoder_type(self, type_: Type, field_:Optional[Field]=None) -> Type['Transcoder']:
 		...
 	
 	@abstractmethod

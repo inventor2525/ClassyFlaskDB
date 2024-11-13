@@ -6,7 +6,7 @@ from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.InstrumentedList import InstrumentedList, ListCFInstance
 from ClassyFlaskDB.new.InstrumentedDict import InstrumentedDict, DictCFInstance
 from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, Union, Set, get_origin, get_args
-from dataclasses import dataclass, field, MISSING
+from dataclasses import dataclass, field, MISSING, Field
 from datetime import datetime
 from enum import Enum
 from zoneinfo import ZoneInfo
@@ -137,7 +137,12 @@ class JSONStorageEngine(StorageEngine):
                 raise KeyError(f"value id '{value_id}' not found in json table '{table_name}'")
         return default
             
-    def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
+    def get_transcoder_type(self, type_: Type, field_:Optional[Field]=None) -> Type[Transcoder]:
+        try:
+            return field_.metadata['transcoder']
+        except:
+            pass
+        
         if type_ in self.transcoder_map:
             return self.transcoder_map[type_]
         for transcoder in self.transcoders:
@@ -267,7 +272,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
                     continue
             
             value = getattr(obj, field.name)
-            transcoder = merge_args.storage_engine.get_transcoder_type(field.type)
+            transcoder = merge_args.storage_engine.get_transcoder_type(field.type, field)
             field_merge_args = merge_args.new(
                 base_name=field.name,
                 type=field.type,

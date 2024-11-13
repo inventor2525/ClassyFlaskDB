@@ -62,7 +62,7 @@ class DATADecorator(InfoDecorator):
 						
 						if field_name in cf_instance.unloaded_fields:
 							field = class_info.fields[field_name]
-							transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type)
+							transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type, field)
 							decode_args = cf_instance.decode_args.new(
 								base_name = field_name,
 								type = field.type

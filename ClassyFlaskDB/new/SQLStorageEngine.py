@@ -89,7 +89,12 @@ class SQLStorageEngine(StorageEngine):
     def query(self, cls: Type[T]) -> 'SQLStorageEngineQuery[T]':
         return SQLStorageEngineQuery(self, cls)
     
-    def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
+    def get_transcoder_type(self, type_: Type, field_:Optional[Field]=None) -> Type[Transcoder]:
+        try:
+            return field_.metadata['transcoder']
+        except:
+            pass
+        
         if type_ in self.transcoder_map:
             return self.transcoder_map[type_]
         for transcoder in self.transcoders:
@@ -295,7 +300,7 @@ class ObjectTranscoder(LazyLoadingTranscoder):
             table_name = f"obj_{setup_args.class_info.cls.__name__}"
             columns = []
             for field_name, field_info in setup_args.class_info.fields.items():
-                transcoder = setup_args.storage_engine.get_transcoder_type(field_info.type)
+                transcoder = setup_args.storage_engine.get_transcoder_type(field_info.type, field_info)
                 new_columns = transcoder.setup(setup_args, field_name, field_info.type, setup_args.class_info.is_primary_key(field_info))
                 columns.extend(new_columns)
 
