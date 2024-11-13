@@ -486,10 +486,7 @@ class ListTranscoder(LazyLoadingTranscoder):
 
     @classmethod
     def create_lazy_instance(cls, cf_instance: ListCFInstance) -> InstrumentedList:
-        lazy_list = InstrumentedList()
-        lazy_list._cf_instance = cf_instance
-        lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
-        return lazy_list
+        return InstrumentedList.from_cf_instance(cf_instance)
 
 @json_transcoder_collection.add
 class JsonDictTranscoder(Transcoder):

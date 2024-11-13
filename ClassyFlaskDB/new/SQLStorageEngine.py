@@ -543,12 +543,8 @@ class ListTranscoder(LazyLoadingTranscoder):
         ))
 
     @classmethod
-    def create_lazy_instance(cls, cf_instance:DictCFInstance) -> InstrumentedDict:
-        lazy_list = InstrumentedList()
-        lazy_list._cf_instance = cf_instance
-        # Pre-populate the list with placeholder objects
-        lazy_list.extend([MISSING for _ in range(len(cf_instance.decode_args.encodes))])
-        return lazy_list
+    def create_lazy_instance(cls, cf_instance:ListCFInstance) -> InstrumentedList:
+        return InstrumentedList.from_cf_instance(cf_instance)
 
 # @sql_transcoder_collection.add  Temporarilly disabled to support AbstractAI. -- field needs to have a meta data option to choose between DictionaryTranscoder and JsonDictTranscoder
 class DictionaryTranscoder(LazyLoadingTranscoder):

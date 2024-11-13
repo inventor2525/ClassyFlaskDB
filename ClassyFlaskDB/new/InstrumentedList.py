@@ -1,7 +1,7 @@
-from typing import Any, Iterable
+from typing import Any, Iterable, Callable
 from dataclasses import MISSING
 from .Args import DecodeArgs, CFInstance
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Type
 from .Transcoder import Transcoder
 from copy import deepcopy
@@ -12,34 +12,88 @@ class ListCFInstance(CFInstance):
 	value_type: Type
 	value_transcoder: Type[Transcoder]
 
+MISSING = object()
+@dataclass
+class SerializedValue:
+	encodes:dict = MISSING
+	value:Any = MISSING
+	loading_func:Callable[[dict],Any] = None
+	
+	@property
+	def loaded_value(self):
+		self.ensure_loaded()
+		return self.value
+	@loaded_value.setter
+	def loaded_value(self, new):
+		self.encodes = MISSING
+		self.value = new
+		
+	def ensure_loaded(self) -> bool:
+		if self.value is MISSING:
+			if self.loading_func and self.encodes is not MISSING:
+				self.value = self.loading_func(self.encodes)
+				return True
+			return False
+		return True
+		
+	def __eq__(self, __value: object) -> bool:
+		if isinstance(__value, SerializedValue):
+			if self.value is MISSING or __value.value is MISSING:
+				if self.encodes is not MISSING and __value.encodes is not MISSING:
+					return self.encodes == __value.encodes
+				if not (self.ensure_loaded() and __value.ensure_loaded()):
+					return False
+			return self.value == __value.value
+		else:
+			if self.ensure_loaded():
+				return self.value == __value
+			return False
+	
+	def __ne__(self, __value: object) -> bool:
+		return not self.__eq__(__value)
+
 class InstrumentedList(list):
+	@classmethod
+	def from_cf_instance(cls, cf_instance:ListCFInstance) -> 'InstrumentedList':
+		l = cls()
+		l._cf_instance = cf_instance
+		def load(encodes:dict):
+			decode_args = cf_instance.decode_args.new(
+				encodes=encodes,
+				base_name="value",
+				type=cf_instance.value_type
+			)
+			return cf_instance.value_transcoder.decode(decode_args)
+		super(InstrumentedList, l).extend([
+			SerializedValue(encodes=value_encodes, loading_func=load)
+			for value_encodes in cf_instance.decode_args.encodes
+		])
+		return l
+	
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self._cf_instance:ListCFInstance = None
 
 	def __setitem__(self, key: int, value: Any) -> None:
-		if key < len(self):
-			if self[key] is not value:
-				self._dirty = True
-		else:
-			self._dirty = True
-		super().__setitem__(key, value)
+		self._dirty = True
+		super().__setitem__(key, SerializedValue(value=value))
 
 	def append(self, item: Any) -> None:
 		self._dirty = True
-		super().append(item)
+		super().append(SerializedValue(value=item))
 
 	def extend(self, items: Iterable[Any]) -> None:
 		self._dirty = True
-		super().extend(items)
+		super().extend([SerializedValue(value=item) for item in items])
 
 	def insert(self, index: int, item: Any) -> None:
 		self._dirty = True
-		super().insert(index, item)
+		super().insert(index, SerializedValue(value=item))
 
 	def pop(self, index: int = -1) -> Any:
 		self._dirty = True
-		return super().pop(index)
+		item = super().pop(index)
+		return item.loaded_value
 
 	def remove(self, item: Any) -> None:
 		self._dirty = True
@@ -58,41 +112,19 @@ class InstrumentedList(list):
 		super().clear()
 
 	def __getitem__(self, index):
+		item = super().__getitem__(index)
 		if isinstance(index, slice):
-			self._ensure_fully_loaded()
-			return super().__getitem__(index)
-		value = super().__getitem__(index)
-		if self._cf_instance is None:
-			return value
-		
-		if value is MISSING:
-			decode_args = self._cf_instance.decode_args.new(
-				encodes=self._cf_instance.decode_args.encodes[index],
-				base_name="value",
-				type=self._cf_instance.value_type
-			)
-			value = self._cf_instance.value_transcoder.decode(decode_args)
-			super().__setitem__(index, value)
-		return value
-
+			return [i.loaded_value for i in item]
+		return item.loaded_value
+	
 	def __iter__(self):
-		for i in range(len(self)):
-			yield self[i]
+		return (item.loaded_value for item in super().__iter__())
 	
 	def _ensure_fully_loaded(self):
 		"""Ensure all items are loaded before comparison."""
 		for item in self:
 			pass
-
-	def __eq__(self, other):
-		self._ensure_fully_loaded()
-		if isinstance(other, InstrumentedList):
-			other._ensure_fully_loaded()
-		return super().__eq__(other)
-
-	def __ne__(self, other):
-		return not self.__eq__(other)
-
+	
 	def __hash__(self):
 		self._ensure_fully_loaded()
 		return super().__hash__()
