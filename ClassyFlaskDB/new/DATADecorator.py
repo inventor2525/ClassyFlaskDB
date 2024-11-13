@@ -3,7 +3,6 @@ from .InfoDecorator import *
 from .Transcoder import *
 from .StorageEngine import *
 from .AutoID import *
-from .DirtyDecorator import *
 from copy import deepcopy
 
 @dataclass
