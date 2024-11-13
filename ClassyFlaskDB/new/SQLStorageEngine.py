@@ -89,9 +89,6 @@ class SQLStorageEngine(StorageEngine):
     def query(self, cls: Type[T]) -> 'SQLStorageEngineQuery[T]':
         return SQLStorageEngineQuery(self, cls)
     
-    def get_table_name(self, cls: Type) -> str:
-        return f"obj_{cls.__name__}"
-    
     def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
         if type_ in self.transcoder_map:
             return self.transcoder_map[type_]
@@ -111,8 +108,7 @@ class SQLStorageEngine(StorageEngine):
             raise ValueError(f"Table '{table_name}' not found in metadata")
     
     def get_table_by_type(self, type_:Type) -> Table:
-        table_name = self.get_table_name(type_)
-        return self.get_table_by_name(table_name)
+        return self.get_table_by_name(f"obj_{type_.__name__}")
     
     def get_existing_columns(self, table_name: str) -> Set[str]:
         inspector = sa.inspect(self.engine)

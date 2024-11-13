@@ -14,11 +14,6 @@ import json
 from pathlib import Path
 import uuid
 
-@dataclass
-class JSONMergeArgs(MergeArgs):
-    current_data: Dict[str, Any]  # Current JSON data being worked with
-    root_path: Optional[Path] = None  # For folder-based storage
-
 json_transcoder_collection = TranscoderCollection()
 
 T = TypeVar('T')
@@ -44,7 +39,16 @@ class JSONStorageEngine(StorageEngine):
         super().__init__(files_dir=files_dir)
         self.use_folders = use_folders
         self.storage_path = Path(storage_path) if storage_path else None
-        self._data = initial_data or {}
+        
+        self._data:Dict[str,Dict[str,dict]] = {}
+        if initial_data:
+            self._data = initial_data
+        if storage_path:
+            self._ensure_storage_exists()
+            if not use_folders:
+                with open(self.storage_path, 'r') as f:
+                    self._data.update(json.load(f))
+        
         self._extra_transcoders = extra_transcoders
         self.data_decorator = data_decorator
         self.transcoder_map = {}
@@ -52,9 +56,6 @@ class JSONStorageEngine(StorageEngine):
         if self.data_decorator:
             self.data_decorator.finalize()
             self.setup(self.data_decorator)
-
-        if storage_path:
-            self._ensure_storage_exists()
 
     def _ensure_storage_exists(self):
         if self.use_folders:
@@ -69,14 +70,6 @@ class JSONStorageEngine(StorageEngine):
             yield transcoder
         for transcoder in json_transcoder_collection.transcoders:
             yield transcoder
-
-    def setup(self, data_decorator: 'DATADecorator'):
-        if self.use_folders:
-            self.storage_path.mkdir(parents=True, exist_ok=True)
-            for cls in data_decorator.registry.values():
-                class_info = ClassInfo.get(cls)
-                table_path = self.storage_path / self.get_table_name(cls)
-                table_path.mkdir(parents=True, exist_ok=True)
 
     def merge(self, obj: Any, persist: bool = False):
         context = self.context if persist else {}
@@ -96,25 +89,52 @@ class JSONStorageEngine(StorageEngine):
         transcoder = self.get_transcoder_type(type(obj))
         transcoder.merge(merge_args, obj)
         
-        if self.use_folders:
-            table_path = self.storage_path / self.get_table_name(type(obj))
-            table_path.mkdir(parents=True, exist_ok=True)
-            obj_path = table_path / f"{obj.get_primary_key()}.json"
-            with open(obj_path, 'w') as f:
-                json.dump(merge_args.encodes, f, indent=2)
-        else:
-            table_name = self.get_table_name(type(obj))
-            if table_name not in self._data:
-                self._data[table_name] = {}
-            self._data[table_name][obj.get_primary_key()] = merge_args.encodes
-            if self.storage_path:
-                with open(self.storage_path, 'w') as f:
-                    json.dump(self._data, f, indent=2)
-
-    def get_table_name(self, cls: Type) -> str:
-        class_info = ClassInfo.get(cls)
-        return f"obj_{class_info.semi_qualname}"
-
+        if self.storage_path and not self.use_folders:
+            with open(self.storage_path, 'w') as f:
+                json.dump(self._data, f, indent=4)
+    
+    def _single_value_path(self, table_name:str, value_id:str) -> Path:
+        table_path = self.storage_path / table_name
+        table_path.mkdir(parents=True, exist_ok=True)
+        return table_path / f"{value_id}.json"
+    
+    def _iter_keys_in_table(self, table_name:str) -> Iterator[str]:
+        mem_table = self._data.get(table_name, {})
+        for key in mem_table.keys():
+            yield key
+            
+        if self.storage_path and self.use_folders:
+            table_path = self.storage_path / table_name
+            if table_path.exists():
+                for file_path in table_path.glob("*.json"):
+                    value_id = file_path.stem
+                    if value_id not in mem_table:
+                        yield value_id
+    
+    def _save_value_encodes(self, table_name:str, value_id:str, encodes:dict):
+        if table_name not in self._data:
+            self._data[table_name] = {}
+        self._data[table_name][value_id] = encodes
+        
+        if self.storage_path and self.use_folders:
+            value_path = self._single_value_path(table_name,value_id)
+            with open(value_path, 'w') as f:
+                json.dump(encodes, f, indent=2)
+    
+    def _get_value_encodes(self, table_name:str, value_id:str) -> dict:
+        try:
+            return self._data[table_name][value_id]
+        except:
+            if self.storage_path and self.use_folders:
+                value_path = self._single_value_path(table_name,value_id)
+                with open(value_path, 'r') as f:
+                    encodes = json.load(f)
+                    if table_name not in self._data:
+                        self._data[table_name] = {}
+                    self._data[table_name][value_id] = encodes
+                    return encodes
+            raise KeyError(f"value id '{value_id}' not found in json table '{table_name}'")
+            
     def get_transcoder_type(self, type_: Type) -> Type[Transcoder]:
         if type_ in self.transcoder_map:
             return self.transcoder_map[type_]
@@ -131,6 +151,12 @@ class JSONStorageEngine(StorageEngine):
     def query(self, cls: Type[T]) -> 'JSONStorageEngineQuery[T]':
         return JSONStorageEngineQuery(self, cls)
 
+@dataclass
+class JSONMergeArgs(MergeArgs):
+    storage_engine: JSONStorageEngine = field(kw_only=True)
+    current_data: Dict[str, Any]  # Current JSON data being worked with
+    root_path: Optional[Path] = None  # For folder-based storage
+    
 class JSONStorageEngineQuery(StorageEngineQuery[T]):
     def __init__(self, storage_engine: 'JSONStorageEngine', cls: Type[T]):
         self.storage_engine = storage_engine
@@ -150,63 +176,20 @@ class JSONStorageEngineQuery(StorageEngineQuery[T]):
             return context_obj
 
         # Get data from storage
-        table_name = self.storage_engine.get_table_name(self.cls)
-        
-        if self.storage_engine.use_folders:
-            table_path = self.storage_engine.storage_path / table_name
-            obj_path = table_path / f"{obj_id}.json"
-            if not obj_path.exists():
-                return None
-            with open(obj_path) as f:
-                encoded_values = json.load(f)
-        else:
-            if table_name not in self.storage_engine._data:
-                return None
-            if obj_id not in self.storage_engine._data[table_name]:
-                return None
-            encoded_values = self.storage_engine._data[table_name][obj_id]
-
+        table_name = ObjectTranscoder.get_table_name(self.cls)
+        encoded_values = self.storage_engine._get_value_encodes(table_name, obj_id)
         return self._create_lazy_instance(encoded_values)
 
     def first(self) -> T:
-        table_name = self.storage_engine.get_table_name(self.cls)
-        
-        if self.storage_engine.use_folders:
-            table_path = self.storage_engine.storage_path / table_name
-            if not table_path.exists():
-                return None
-            try:
-                first_file = next(table_path.glob("*.json"))
-                with open(first_file) as f:
-                    encoded_values = json.load(f)
-                return self._create_lazy_instance(encoded_values)
-            except StopIteration:
-                return None
-        else:
-            if table_name not in self.storage_engine._data:
-                return None
-            try:
-                obj_id = next(iter(self.storage_engine._data[table_name]))
-                return self.filter_by_id(obj_id)
-            except StopIteration:
-                return None
+        table_name = ObjectTranscoder.get_table_name(self.cls)
+        for obj_id in self.storage_engine._iter_keys_in_table(table_name):
+            return self.filter_by_id(obj_id)
+        return None
 
     def all(self) -> Iterator[T]:
-        table_name = self.storage_engine.get_table_name(self.cls)
-        
-        if self.storage_engine.use_folders:
-            table_path = self.storage_engine.storage_path / table_name
-            if not table_path.exists():
-                return
-            for file_path in table_path.glob("*.json"):
-                with open(file_path) as f:
-                    encoded_values = json.load(f)
-                    yield self._create_lazy_instance(encoded_values)
-        else:
-            if table_name not in self.storage_engine._data:
-                return
-            for obj_id in self.storage_engine._data[table_name]:
-                yield self.filter_by_id(obj_id)
+        table_name = ObjectTranscoder.get_table_name(self.cls)
+        for obj_id in self.storage_engine._iter_keys_in_table(table_name):
+            yield self.filter_by_id(obj_id)
 
     def _create_lazy_instance(self, encoded_values: Dict[str, Any]) -> T:
         class_info = ClassInfo.get(self.cls)
@@ -253,64 +236,45 @@ class ObjectTranscoder(LazyLoadingTranscoder):
     @classmethod
     def validate(cls, type_: Type) -> bool:
         return ClassInfo.has_ClassInfo(type_)
-
+    
+    @classmethod
+    def get_table_name(cls, type_: Type) -> str:
+        class_info = ClassInfo.get(type_)
+        return f"obj_{class_info.semi_qualname}"
+    
     @classmethod
     def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
         return []  # No setup needed for JSON
 
     @classmethod
-    def _merge(cls, merge_args: MergeArgs, obj: Any) -> None:
+    def _merge(cls, merge_args: JSONMergeArgs, obj: Any) -> None:
         if obj is None:
-            merge_args.encodes[f"{merge_args.base_name}_id"] = None
-            merge_args.encodes[f"{merge_args.base_name}_type"] = None
             return
 
         class_info = ClassInfo.get(type(obj))
         
-        # For top-level objects
-        if merge_args.base_name == 'id':
-            merge_args.encodes[class_info.primary_key_name] = obj.get_primary_key()
+        obj_encodes = {}
+        cf_instance = CFInstance.get(obj)
+        for field in class_info.fields.values():
+            if cf_instance is not MISSING and cf_instance.decode_args.storage_engine is merge_args.storage_engine:
+                if field.name in cf_instance.unloaded_fields:
+                    continue
             
-            cf_instance = CFInstance.get(obj)
-            for field in class_info.fields.values():
-                if cf_instance is not MISSING and cf_instance.decode_args.storage_engine is merge_args.storage_engine:
-                    if field.name in cf_instance.unloaded_fields:
-                        continue
-                
-                value = getattr(obj, field.name)
-                transcoder = merge_args.storage_engine.get_transcoder_type(field.type)
-                field_merge_args = merge_args.new(
-                    base_name=field.name,
-                    type=field.type,
-                    encodes={}
-                )
-                transcoder.merge(field_merge_args, value)
-                merge_args.encodes.update(field_merge_args.encodes)
-        else:
-            # For referenced objects
-            merge_args.encodes[f"{merge_args.base_name}_id"] = obj.get_primary_key()
-            merge_args.encodes[f"{merge_args.base_name}_type"] = class_info.semi_qualname
-            
-            # Also merge the referenced object
-            ref_merge_args = merge_args.new(
-                base_name='id',
-                type=type(obj),
-                encodes={}
+            value = getattr(obj, field.name)
+            transcoder = merge_args.storage_engine.get_transcoder_type(field.type)
+            field_merge_args = merge_args.new(
+                base_name=field.name,
+                type=field.type,
+                encodes=obj_encodes
             )
-            cls._merge(ref_merge_args, obj)
-            
-            # Store in the current data or folder
-            if isinstance(merge_args, JSONMergeArgs):
-                if merge_args.root_path:
-                    table_path = merge_args.root_path / merge_args.storage_engine.get_table_name(type(obj))
-                    table_path.mkdir(parents=True, exist_ok=True)
-                    with open(table_path / f"{obj.get_primary_key()}.json", 'w') as f:
-                        json.dump(ref_merge_args.encodes, f, indent=2)
-                else:
-                    table_name = merge_args.storage_engine.get_table_name(type(obj))
-                    if table_name not in merge_args.current_data:
-                        merge_args.current_data[table_name] = {}
-                    merge_args.current_data[table_name][obj.get_primary_key()] = ref_merge_args.encodes
+            transcoder.merge(field_merge_args, value)
+        
+        merge_args.storage_engine._save_value_encodes(
+            ObjectTranscoder.get_table_name(type(obj)),
+            obj.get_primary_key(),
+            obj_encodes
+        )
+
     @classmethod
     def _encode(cls, merge_args: MergeArgs, value: Any) -> None:
         if value is None:
@@ -478,6 +442,8 @@ class ListTranscoder(LazyLoadingTranscoder):
     def decode(cls, decode_args: DecodeArgs) -> InstrumentedList:
         value_type = get_args(decode_args.type)[0]
         value_transcoder = decode_args.storage_engine.get_transcoder_type(value_type)
+        
+        # list_id = decode_args.encodes[f"{decode_args.base_name}_id"]
         
         encoded_items = decode_args.encodes.get(f"{decode_args.base_name}_items", [])
         

@@ -44,9 +44,8 @@ class StorageEngine(ABC):
 	def transcoders(self) -> Iterator['Transcoder']:
 		...
 	
-	@abstractmethod
 	def setup(self, data_decorator: 'DATADecorator'):
-		...
+		pass
 	
 	@abstractmethod
 	def merge(self, obj: Any, persist: bool = False):
