@@ -49,8 +49,7 @@ class LazyLoadingTests(unittest.TestCase):
 			self.assertEqual(queried.items[1:4], ["b", "c", "d"])
 			
 			# Test enumerating
-			queried = setup_and_query(engine_type)
-			print(list(queried.items.serialized_values()))
+			queried = setup_and_query(engine_type) 
 			prev_index = -1
 			items = ["a", "b", "c", "d", "e"]
 			for index, item in enumerate(queried.items):
