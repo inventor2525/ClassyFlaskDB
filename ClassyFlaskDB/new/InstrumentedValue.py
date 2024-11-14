@@ -25,21 +25,21 @@ class InstrumentedValue:
 			return False
 		return True
 		
-	def __eq__(self, __value: object) -> bool:
-		if isinstance(__value, InstrumentedValue):
-			if self.value is MISSING or __value.value is MISSING:
-				if self.encodes is not MISSING and __value.encodes is not MISSING:
-					return self.encodes == __value.encodes
-				if not (self.ensure_loaded() and __value.ensure_loaded()):
+	def __eq__(self, value: object) -> bool:
+		if isinstance(value, InstrumentedValue):
+			if self.value is MISSING or value.value is MISSING:
+				if self.encodes is not MISSING and value.encodes is not MISSING:
+					return self.encodes == value.encodes
+				if not (self.ensure_loaded() and value.ensure_loaded()):
 					return False
-			return self.value == __value.value
+			return self.value == value.value
 		else:
 			if self.ensure_loaded():
-				return self.value == __value
+				return self.value == value
 			return False
 	
-	def __ne__(self, __value: object) -> bool:
-		return not self.__eq__(__value)
+	def __ne__(self, value: object) -> bool:
+		return not self.__eq__(value)
 	
 	def __hash__(self) -> int:
 		return hash(self.loaded_value)
