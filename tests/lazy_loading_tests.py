@@ -264,24 +264,27 @@ class LazyLoadingTests(unittest.TestCase):
 			container = FamilyContainer({"smith": smith_family, "doe": doe_family})
 			storage.merge(container)
 			queried = storage.query(FamilyContainer).filter_by_id(container.get_primary_key())
-			return queried, Person, Family
+			return container, queried, Person, Family
 
 		for engine_type in range(0, 2):
 			# Test key access and circular references
-			queried, Person, Family = setup_and_query(engine_type)
+			container, queried, Person, Family = setup_and_query(engine_type)
 			self.assertEqual(queried.families["smith"].members["alice"].family.last_name, "Smith")
-			queried, Person, Family = setup_and_query(engine_type)
+			container, queried, Person, Family = setup_and_query(engine_type)
 			self.assertEqual(queried.families["smith"].members["alice"].first_name, "Alice")
-			queried, Person, Family = setup_and_query(engine_type)
+			container, queried, Person, Family = setup_and_query(engine_type)
 			self.assertIs(queried.families["smith"].members["alice"].family, queried.families["smith"])
-			queried, Person, Family = setup_and_query(engine_type)
+			container, queried, Person, Family = setup_and_query(engine_type)
 			self.assertEqual(len(queried.families), 2)
-			queried, Person, Family = setup_and_query(engine_type)
+			container, queried, Person, Family = setup_and_query(engine_type)
+			self.assertEqual(list(queried.families.keys()), ['smith', 'doe'])
+			
+			container, queried, Person, Family = setup_and_query(engine_type)
 			self.assertEqual(list(queried.families.values()), list(queried.families.values()))
 
 			# Test setting existing key
 			def set_existing_key():
-				queried, Person, Family = setup_and_query(engine_type)
+				container, queried, Person, Family = setup_and_query(engine_type)
 				new_family = Family("Johnson", {"eve": Person("Eve", 22, None)})
 				new_family.members["eve"].family = new_family
 				queried.families["smith"] = new_family
@@ -298,7 +301,7 @@ class LazyLoadingTests(unittest.TestCase):
 
 			# Test setting new key
 			def set_new_key():
-				queried, Person, Family = setup_and_query(engine_type)
+				container, queried, Person, Family = setup_and_query(engine_type)
 				new_family = Family("Brown", {"frank": Person("Frank", 40, None)})
 				new_family.members["frank"].family = new_family
 				queried.families["brown"] = new_family
