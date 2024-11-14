@@ -114,3 +114,6 @@ class InstrumentedDict(dict):
 	
 	def get_primary_key(self) -> str:
 		return self._cf_instance.dict_id
+	
+	def __iter__(self):
+		return (item.loaded_value for item in super().__iter__())
