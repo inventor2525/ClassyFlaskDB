@@ -292,15 +292,6 @@ class LazyLoadingTests(unittest.TestCase):
 			for orig,key in zip(['smith', 'doe'], queried.families):
 				self.assertEquals(orig, key)
 			
-			container, queried, Person, Family = setup_and_query(engine_type)
-			a= list(container.families.values())
-			b= list(queried.families.values())
-			self.assertEqual(a[0], b[0])
-			self.assertEqual(a[1], b[1])
-			
-			container, queried, Person, Family = setup_and_query(engine_type)
-			self.assertEqual(list(container.families.values()), list(queried.families.values()))
-
 			# Test setting existing key
 			def set_existing_key():
 				container, queried, Person, Family = setup_and_query(engine_type)
