@@ -3,7 +3,6 @@ from .InfoDecorator import *
 from .Transcoder import *
 from .StorageEngine import *
 from .AutoID import *
-from .DirtyDecorator import *
 from copy import deepcopy
 
 @dataclass
@@ -19,15 +18,15 @@ class DATADecorator(InfoDecorator):
 	Note: Remember to call finalize after every decorated class is imported!
 	'''
 	
-	class Interface(AutoID.Interface, DirtyDecorator.Interface):
+	class Interface(AutoID.Interface):
 		_cf_instance: Optional['CFInstance'] = None
 		
 		
 	@overload
-	def __call__(self, cls:Type[T]) -> Union[Type[T], Type['DATADecorator.Interface']]:
+	def __call__(self, cls:Type[T]) -> Type[T]:
 		pass
 	@overload
-	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = [], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Callable[[Type[T]], Union[Type[T], Type['DATADecorator.Interface']]]:
+	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = [], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Callable[[Type[T]], Type[T]]:
 		pass
 	def __call__(self, *args, **kwargs):
 		'''
@@ -63,7 +62,7 @@ class DATADecorator(InfoDecorator):
 						
 						if field_name in cf_instance.unloaded_fields:
 							field = class_info.fields[field_name]
-							transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type)
+							transcoder = cf_instance.decode_args.storage_engine.get_transcoder_type(field.type, field)
 							decode_args = cf_instance.decode_args.new(
 								base_name = field_name,
 								type = field.type
@@ -139,3 +138,19 @@ class DATADecorator(InfoDecorator):
 				return cls_copy
 
 			setattr(cls, '__deepcopy__', __deepcopy__)
+			
+			def _hash_implementation(self):
+				"""Generate a hash based on the object's ID or dataclass fields."""
+				# if hasattr(self.__class__, '__orig_hash__'):
+				# 	# Use original dataclass-generated hash if it exists
+				# 	return self.__class__.__orig_hash__(self)
+				
+				# Otherwise, hash the primary key
+				return hash(self.get_primary_key())
+			
+			# Preserve any existing dataclass-generated hash
+			# if hasattr(cls, '__hash__'):
+			# 	setattr(cls, '__orig_hash__', cls.__hash__)
+			
+			# Set our new hash implementation
+			setattr(cls, '__hash__', _hash_implementation)

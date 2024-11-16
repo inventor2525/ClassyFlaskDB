@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple, Optional
+from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple, Optional, ClassVar
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass, field
 from .ClassInfo import *
@@ -25,7 +25,7 @@ T = TypeVar('T')
 class StorageEngine(ABC):
 	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
 	files_dir: Optional[str] = field(default=None, kw_only=True)
-	id_mapping: Dict[int, str] = field(default_factory=dict, kw_only=True)
+	id_mapping: ClassVar[Dict[int, str]] = {}
 	
 	def __post_init__(self):
 		if self.files_dir:
@@ -44,38 +44,41 @@ class StorageEngine(ABC):
 	def transcoders(self) -> Iterator['Transcoder']:
 		...
 	
-	@abstractmethod
 	def setup(self, data_decorator: 'DATADecorator'):
-		...
+		pass
 	
 	@abstractmethod
 	def merge(self, obj: Any, persist: bool = False):
 		...
 	
 	@abstractmethod
-	def get_transcoder_type(self, type_: Type) -> Type['Transcoder']:
+	def get_transcoder_type(self, type_: Type, field_:Optional[Field]=None) -> Type['Transcoder']:
 		...
 	
 	@abstractmethod
 	def query(self, cls: Type[T]) -> StorageEngineQuery[T]:
 		...
 	
-	def get_id(self, obj:Any):
+	@staticmethod
+	def get_id(obj:Any):
 		'''
 		Get's obj's primary key if it exists,
 		else returns a key from id_mapping and
 		creates one if there isn't one there yet.
 		'''
+		if obj is None:
+			return None
+		
 		try:
 			return obj.get_primary_key()
 		except:
 			pass
 		
 		try:
-			return self.id_mapping[id(obj)]
+			return StorageEngine.id_mapping[id(obj)]
 		except:
 			new_id = str(uuid.uuid4())
-			self.id_mapping[id(obj)] = new_id
+			StorageEngine.id_mapping[id(obj)] = new_id
 			return new_id
 		
 	def get_binary_path(self, obj:Any) -> Optional[str]:

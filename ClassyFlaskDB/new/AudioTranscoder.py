@@ -1,5 +1,6 @@
 from .SQLStorageEngine import sql_transcoder_collection, String, Column
 from .Args import MergeArgs, DecodeArgs, SetupArgs
+from .StorageEngine import StorageEngine
 from .Transcoder import Transcoder
 
 from typing import Dict, Any, Type, List, Optional
@@ -9,8 +10,6 @@ import os
 
 @sql_transcoder_collection.add
 class AudioTranscoder(Transcoder):
-	audio_id_mapping: Dict[int, str] = {}
-	
 	@staticmethod
 	def extension() -> Optional[str]:
 		return "mp3"
@@ -29,8 +28,7 @@ class AudioTranscoder(Transcoder):
 		if merge_args.storage_engine.files_dir is None:
 			raise ValueError("Cannot encode audio to the database without specifying files_dir")
 		
-		audio_id = merge_args.storage_engine.id_mapping.get(id(value), str(uuid.uuid4()))
-		merge_args.storage_engine.id_mapping[id(value)] = audio_id
+		audio_id = StorageEngine.get_id(value)
 
 		file_path = os.path.join(merge_args.storage_engine.files_dir, f"{audio_id}.mp3")
 		if not os.path.exists(file_path):
@@ -49,9 +47,9 @@ class AudioTranscoder(Transcoder):
 
 		file_path = os.path.join(decode_args.storage_engine.files_dir, f"{audio_id}.mp3")
 
-		if audio_id in decode_args.storage_engine.id_mapping:
+		if audio_id in StorageEngine.id_mapping:
 			return AudioSegment.from_mp3(file_path)
 
 		audio = AudioSegment.from_mp3(file_path)
-		decode_args.storage_engine.id_mapping[id(audio)] = audio_id
+		StorageEngine.id_mapping[id(audio)] = audio_id
 		return audio
