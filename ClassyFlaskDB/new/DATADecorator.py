@@ -23,10 +23,10 @@ class DATADecorator(InfoDecorator):
 		
 		
 	@overload
-	def __call__(self, cls:Type[T]) -> Union[Type[T], Type['DATADecorator.Interface']]:
+	def __call__(self, cls:Type[T]) -> Type[T]:
 		pass
 	@overload
-	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = [], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Callable[[Type[T]], Union[Type[T], Type['DATADecorator.Interface']]]:
+	def __call__(self, included_fields: Iterable[str] = [], excluded_fields: Iterable[str] = [], id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Callable[[Type[T]], Type[T]]:
 		pass
 	def __call__(self, *args, **kwargs):
 		'''
