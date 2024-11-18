@@ -17,6 +17,11 @@ class StoredMessage:
     message: Message
     response: str
 
+@DATA
+@dataclass
+class msg_list:
+    messages: List[StoredMessage]
+
 # Service objects
 FLASKIFY = FlaskifyDecorator(DATA)
 
@@ -33,8 +38,8 @@ class ChatHistory:
         return stored
     
     @FLASKIFY.route("/get_all")
-    def get_messages(self) -> List[StoredMessage]:
-        return self.messages
+    def get_messages(self) -> msg_list:
+        return msg_list(self.messages)
     
     @FLASKIFY.route("/clear")
     def clear(self) -> None:
