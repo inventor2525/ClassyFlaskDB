@@ -161,7 +161,7 @@ class FlaskifyDecorator:
 				self.instance_map[cls_name] = {}
 				
 				# Create instance creation endpoint
-				def create_instance():
+				def create_instance(cls_name:str, cls:Type):
 					storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
 					try:
 						data = request.get_json()
@@ -186,16 +186,16 @@ class FlaskifyDecorator:
 				app.add_url_rule(
 					f"/{cls_name}/create",
 					f"{cls_name}___init__",
-					create_instance,
+					lambda cn=cls_name, cls=cls: create_instance(cn, cls),
 					methods=["POST"]
 				)
 			
 				# Create method endpoints
-				def handle_method_call(method_info: MethodInfo) -> Any:
+				def handle_method_call(method_info: MethodInfo, cls_name: str) -> Any:
 					"""Common handler for both instance and static method calls"""
 					try:
 						data = request.get_json()
-						storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
+						storage = JSONStorageEngine(storage_path=None, initial_data=data['objects'], data_decorator=self.data_decorator)
 						args, kwargs = self._deserialize_args(
 							storage, data, method_info.signature, method_info.type_hints
 						)
@@ -247,7 +247,7 @@ class FlaskifyDecorator:
 					app.add_url_rule(
 						f"/{cls_name}{method_info.route.path}",
 						f"{cls_name}_{method_name}",
-						lambda mi=method_info: handle_method_call(mi),
+						lambda mi=method_info, cn=cls_name: handle_method_call(mi,cn),
 						methods=["POST"]
 					)
 		
@@ -334,40 +334,42 @@ class FlaskifyDecorator:
 					return method_impl
 
 				# Create __init__ that gets instance ID from server
-				original_init = cls.__init__
-				def __init__(self, *args, **kwargs):
-					try:
-						# Create new storage engine for this request
-						storage = JSONStorageEngine(storage_path=None, data_decorator=flaskify.data_decorator)
-						
-						# Serialize init args
-						init_hints = get_type_hints(original_init)
-						data = flaskify._serialize_args(
-							storage, args, kwargs, 
-							signature(original_init), 
-							init_hints
-						)
-						
-						# Make request to server to create instance
-						response = requests.post(
-							f"http://{host}:{port}/{cls_name}/create",
-							json=data
-						)
-						
-						if response.status_code != 200:
-							raise Exception(f"Failed to create instance: {response.text}")
+				def make_init(cls:Type, cls_name:str):
+					original_init = cls.__init__
+					def __init__(self, *args, **kwargs):
+						try:
+							# Create new storage engine for this request
+							storage = JSONStorageEngine(storage_path=None, data_decorator=flaskify.data_decorator)
 							
-						# Store instance ID
-						self._instance_id = response.json()["instance_id"]
-						
-					except Exception as e:
-						method_info = cls_methods.get("__init__")
-						if method_info and method_info.route.error_handler:
-							method_info.route.error_handler(e)
-						raise
+							# Serialize init args
+							init_hints = get_type_hints(original_init)
+							data = flaskify._serialize_args(
+								storage, args, kwargs, 
+								signature(original_init), 
+								init_hints
+							)
+							
+							# Make request to server to create instance
+							response = requests.post(
+								f"http://{host}:{port}/{cls_name}/create",
+								json=data
+							)
+							
+							if response.status_code != 200:
+								raise Exception(f"Failed to create instance: {response.text}")
+								
+							# Store instance ID
+							self._instance_id = response.json()["instance_id"]
+							
+						except Exception as e:
+							method_info = cls_methods.get("__init__")
+							if method_info and method_info.route.error_handler:
+								method_info.route.error_handler(e)
+							raise
+					return __init__
 
 				# Apply modifications to class
-				cls.__init__ = __init__
+				cls.__init__ = make_init(cls=cls, cls_name=cls_name)
 				
 				# Add all methods
 				for method_name, method_info in cls_methods.items():
