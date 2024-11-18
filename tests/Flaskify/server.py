@@ -3,4 +3,3 @@ from flask import Flask
 
 if __name__ == "__main__":
     app = FLASKIFY.make_server('localhost', 5000)
-    app.run(host='localhost', port=5000)

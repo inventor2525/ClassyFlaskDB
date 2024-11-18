@@ -16,6 +16,7 @@ class RouteInfo:
 @dataclass
 class MethodInfo:
 	"""Internal method information including route configuration"""
+	method_name: str
 	route: RouteInfo
 	signature: Signature
 	is_static: bool
@@ -51,6 +52,7 @@ class FlaskifyDecorator:
 		method = getattr(cls, method_name)
 		if hasattr(method, '__route_info__'):
 			return MethodInfo(
+				method_name=method_name,
 				route=method.__route_info__,
 				signature=signature(method),
 				is_static=isinstance(method, staticmethod),
@@ -83,6 +85,8 @@ class FlaskifyDecorator:
 		
 		# Process positional args
 		param_names = list(sig.parameters.keys())
+		if len(param_names)>0 and param_names[0]=='self':
+			param_names = param_names[1:]
 		if not any(p.kind == p.VAR_POSITIONAL for p in sig.parameters.values()):
 			if len(args) > len(param_names):
 				raise ValueError(f"Too many positional arguments")
@@ -129,56 +133,6 @@ class FlaskifyDecorator:
 			kwargs[key] = kwarg
 			
 		return tuple(args), kwargs
-
-	def _handle_method_call(self, storage: JSONStorageEngine, cls_name: str, 
-						method_info: MethodInfo, instance: Optional[Any] = None) -> Any:
-		"""Common handler for both instance and static method calls"""
-		try:
-			data = request.get_json()
-			args, kwargs = self._deserialize_args(
-				storage, data, method_info.signature, method_info.type_hints
-			)
-			
-			if method_info.is_static:
-				result = getattr(self.methods[cls_name]["cls"], method_info.signature.name)(*args, **kwargs)
-			else:
-				if not instance:
-					instance_id = data.get("instance_id")
-					if not instance_id:
-						raise ValueError("No instance ID provided")
-					instance = self.instance_map[cls_name].get(instance_id)
-					if not instance:
-						raise ValueError(f"No instance found with ID: {instance_id}")
-				
-				result = getattr(instance, method_info.signature.name)(*args, **kwargs)
-			
-			# Handle return value if any
-			return_type = method_info.type_hints.get("return")
-			if result is not None and return_type:
-				result_storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
-				
-				if ClassInfo.has_ClassInfo(return_type):
-					result_storage.merge(result)
-					result_data = {
-						"value": result.get_primary_key(),
-						"type": ClassInfo.get_semi_qual_name(type(result))
-					}
-				else:
-					result_data = {
-						"value": result,
-						"type": type(result).__name__
-					}
-				return jsonify({
-					"result": result_data,
-					"objects": result_storage._data
-				})
-			
-			return jsonify({"status": "success"})
-			
-		except Exception as e:
-			if method_info.route.error_handler:
-				method_info.route.error_handler(e)
-			return jsonify({"error": str(e)}), 500
 
 	def make_server(self, host: str, port: int, run: bool = True) -> Flask:
 		"""Convert registered classes to server implementations"""
@@ -237,6 +191,55 @@ class FlaskifyDecorator:
 				)
 			
 				# Create method endpoints
+				def handle_method_call(method_info: MethodInfo) -> Any:
+					"""Common handler for both instance and static method calls"""
+					try:
+						data = request.get_json()
+						storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
+						args, kwargs = self._deserialize_args(
+							storage, data, method_info.signature, method_info.type_hints
+						)
+						
+						if method_info.is_static:
+							result = getattr(self.methods[cls_name]["cls"], method_info.method_name)(*args, **kwargs)
+						else:
+							instance_id = data.get("instance_id")
+							if not instance_id:
+								raise ValueError("No instance ID provided")
+							instance = self.instance_map[cls_name].get(instance_id)
+							if not instance:
+								raise ValueError(f"No instance found with ID: {instance_id}")
+							
+							result = getattr(instance, method_info.method_name)(*args, **kwargs)
+						
+						# Handle return value if any
+						return_type = method_info.type_hints.get("return")
+						if result is not None and return_type:
+							result_storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
+							
+							if ClassInfo.has_ClassInfo(return_type):
+								result_storage.merge(result)
+								result_data = {
+									"value": result.get_primary_key(),
+									"type": ClassInfo.get_semi_qual_name(type(result))
+								}
+							else:
+								result_data = {
+									"value": result,
+									"type": type(result).__name__
+								}
+							return jsonify({
+								"result": result_data,
+								"objects": result_storage._data
+							})
+						
+						return jsonify({"status": "success"})
+						
+					except Exception as e:
+						if method_info.route.error_handler:
+							method_info.route.error_handler(e)
+						return jsonify({"error": str(e)}), 500
+					
 				for method_name, method_info in cls_methods.items():
 					if method_name == "__init__" or method_name == "cls":
 						continue
@@ -244,10 +247,7 @@ class FlaskifyDecorator:
 					app.add_url_rule(
 						f"/{cls_name}{method_info.route.path}",
 						f"{cls_name}_{method_name}",
-						lambda mi=method_info: self._handle_method_call(
-							JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator),
-							cls_name, mi
-						),
+						lambda mi=method_info: handle_method_call(mi),
 						methods=["POST"]
 					)
 		
@@ -276,9 +276,15 @@ class FlaskifyDecorator:
 			flaskify = self
 			if cls_methods:
 				# Create client method implementation
-				def make_method(method_info: MethodInfo):
-					def method_impl(self, *args, **kwargs):
+				def make_method(method_info: MethodInfo, cls_name:str):
+					def method_impl(*args, **kwargs):
 						try:
+							self = None
+							if not method_info.is_static:
+								assert len(args)>0, "Must pass self to instance methods"
+								self = args[0]
+								args = args[1:]
+							
 							# Create new storage engine for this request
 							storage = JSONStorageEngine(storage_path=None, data_decorator=flaskify.data_decorator)
 							
@@ -366,4 +372,4 @@ class FlaskifyDecorator:
 				# Add all methods
 				for method_name, method_info in cls_methods.items():
 					if method_name != "__init__":
-						setattr(cls, method_name, make_method(method_info))
+						setattr(cls, method_name, make_method(method_info, cls_name))

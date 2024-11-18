@@ -55,7 +55,7 @@ class Calculator:
         self.value *= x
         return self.value
     
-    @staticmethod
     @FLASKIFY.route("/static/add")
+    @staticmethod
     def static_add(x: float, y: float) -> float:
         return x + y
