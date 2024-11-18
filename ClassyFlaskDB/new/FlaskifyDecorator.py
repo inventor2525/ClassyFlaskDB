@@ -27,6 +27,7 @@ class FlaskifyDecorator:
 		Initialize with a DATA decorator to handle object serialization
 		"""
 		self.data_decorator = data_decorator
+		self.classes: List[Type] = []
 		# Maps semi_qualname -> {method_name -> MethodInfo}
 		self.methods: Dict[str, Dict[str, MethodInfo]] = {}
 		# Maps semi_qualname -> {uuid -> instance}
@@ -34,6 +35,7 @@ class FlaskifyDecorator:
 		
 	def __call__(self, cls: Type):
 		"""Class decorator - simply returns class for registration during make_server/client"""
+		self.classes.append(cls)
 		return cls
 		
 	def route(self, path: str, error_handler: Optional[Callable] = None):
@@ -183,7 +185,7 @@ class FlaskifyDecorator:
 		app = Flask(__name__)
 		
 		# Process all classes with route-decorated methods
-		for cls in list(globals().values()):
+		for cls in self.classes:
 			if not isinstance(cls, type):
 				continue
 				
@@ -205,7 +207,6 @@ class FlaskifyDecorator:
 				self.instance_map[cls_name] = {}
 				
 				# Create instance creation endpoint
-				@app.route(f"/{cls_name}/create", methods=["POST"])
 				def create_instance():
 					storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
 					try:
@@ -228,15 +229,20 @@ class FlaskifyDecorator:
 							method_info.route.error_handler(e)
 						return jsonify({"error": str(e)}), 500
 				
+				app.add_url_rule(
+					f"/{cls_name}/create",
+					f"{cls_name}___init__",
+					create_instance,
+					methods=["POST"]
+				)
+			
 				# Create method endpoints
 				for method_name, method_info in cls_methods.items():
 					if method_name == "__init__" or method_name == "cls":
 						continue
-						
-					endpoint = f"/{cls_name}{method_info.route.path}"
 					
 					app.add_url_rule(
-						endpoint,
+						f"/{cls_name}{method_info.route.path}",
 						f"{cls_name}_{method_name}",
 						lambda mi=method_info: self._handle_method_call(
 							JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator),
@@ -251,7 +257,7 @@ class FlaskifyDecorator:
 
 	def make_client(self, host: str, port: int):
 		"""Convert registered classes to client stubs"""
-		for cls in list(globals().values()):
+		for cls in self.classes:
 			if not isinstance(cls, type):
 				continue
 				
@@ -267,16 +273,17 @@ class FlaskifyDecorator:
 				if method_info:
 					cls_methods[method_name] = method_info
 			
+			flaskify = self
 			if cls_methods:
 				# Create client method implementation
 				def make_method(method_info: MethodInfo):
 					def method_impl(self, *args, **kwargs):
 						try:
 							# Create new storage engine for this request
-							storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
+							storage = JSONStorageEngine(storage_path=None, data_decorator=flaskify.data_decorator)
 							
 							# Serialize method args
-							data = self._serialize_args(
+							data = flaskify._serialize_args(
 								storage, args, kwargs, 
 								method_info.signature, 
 								method_info.type_hints
@@ -301,7 +308,7 @@ class FlaskifyDecorator:
 								return_type = method_info.type_hints.get("return", type(None))
 								storage = JSONStorageEngine(
 									storage_path=None, 
-									data_decorator=self.data_decorator,
+									data_decorator=flaskify.data_decorator,
 									initial_data=result["objects"]
 								)
 								
@@ -325,11 +332,11 @@ class FlaskifyDecorator:
 				def __init__(self, *args, **kwargs):
 					try:
 						# Create new storage engine for this request
-						storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
+						storage = JSONStorageEngine(storage_path=None, data_decorator=flaskify.data_decorator)
 						
 						# Serialize init args
 						init_hints = get_type_hints(original_init)
-						data = self._serialize_args(
+						data = flaskify._serialize_args(
 							storage, args, kwargs, 
 							signature(original_init), 
 							init_hints
