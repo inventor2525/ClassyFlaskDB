@@ -12,6 +12,7 @@ class InfoDecorator:
 	is decorated with this has been imported.
 	'''
 	registry:Dict[str, type] = field(default_factory=dict, kw_only=True)
+	un_finalized:List[type] = field(default_factory=list, init=False)
 	
 	@overload
 	def __call__(self, cls:Type[T]) -> Union[Type[T], Type[ClassInfo.Interface]]:
@@ -37,13 +38,13 @@ class InfoDecorator:
 		class_info = ClassInfo(cls, included_fields, excluded_fields)
 		setattr(cls, ClassInfo.field_name, class_info)
 		self.registry[class_info.semi_qualname] = cls
+		self.un_finalized.append(cls)
 		return cls
 	
 	def finalize(self):
-		if getattr(self, "is_finalized", False):
-			return
-		self._finalize()
-		self.is_finalized = True
+		if len(self.un_finalized)>0:
+			self._finalize()
+			self.un_finalized.clear()
 		
 	def _finalize(self):
 		'''
@@ -53,7 +54,7 @@ class InfoDecorator:
 		is decorating is either fully defined or imported.
 		'''
 		open_list = []
-		for cls in self.registry.values():
+		for cls in self.un_finalized:
 			classInfo = getattr(cls, ClassInfo.field_name)
 			for f in classInfo.fields.values():
 				f.type = self._resolve_type(f.type)

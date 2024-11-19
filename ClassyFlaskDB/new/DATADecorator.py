@@ -51,7 +51,7 @@ class DATADecorator(InfoDecorator):
 		from .InstrumentedDict import InstrumentedDict
 
 		data_decorator_applied = object()
-		for cls in self.registry.values():
+		for cls in self.un_finalized:
 			#Apply a new get attribute to cls:
 			old_getattr = cls.__getattribute__
 			if not hasattr(old_getattr, "data_decorator_applied"):
