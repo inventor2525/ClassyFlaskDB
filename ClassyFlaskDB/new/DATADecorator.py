@@ -1,7 +1,5 @@
 from ClassyFlaskDB.DATA.ID_Type import ID_Type
 from .InfoDecorator import *
-from .Transcoder import *
-from .StorageEngine import *
 from .AutoID import *
 from copy import deepcopy
 
@@ -19,9 +17,8 @@ class DATADecorator(InfoDecorator):
 	'''
 	
 	class Interface(AutoID.Interface):
-		_cf_instance: Optional['CFInstance'] = None
-		
-		
+		_cf_instance: ForwardRef('CFInstance') = None
+	
 	@overload
 	def __call__(self, cls:Type[T]) -> Type[T]:
 		pass
@@ -38,7 +35,7 @@ class DATADecorator(InfoDecorator):
 		'''
 		return super().__call__(*args, **kwargs)
 
-	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[], group_name:str="main", id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Union[Type[T], Type['DATADecorator.Interface']]:
+	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[], group_name:str="main", id_type:ID_Type=ID_Type.UUID, hashed_fields:List[str]=None) -> Type[T]:
 		cls = super().decorate(cls, included_fields, excluded_fields, group_name)
 		cls = AutoID(id_type, None if hashed_fields is None else set(hashed_fields))(cls)
 		#more cls mods in finalize!
@@ -47,9 +44,10 @@ class DATADecorator(InfoDecorator):
 	def _finalize(self):
 		super()._finalize()
 		
+		from .Transcoder import CFInstance, Transcoder
+		from .StorageEngine import StorageEngine
 		from .InstrumentedList import InstrumentedList
 		from .InstrumentedDict import InstrumentedDict
-
 		data_decorator_applied = object()
 		for cls in self.un_finalized:
 			#Apply a new get attribute to cls:

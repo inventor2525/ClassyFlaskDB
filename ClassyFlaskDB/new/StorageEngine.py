@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple, Optional, ClassVar,Iterable, ForwardRef
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass, field
+from .DATADecorator import DATADecorator
 from .ClassInfo import *
 import uuid
 import os
@@ -23,7 +24,7 @@ T = TypeVar('T')
 
 @dataclass
 class StorageEngine(ABC):
-	data_decorator: ForwardRef('DATADecorator')
+	data_decorator: DATADecorator
 	
 	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
 	'''Used to maintain objects in memory between queries and possibly merges, by id.'''
