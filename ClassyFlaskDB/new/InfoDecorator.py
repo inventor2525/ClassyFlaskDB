@@ -26,7 +26,7 @@ class InfoDecorator:
 		else:
 			return lambda cls: self.decorate(cls, *args, **kwargs)
 
-	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[]) -> Union[Type[T], Type[ClassInfo.Interface]]:
+	def decorate(self, cls: Type[T], included_fields: Iterable[str] = [], excluded_fields: Iterable[str]=[], group_name:str="main") -> Union[Type[T], Type[ClassInfo.Interface]]:
 		parent_class_infos = ClassInfo.parent_infos(cls)
 		included_fields = set(included_fields)
 		excluded_fields = set(excluded_fields)
@@ -35,7 +35,7 @@ class InfoDecorator:
 				included_fields.add(i)
 			for e in parent_info._excluded_fields:
 				excluded_fields.add(e)
-		class_info = ClassInfo(cls, included_fields, excluded_fields)
+		class_info = ClassInfo(cls, included_fields, excluded_fields, group_name)
 		setattr(cls, ClassInfo.field_name, class_info)
 		self.registry[class_info.semi_qualname] = cls
 		self.un_finalized.append(cls)

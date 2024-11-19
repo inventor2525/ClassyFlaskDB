@@ -5,7 +5,7 @@ from ClassyFlaskDB.new.ClassInfo import ClassInfo, ID_Type
 from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.InstrumentedList import InstrumentedList, ListCFInstance
 from ClassyFlaskDB.new.InstrumentedDict import InstrumentedDict, DictCFInstance
-from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, Union, Set, get_origin, get_args
+from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, Union, Set, get_origin, get_args, Iterable
 from dataclasses import dataclass, field, MISSING, Field
 from datetime import datetime
 from enum import Enum
@@ -24,7 +24,8 @@ class JSONStorageEngine(StorageEngine):
                 use_folders: bool = False,
                 data_decorator: 'DATADecorator' = None,
                 extra_transcoders: List[Transcoder] = [],
-                files_dir: Optional[str] = None):
+                files_dir: Optional[str] = None,
+                group_names:Optional[Iterable[str]]=None):
         """
         Initialize JSONStorageEngine.
         
@@ -35,8 +36,9 @@ class JSONStorageEngine(StorageEngine):
             data_decorator: DATADecorator instance for type registration
             extra_transcoders: Additional transcoders to use
             files_dir: Directory for storing binary files
+            group_names: Used to specify which class groups from DATADecorator to use.
         """
-        super().__init__(files_dir=files_dir)
+        super().__init__(data_decorator, files_dir=files_dir, group_names=group_names)
         self.use_folders = use_folders
         self.storage_path = Path(storage_path) if storage_path else None
         
@@ -55,7 +57,7 @@ class JSONStorageEngine(StorageEngine):
         
         if self.data_decorator:
             self.data_decorator.finalize()
-            self.setup(self.data_decorator)
+            self.setup()
 
     def _ensure_storage_exists(self):
         if self.use_folders:

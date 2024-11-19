@@ -36,8 +36,10 @@ class ClassInfo:
 			semi_qualname = re.sub(r"""^(.*?<locals>\.)?(.*?$)""", r'\2', semi_qualname)
 		return semi_qualname
 	
-	def __init__(self, cls:type, included_fields:Set[str], excluded_fields:Set[str]):
+	def __init__(self, cls:type, included_fields:Set[str], excluded_fields:Set[str], group_name:str="main"):
 		self.cls = cls
+		self.group_name = group_name
+		
 		self.qualname = cls.__qualname__
 		self.semi_qualname = ClassInfo.get_semi_qual_name(cls)
 		

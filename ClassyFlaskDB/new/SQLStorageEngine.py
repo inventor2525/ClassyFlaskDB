@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, Boolean, select, MetaData, JSON, text
 from sqlalchemy.orm import sessionmaker
 import sqlalchemy as sa
-from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union, Set
+from typing import Dict, Any, Type, List, Generic, TypeVar, Iterator, Optional, get_origin, get_args, Union, Set, Iterable
 from dataclasses import dataclass, field, Field, MISSING
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -34,8 +34,8 @@ class SQLStorageEngine(StorageEngine):
         for transcoder in sql_transcoder_collection.transcoders:
             yield transcoder
     
-    def __init__(self, connection_string: str, data_decorator: DATADecorator, extra_transcoders: List[Transcoder] = [], files_dir: Optional[str] = None):
-        super().__init__(files_dir=files_dir)
+    def __init__(self, connection_string: str, data_decorator: DATADecorator, extra_transcoders: List[Transcoder] = [], files_dir: Optional[str] = None, group_names:Optional[Iterable[str]]=None):
+        super().__init__(data_decorator, files_dir=files_dir, group_names=group_names)        
         self.engine = create_engine(connection_string)
         self.session_maker = sessionmaker(bind=self.engine)
         self.metadata = MetaData()
@@ -46,7 +46,7 @@ class SQLStorageEngine(StorageEngine):
         
         self.data_decorator = data_decorator
         self.data_decorator.finalize()
-        self.setup(self.data_decorator)
+        self.setup()
 
         if self.files_dir is None:
             if connection_string.startswith('sqlite:///'):
@@ -59,9 +59,8 @@ class SQLStorageEngine(StorageEngine):
                         print(f"Failed to create directory {self.files_dir}: {e}")
                         self.files_dir = None
 
-    def setup(self, data_decorator: DATADecorator):
-        for cls in data_decorator.registry.values():
-            class_info = ClassInfo.get(cls)
+    def setup(self):
+        for cls, class_info in self.classes():
             setup_args = SetupArgs(storage_engine=self, class_info=class_info)
             transcoder = self.get_transcoder_type(cls)
             if transcoder:

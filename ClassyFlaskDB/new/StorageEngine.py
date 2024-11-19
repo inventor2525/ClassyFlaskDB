@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple, Optional, ClassVar
+from typing import List, Dict, Any, Union, TypeVar, Generic, Iterator, Mapping, Tuple, Optional, ClassVar,Iterable, ForwardRef
 from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass, field
 from .ClassInfo import *
@@ -23,11 +23,22 @@ T = TypeVar('T')
 
 @dataclass
 class StorageEngine(ABC):
-	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
-	files_dir: Optional[str] = field(default=None, kw_only=True)
-	id_mapping: ClassVar[Dict[int, str]] = {}
+	data_decorator: ForwardRef('DATADecorator')
 	
+	context:Dict[Type, Dict[Any, Any]] = field(default_factory=dict, kw_only=True)
+	'''Used to maintain objects in memory between queries and possibly merges, by id.'''
+	
+	files_dir: Optional[str] = field(default=None, kw_only=True)
+	'''The location that files will be stored (audio, images, etc)'''
+	
+	id_mapping: ClassVar[Dict[int, str]] = {}
+	'''Used to store id's of objects that were not decorated with DATADecorator.'''
+	
+	group_names: Optional[Iterable[str]] = field(default=None,kw_only=True)
+	'''When decorating a class with a DATADecorator, you can assign it an optional group name (default is 'main'), and with this you can specify which class groups you want in this storage engine. Default is that all that were decorated by the passed data decorator will be used.'''
 	def __post_init__(self):
+		if self.group_names:
+			self.group_names = set(self.group_names)
 		if self.files_dir:
 			if isinstance(self.files_dir, str) and len(self.files_dir) > 0:
 				self.files_dir = os.path.expanduser(self.files_dir)
@@ -44,7 +55,7 @@ class StorageEngine(ABC):
 	def transcoders(self) -> Iterator['Transcoder']:
 		...
 	
-	def setup(self, data_decorator: 'DATADecorator'):
+	def setup(self):
 		pass
 	
 	@abstractmethod
@@ -98,6 +109,15 @@ class StorageEngine(ABC):
 		
 		id = str(self.get_id(obj))
 		return os.path.join(self.files_dir, f"{id}.{extension}")
+	
+	def classes(self) -> Iterator[Tuple[type, ClassInfo]]:
+		for cls in self.data_decorator.registry.values():
+			class_info = ClassInfo.get(cls)
+			if self.group_names and class_info.group_name not in self.group_names:
+				# Skip any classes not in a group we're configured to use
+				continue
+			yield (cls, class_info)
+	
 
 @dataclass
 class TranscoderCollection:
