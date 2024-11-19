@@ -709,5 +709,10 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_new_book.author.age, 28)
 		self.assertEqual(queried_new_book.author.email, "jane@example.com")
 		self.assertEqual(queried_new_book.publication_year, 2023)
+	
+	def tearDown(self) -> None:
+		if os.path.exists('test_schema_evolution.db'):
+			os.remove('test_schema_evolution.db')
+		return super().tearDown()
 if __name__ == '__main__':
 	unittest.main()
