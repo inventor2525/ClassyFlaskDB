@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any, Callable, Type, Optional, get_type_hints, List, Union, Tuple
+from typing import Dict, Any, Callable, Type, Optional, get_type_hints, List, Union, Tuple,TypeVar
 from ClassyFlaskDB.new.JSONStorageEngine import JSONStorageEngine
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from flask import Flask, request, jsonify
@@ -22,6 +22,7 @@ class MethodInfo:
 	is_static: bool
 	type_hints: Dict[str, Type]
 
+T = TypeVar('T')
 class FlaskifyDecorator:
 	def __init__(self, data_decorator):
 		"""
@@ -34,14 +35,14 @@ class FlaskifyDecorator:
 		# Maps semi_qualname -> {uuid -> instance}
 		self.instance_map: Dict[str, Dict[str, Any]] = {}
 		
-	def __call__(self, cls: Type):
+	def __call__(self, cls: Type[T]) -> Type[T]:
 		"""Class decorator - simply returns class for registration during make_server/client"""
 		self.classes.append(cls)
 		return cls
 		
 	def route(self, path: str, error_handler: Optional[Callable] = None):
 		"""Method decorator - stores route info directly on method for later processing"""
-		def decorator(method):
+		def decorator(method: T) -> T:
 			# Store RouteInfo directly on method
 			method.__route_info__ = RouteInfo(path=path, error_handler=error_handler)
 			return method
