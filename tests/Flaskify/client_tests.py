@@ -2,10 +2,27 @@ import unittest
 from .model import *
 import time
 from datetime import datetime, timedelta
+import subprocess
+import signal
+import sys
+
 server_secret = 42
 class TestFlaskifyClient(unittest.TestCase):
+    server_process = None
+    
     @classmethod
     def setUpClass(cls):
+        # Get the directory containing this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        server_path = os.path.join(current_dir, 'server.py')
+        
+        # Start server in subprocess
+        cls.server_process = subprocess.Popen([sys.executable, server_path],
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
+        # Wait for server to start
+        time.sleep(2)
+        
         # Configure client
         FLASKIFY.make_client('localhost', 5000)
 
@@ -105,6 +122,21 @@ class TestFlaskifyClient(unittest.TestCase):
         self.assertEqual(retrieved.message.content, original_msg.content)
         self.assertEqual(retrieved.message.timestamp, original_msg.timestamp)
         self.assertEqual(retrieved.response, f"Echo: Test message {server_secret}")
+    
+    @classmethod
+    def tearDownClass(cls):
+        if cls.server_process:
+            try:
+                # First try graceful shutdown
+                cls.server_process.terminate()
+                try:
+                    cls.server_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    # If graceful shutdown fails, force kill
+                    cls.server_process.kill()
+                    cls.server_process.wait(timeout=5)
+            except Exception as e:
+                print(f"Warning: Error shutting down server: {e}")
 
 if __name__ == '__main__':
     unittest.main()
