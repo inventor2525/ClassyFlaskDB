@@ -5,6 +5,7 @@ from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from flask import Flask, request, jsonify
 from inspect import signature, Signature
 import requests
+import inspect
 import uuid
 
 @dataclass
@@ -40,6 +41,8 @@ class FlaskifyDecorator:
 		# Maps semi_qualname -> {uuid -> instance}
 		self.instance_map: Dict[str, Dict[str, Any]] = {}
 		
+		self.routes: Dict[str,RouteInfo] = {}
+		
 	def __call__(self, cls: Type[T]) -> Type[T]:
 		"""Class decorator - simply returns class for registration during make_server/client"""
 		self.classes.append(cls)
@@ -48,8 +51,7 @@ class FlaskifyDecorator:
 	def route(self, path: str, error_handler: Optional[Callable] = None):
 		"""Method decorator - stores route info directly on method for later processing"""
 		def decorator(method: T) -> T:
-			# Store RouteInfo directly on method
-			method.__route_info__ = RouteInfo(path=path, error_handler=error_handler)
+			self.routes[method.__qualname__] = RouteInfo(path=path, error_handler=error_handler)
 			return method
 		return decorator
 
@@ -75,8 +77,7 @@ class FlaskifyDecorator:
 
 	def _get_method_info(self, cls: Type, method_name: str) -> Optional[MethodInfo]:
 		"""Helper to create MethodInfo from a method with RouteInfo"""
-		method = getattr(cls, method_name)
-			
+		method = inspect.getattr_static(cls, method_name)
 		sig = signature(method)
 		type_hints = get_type_hints(method)
 		is_static = isinstance(method, staticmethod)
@@ -115,13 +116,9 @@ class FlaskifyDecorator:
 			
 		group_name = f"{ClassInfo.get_semi_qual_name(cls)}_{method_name}"
 		
-		try:
-			route = method.__route_info__
-		except:
-			route = None
 		return MethodInfo(
 			method_name=method_name,
-			route=route,
+			route=self.routes.get(method.__qualname__, None),
 			signature=sig,
 			is_static=is_static,
 			type_hints=type_hints,
