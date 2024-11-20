@@ -26,7 +26,7 @@ class ChatHistory:
     def __init__(self):
         self.messages: List[StoredMessage] = []
     
-    @FLASKIFY.route("/add")
+    @FLASKIFY.route
     def add_message(self, message: Message) -> StoredMessage:
         response = f"Echo: {message.content} {FLASKIFY.secret}"
         stored = StoredMessage(message, response)
@@ -37,7 +37,7 @@ class ChatHistory:
     def get_messages(self) -> List[StoredMessage]:
         return self.messages
     
-    @FLASKIFY.route("/clear")
+    @FLASKIFY.route
     def clear(self) -> None:
         self.messages.clear()
 
@@ -56,7 +56,7 @@ class Calculator:
         self.value *= x+FLASKIFY.secret
         return self.value
     
-    @FLASKIFY.route("/static/add")
     @staticmethod
+    @FLASKIFY.route
     def static_add(x: float, y: float) -> float:
         return x + y + FLASKIFY.secret

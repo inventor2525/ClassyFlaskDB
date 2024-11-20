@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any, Callable, Type, Optional, get_type_hints, List, Union, Tuple,TypeVar
+from typing import Dict, Any, Callable, Type, Optional, get_type_hints, List, Union, Tuple, TypeVar, overload
 from ClassyFlaskDB.new.JSONStorageEngine import JSONStorageEngine
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from flask import Flask, request, jsonify
@@ -47,13 +47,23 @@ class FlaskifyDecorator:
 		"""Class decorator - simply returns class for registration during make_server/client"""
 		self.classes.append(cls)
 		return cls
-		
-	def route(self, path: str, error_handler: Optional[Callable] = None):
+	
+	@overload
+	def route(self, method:T) -> T:
+		pass
+	@overload
+	def route(self, path: str, error_handler: Optional[Callable] = None) -> Callable[[T], T]:
+		pass
+	def route(self, *args, **kwargs):
 		"""Method decorator - stores route info directly on method for later processing"""
-		def decorator(method: T) -> T:
+		def decorator(method:T, path:str, error_handler: Optional[Callable] = None) -> T:
 			self.routes[method.__qualname__] = RouteInfo(path=path, error_handler=error_handler)
 			return method
-		return decorator
+		if len(args) == 1 and isinstance(args[0], Callable):
+			method = args[0]
+			return decorator(method, method.__name__)
+		else:
+			return lambda method: decorator(method, *args, **kwargs)
 
 	def _needs_custom_class(self, type_: Type) -> bool:
 		if type_ in BASIC_TYPES:
