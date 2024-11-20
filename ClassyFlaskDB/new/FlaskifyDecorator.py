@@ -25,6 +25,18 @@ class MethodInfo:
 	args_class: Optional[Type] = None
 	return_class: Optional[Type] = None
 	group_name: str = ''
+	
+	@property
+	def path(self) -> str:
+		if self.route:
+			if self.route.path.startswith('/'):
+				return self.route.path
+			return f"/{self.route.path}"
+		return f"/{self.method_name}"
+	
+	def error(self, e:Exception):
+		if self.route and self.route.error_handler:
+			self.route.error_handler(e)
 
 BASIC_TYPES = {int, float, str, bool}
 
@@ -263,7 +275,7 @@ class FlaskifyDecorator:
 				continue
 				
 			# Find methods with route info
-			cls_methods = {}
+			cls_methods :Dict[str, MethodInfo] = {}
 			cls_name = ClassInfo.get_semi_qual_name(cls)
 			
 			for method_name in dir(cls):
@@ -298,12 +310,12 @@ class FlaskifyDecorator:
 						return jsonify({"instance_id": instance_id})
 						
 					except Exception as e:
-						if method_info and method_info.route.error_handler:
-							method_info.route.error_handler(e)
+						if method_info:
+							method_info.error(e)
 						return jsonify({"error": str(e)}), 500
 				
 				app.add_url_rule(
-					f"/{cls_name}/create",
+					f"/{cls_name}/__init__",
 					f"{cls_name}___init__",
 					lambda cn=cls_name, cls=cls: create_instance(cn, cls),
 					methods=["POST"]
@@ -364,8 +376,8 @@ class FlaskifyDecorator:
 						return jsonify({"status": "success"})
 						
 					except Exception as e:
-						if method_info.route.error_handler:
-							method_info.route.error_handler(e)
+						if method_info:
+							method_info.error(e)
 						return jsonify({"error": str(e)}), 500
 					
 				for method_name, method_info in cls_methods.items():
@@ -373,7 +385,7 @@ class FlaskifyDecorator:
 						continue
 					
 					app.add_url_rule(
-						f"/{cls_name}{method_info.route.path}",
+						f"/{cls_name}{method_info.path}",
 						f"{cls_name}_{method_name}",
 						lambda mi=method_info, cn=cls_name: handle_method_call(mi,cn),
 						methods=["POST"]
@@ -392,7 +404,7 @@ class FlaskifyDecorator:
 			cls_name = ClassInfo.get_semi_qual_name(cls)
 			
 			# Find methods with route info
-			cls_methods = {}
+			cls_methods :Dict[str, MethodInfo] = {}
 			for method_name in dir(cls):
 				if method_name.startswith('_'):
 					continue
@@ -423,7 +435,7 @@ class FlaskifyDecorator:
 								
 							# Make request to server
 							response = requests.post(
-								f"http://{host}:{port}/{cls_name}{method_info.route.path}",
+								f"http://{host}:{port}/{cls_name}{method_info.path}",
 								json=data
 							)
 							
@@ -457,8 +469,8 @@ class FlaskifyDecorator:
 							return None
 							
 						except Exception as e:
-							if method_info.route.error_handler:
-								method_info.route.error_handler(e)
+							if method_info:
+								method_info.error(e)
 							raise
 							
 					if method_info.is_static:
@@ -476,7 +488,7 @@ class FlaskifyDecorator:
 							
 							# Make request to server to create instance
 							response = requests.post(
-								f"http://{host}:{port}/{cls_name}/create",
+								f"http://{host}:{port}/{cls_name}/__init__",
 								json=data
 							)
 							
@@ -487,8 +499,8 @@ class FlaskifyDecorator:
 							self._instance_id = response.json()["instance_id"]
 							
 						except Exception as e:
-							if method_info and method_info.route.error_handler:
-								method_info.route.error_handler(e)
+							if method_info:
+								method_info.error(e)
 							raise
 					return __init__
 
