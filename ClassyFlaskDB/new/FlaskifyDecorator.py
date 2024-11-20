@@ -21,6 +21,11 @@ class MethodInfo:
 	signature: Signature
 	is_static: bool
 	type_hints: Dict[str, Type]
+	args_class: Optional[Type] = None
+	return_class: Optional[Type] = None
+	group_name: str = ''
+
+BASIC_TYPES = {int, float, str, bool}
 
 T = TypeVar('T')
 class FlaskifyDecorator:
@@ -48,18 +53,82 @@ class FlaskifyDecorator:
 			return method
 		return decorator
 
+	def _needs_custom_class(self, type_: Type) -> bool:
+		if type_ in BASIC_TYPES:
+			return False
+		if ClassInfo.has_ClassInfo(type_):
+			return False
+		return True
+
+	def _create_dynamic_class(self, name: str, fields: Dict[str, Type]) -> Type:
+		cls = type(
+			name,
+			(),
+			{
+				'__annotations__': fields,
+				'__module__': __name__
+			}
+		)
+		cls = dataclass(cls)
+		group_name = f"dynamic_{name}"
+		return self.data_decorator(group_name=group_name)(cls)
+
 	def _get_method_info(self, cls: Type, method_name: str) -> Optional[MethodInfo]:
 		"""Helper to create MethodInfo from a method with RouteInfo"""
 		method = getattr(cls, method_name)
-		if hasattr(method, '__route_info__'):
-			return MethodInfo(
-				method_name=method_name,
-				route=method.__route_info__,
-				signature=signature(method),
-				is_static=isinstance(method, staticmethod),
-				type_hints=get_type_hints(method)
+			
+		sig = signature(method)
+		type_hints = get_type_hints(method)
+		is_static = isinstance(method, staticmethod)
+		
+		param_names = list(sig.parameters.keys())
+		if not is_static and len(param_names) > 0 and param_names[0] == 'self':
+			param_names = param_names[1:]
+			
+		# Single pass for args class creation
+		needs_args_class = False
+		args_fields = {}
+		for name in param_names:
+			arg_type = type_hints[name]
+			if self._needs_custom_class(arg_type):
+				needs_args_class = True
+			args_fields[name] = arg_type
+			
+		# Create args class if needed
+		base_name = f"{ClassInfo.get_semi_qual_name(cls)}_{method_name}"
+		args_class = None
+		if needs_args_class:
+			args_class = self._create_dynamic_class(
+				f"MethodArgs_{base_name}",
+				args_fields
 			)
-		return None
+			
+		# Check return type
+		return_class = None
+		return_type = type_hints.get('return')
+		if return_type and self._needs_custom_class(return_type):
+			return_fields = {'value': return_type}
+			return_class = self._create_dynamic_class(
+				f"MethodReturn_{base_name}",
+				return_fields
+			)
+			
+		group_name = f"{ClassInfo.get_semi_qual_name(cls)}_{method_name}"
+		
+		try:
+			route = method.__route_info__
+		except:
+			route = None
+		return MethodInfo(
+			method_name=method_name,
+			route=route,
+			signature=sig,
+			is_static=is_static,
+			type_hints=type_hints,
+			args_class=args_class,
+			return_class=return_class,
+			group_name=group_name
+		)
 
 	def _process_arg(self, storage: JSONStorageEngine, arg_name: str, arg_type: Type, arg_value: Any) -> Dict[str, Any]:
 		"""Helper to process a single argument for serialization"""
@@ -76,48 +145,90 @@ class FlaskifyDecorator:
 			"type": type(arg_value).__name__
 		}
 
-	def _serialize_args(self, storage: JSONStorageEngine, args: Tuple, kwargs: Dict[str, Any], 
-					sig: Signature, type_hints: Dict[str, Type]) -> Dict[str, Any]:
+	def _serialize_args(self, method_info: MethodInfo, args: Tuple, kwargs: Dict[str, Any]) -> Dict[str, Any]:
 		"""Serialize method arguments using provided storage engine"""
-		serialized_data = {
-			"args": {},
-			"kwargs": {}
-		}
+		storage = JSONStorageEngine(
+			storage_path=None,
+			data_decorator=self.data_decorator,
+			group_names=['main', method_info.group_name]
+		)
+
+		if method_info.args_class:
+			# Map args and kwargs to fields
+			param_names = list(method_info.signature.parameters.keys())
+			if not method_info.is_static and param_names[0] == 'self':
+				param_names = param_names[1:]
+				
+			field_values = {}
+			for i, arg in enumerate(args):
+				field_values[param_names[i]] = arg
+			field_values.update(kwargs)
+			
+			# Create and merge container
+			container = method_info.args_class(**field_values)
+			storage.merge(container)
+			
+			return {
+				'container_id': container.get_primary_key(),
+				'objects': storage._data
+			}
 		
 		# Process positional args
-		param_names = list(sig.parameters.keys())
-		if len(param_names)>0 and param_names[0]=='self':
+		serialized_data = {"args": {}, "kwargs": {}}
+		param_names = list(method_info.signature.parameters.keys())
+		if not method_info.is_static and param_names[0] == 'self':
 			param_names = param_names[1:]
-		if not any(p.kind == p.VAR_POSITIONAL for p in sig.parameters.values()):
-			if len(args) > len(param_names):
-				raise ValueError(f"Too many positional arguments")
-				
+			
 		for i, arg in enumerate(args):
 			arg_name = param_names[i]
-			arg_type = type_hints[arg_name]
+			arg_type = method_info.type_hints[arg_name]
 			serialized_data["args"][arg_name] = self._process_arg(storage, arg_name, arg_type, arg)
 				
 		# Process kwargs
 		for key, value in kwargs.items():
-			if key not in type_hints:
-				raise ValueError(f"Unexpected keyword argument: {key}")
-			arg_type = type_hints[key]
+			arg_type = method_info.type_hints[key]
 			serialized_data["kwargs"][key] = self._process_arg(storage, key, arg_type, value)
 		
 		return {
-			"arguments": serialized_data,
-			"objects": storage._data
+			'arguments': serialized_data,
+			'objects': storage._data
 		}
 
-	def _deserialize_args(self, storage: JSONStorageEngine, data: Dict[str, Any], 
-						sig: Signature, type_hints: Dict[str, Type]) -> Tuple[Tuple, Dict[str, Any]]:
+	def _deserialize_args(self, method_info: MethodInfo, data: Dict[str, Any]) -> Tuple[Tuple, Dict[str, Any]]:
 		"""Deserialize method arguments using provided storage engine"""
+		storage = JSONStorageEngine(
+			storage_path=None,
+			data_decorator=self.data_decorator,
+			initial_data=data['objects'],
+			group_names=['main', method_info.group_name]
+		)
+
+		if method_info.args_class:
+			container = storage.query(method_info.args_class).filter_by_id(data['container_id'])
+			
+			# Extract args and kwargs from container
+			param_names = list(method_info.signature.parameters.keys())
+			if not method_info.is_static and param_names[0] == 'self':
+				param_names = param_names[1:]
+				
+			args = []
+			kwargs = {}
+			
+			for name in param_names:
+				value = getattr(container, name)
+				if hasattr(container, name):
+					args.append(value)
+				else:
+					kwargs[name] = value
+					
+			return tuple(args), kwargs
+
 		args = []
 		kwargs = {}
 		
 		# Deserialize positional args
 		for arg_name, arg_data in data["arguments"]["args"].items():
-			arg_type = type_hints[arg_name]
+			arg_type = method_info.type_hints[arg_name]
 			if ClassInfo.has_ClassInfo(arg_type):
 				arg = storage.query(arg_type).filter_by_id(arg_data["value"])
 			else:
@@ -126,7 +237,7 @@ class FlaskifyDecorator:
 			
 		# Deserialize kwargs
 		for key, arg_data in data["arguments"]["kwargs"].items():
-			arg_type = type_hints[key]
+			arg_type = method_info.type_hints[key]
 			if ClassInfo.has_ClassInfo(arg_type):
 				kwarg = storage.query(arg_type).filter_by_id(arg_data["value"])
 			else:
@@ -163,14 +274,15 @@ class FlaskifyDecorator:
 				
 				# Create instance creation endpoint
 				def create_instance(cls_name:str, cls:Type):
-					storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
+					method_info = self._get_method_info(cls, '__init__')
+					storage = JSONStorageEngine(
+						storage_path=None, 
+						data_decorator=self.data_decorator,
+						group_names=['main', method_info.group_name] if method_info else None
+					)
 					try:
 						data = request.get_json()
-						args, kwargs = self._deserialize_args(
-							storage, data, 
-							signature(cls.__init__), 
-							get_type_hints(cls.__init__)
-						)
+						args, kwargs = self._deserialize_args(method_info, data)
 						
 						instance = cls(*args, **kwargs)
 						instance_id = str(uuid.uuid4())
@@ -179,7 +291,6 @@ class FlaskifyDecorator:
 						return jsonify({"instance_id": instance_id})
 						
 					except Exception as e:
-						method_info = cls_methods.get("__init__")
 						if method_info and method_info.route.error_handler:
 							method_info.route.error_handler(e)
 						return jsonify({"error": str(e)}), 500
@@ -196,10 +307,13 @@ class FlaskifyDecorator:
 					"""Common handler for both instance and static method calls"""
 					try:
 						data = request.get_json()
-						storage = JSONStorageEngine(storage_path=None, initial_data=data['objects'], data_decorator=self.data_decorator)
-						args, kwargs = self._deserialize_args(
-							storage, data, method_info.signature, method_info.type_hints
+						storage = JSONStorageEngine(
+							storage_path=None, 
+							initial_data=data['objects'],
+							data_decorator=self.data_decorator,
+							group_names=['main', method_info.group_name]
 						)
+						args, kwargs = self._deserialize_args(method_info, data)
 						
 						if method_info.is_static:
 							result = getattr(self.methods[cls_name]["cls"], method_info.method_name)(*args, **kwargs)
@@ -214,25 +328,31 @@ class FlaskifyDecorator:
 							result = getattr(instance, method_info.method_name)(*args, **kwargs)
 						
 						# Handle return value if any
-						return_type = method_info.type_hints.get("return")
-						if result is not None and return_type:
-							result_storage = JSONStorageEngine(storage_path=None, data_decorator=self.data_decorator)
+						if result is not None:
+							result_storage = JSONStorageEngine(
+								storage_path=None,
+								data_decorator=self.data_decorator,
+								group_names=['main', method_info.group_name]
+							)
 							
-							if ClassInfo.has_ClassInfo(return_type):
+							if method_info.return_class:
+								container = method_info.return_class(value=result)
+								result_storage.merge(container)
+								return jsonify({
+									'container_id': container.get_primary_key(),
+									'objects': result_storage._data
+								})
+							elif ClassInfo.has_ClassInfo(method_info.type_hints.get('return')):
 								result_storage.merge(result)
-								result_data = {
-									"value": result.get_primary_key(),
-									"type": ClassInfo.get_semi_qual_name(type(result))
-								}
+								return jsonify({
+									'value': result.get_primary_key(),
+									'objects': result_storage._data
+								})
 							else:
-								result_data = {
-									"value": result,
-									"type": type(result).__name__
-								}
-							return jsonify({
-								"result": result_data,
-								"objects": result_storage._data
-							})
+								return jsonify({
+									'value': result,
+									'type': type(result).__name__
+								})
 						
 						return jsonify({"status": "success"})
 						
@@ -286,15 +406,9 @@ class FlaskifyDecorator:
 								self = args[0]
 								args = args[1:]
 							
-							# Create new storage engine for this request
-							storage = JSONStorageEngine(storage_path=None, data_decorator=flaskify.data_decorator)
 							
 							# Serialize method args
-							data = flaskify._serialize_args(
-								storage, args, kwargs, 
-								method_info.signature, 
-								method_info.type_hints
-							)
+							data = flaskify._serialize_args(method_info, args, kwargs)
 							
 							# Add instance ID if instance method
 							if not method_info.is_static:
@@ -311,18 +425,28 @@ class FlaskifyDecorator:
 								
 							# Deserialize response if needed
 							result = response.json()
-							if "result" in result:
-								return_type = method_info.type_hints.get("return", type(None))
+							if 'container_id' in result:
 								storage = JSONStorageEngine(
-									storage_path=None, 
+									storage_path=None,
 									data_decorator=flaskify.data_decorator,
-									initial_data=result["objects"]
+									initial_data=result['objects'],
+									group_names=['main', method_info.group_name]
 								)
-								
-								if ClassInfo.has_ClassInfo(return_type):
-									return storage.query(return_type).filter_by_id(result["result"]["value"])
+								container = storage.query(method_info.return_class).filter_by_id(result['container_id'])
+								return container.value
+							elif 'value' in result:
+								if 'objects' in result:
+									storage = JSONStorageEngine(
+										storage_path=None,
+										data_decorator=flaskify.data_decorator,
+										initial_data=result['objects'],
+										group_names=['main', method_info.group_name]
+									)
+									return_type = method_info.type_hints.get('return')
+									return storage.query(return_type).filter_by_id(result['value'])
 								else:
-									return return_type(result["result"]["value"])
+									return_type = method_info.type_hints.get('return', type(None))
+									return return_type(result['value'])
 							return None
 							
 						except Exception as e:
@@ -337,18 +461,11 @@ class FlaskifyDecorator:
 				# Create __init__ that gets instance ID from server
 				def make_init(cls:Type, cls_name:str):
 					original_init = cls.__init__
+					method_info = flaskify._get_method_info(cls, '__init__')
 					def __init__(self, *args, **kwargs):
 						try:
-							# Create new storage engine for this request
-							storage = JSONStorageEngine(storage_path=None, data_decorator=flaskify.data_decorator)
-							
 							# Serialize init args
-							init_hints = get_type_hints(original_init)
-							data = flaskify._serialize_args(
-								storage, args, kwargs, 
-								signature(original_init), 
-								init_hints
-							)
+							data = flaskify._serialize_args(method_info, args, kwargs)
 							
 							# Make request to server to create instance
 							response = requests.post(
@@ -363,7 +480,6 @@ class FlaskifyDecorator:
 							self._instance_id = response.json()["instance_id"]
 							
 						except Exception as e:
-							method_info = cls_methods.get("__init__")
 							if method_info and method_info.route.error_handler:
 								method_info.route.error_handler(e)
 							raise
