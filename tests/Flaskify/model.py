@@ -19,6 +19,7 @@ class StoredMessage:
 
 # Service objects
 FLASKIFY = FlaskifyDecorator(DATA)
+FLASKIFY.secret = 0
 
 @FLASKIFY
 class ChatHistory:
@@ -27,7 +28,7 @@ class ChatHistory:
     
     @FLASKIFY.route("/add")
     def add_message(self, message: Message) -> StoredMessage:
-        response = f"Echo: {message.content}"
+        response = f"Echo: {message.content} {FLASKIFY.secret}"
         stored = StoredMessage(message, response)
         self.messages.append(stored)
         return stored
@@ -47,15 +48,15 @@ class Calculator:
     
     @FLASKIFY.route("/add")
     def add(self, x: float) -> float:
-        self.value += x
+        self.value += x+FLASKIFY.secret
         return self.value
     
     @FLASKIFY.route("/multiply")
     def multiply(self, x: float) -> float:
-        self.value *= x
+        self.value *= x+FLASKIFY.secret
         return self.value
     
     @FLASKIFY.route("/static/add")
     @staticmethod
     def static_add(x: float, y: float) -> float:
-        return x + y
+        return x + y + FLASKIFY.secret

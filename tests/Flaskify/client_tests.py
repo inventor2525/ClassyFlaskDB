@@ -2,26 +2,26 @@ import unittest
 from .model import *
 import time
 from datetime import datetime, timedelta
+server_secret = 42
 class TestFlaskifyClient(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Configure client
         FLASKIFY.make_client('localhost', 5000)
-        time.sleep(1)  # Give server time to start if just launched
 
     def test_calculator_basic_operations(self):
         # Test instance creation with initial value
         calc = Calculator(10.0)
-        self.assertEqual(calc.add(5), 15.0)
-        self.assertEqual(calc.multiply(2), 30.0)
+        self.assertEqual(calc.add(5), 15.0+server_secret)
+        self.assertEqual(calc.multiply(2-server_secret), (15.0+server_secret)*2)
         
         # Test static method
-        self.assertEqual(Calculator.static_add(3, 4), 7.0)
+        self.assertEqual(Calculator.static_add(3, 4), 7.0+server_secret)
         
         # Test multiple instances don't interfere
         calc2 = Calculator(100.0)
-        self.assertEqual(calc2.add(50), 150.0)
-        self.assertEqual(calc.add(10), 40.0)  # First calculator maintains its state
+        self.assertEqual(calc2.add(50), 150.0+server_secret)
+        self.assertEqual(calc.add(10), (15.0+server_secret)*2+10+server_secret)  # First calculator maintains its state
 
     def test_chat_history_operations(self):
         history = ChatHistory()
@@ -30,7 +30,7 @@ class TestFlaskifyClient(unittest.TestCase):
         msg1 = Message("Hello, World!")
         stored1 = history.add_message(msg1)
         self.assertEqual(stored1.message.content, "Hello, World!")
-        self.assertEqual(stored1.response, "Echo: Hello, World!")
+        self.assertEqual(stored1.response, f"Echo: Hello, World! {server_secret}")
         
         # Verify timestamp is within last minute
         self.assertLess(
@@ -104,7 +104,7 @@ class TestFlaskifyClient(unittest.TestCase):
         
         self.assertEqual(retrieved.message.content, original_msg.content)
         self.assertEqual(retrieved.message.timestamp, original_msg.timestamp)
-        self.assertEqual(retrieved.response, "Echo: Test message")
+        self.assertEqual(retrieved.response, f"Echo: Test message {server_secret}")
 
 if __name__ == '__main__':
     unittest.main()
