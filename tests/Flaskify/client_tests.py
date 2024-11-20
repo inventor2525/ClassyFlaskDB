@@ -42,14 +42,14 @@ class TestFlaskifyClient(unittest.TestCase):
         msg2 = Message("Testing...")
         history.add_message(msg2)
         
-        all_messages = history.get_messages().messages
+        all_messages = history.get_messages()
         self.assertEqual(len(all_messages), 2)
         self.assertEqual(all_messages[0].message.content, "Hello, World!")
         self.assertEqual(all_messages[1].message.content, "Testing...")
         
         # Test clear
         history.clear()
-        self.assertEqual(len(history.get_messages().messages), 0)
+        self.assertEqual(len(history.get_messages()), 0)
         
     def test_multiple_chat_histories(self):
         history1 = ChatHistory()
@@ -64,8 +64,8 @@ class TestFlaskifyClient(unittest.TestCase):
         history2.add_message(msg2)
         
         # Verify separation
-        messages1 = history1.get_messages().messages
-        messages2 = history2.get_messages().messages
+        messages1 = history1.get_messages()
+        messages2 = history2.get_messages()
         
         self.assertEqual(len(messages1), 1)
         self.assertEqual(len(messages2), 1)
@@ -99,7 +99,7 @@ class TestFlaskifyClient(unittest.TestCase):
         self.assertEqual(stored.message.timestamp, original_msg.timestamp)
         
         # Verify we can retrieve it again
-        messages = history.get_messages().messages
+        messages = history.get_messages()
         retrieved = messages[0]
         
         self.assertEqual(retrieved.message.content, original_msg.content)
