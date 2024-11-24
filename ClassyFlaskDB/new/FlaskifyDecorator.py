@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Callable, Type, Optional, get_type_hints, List, Union, Tuple, TypeVar, overload
-from ClassyFlaskDB.new.JSONStorageEngine import JSONStorageEngine
+from ClassyFlaskDB.new.JSONStorageEngine import JSONStorageEngine, DATADecorator
 from ClassyFlaskDB.new.ClassInfo import ClassInfo
 from flask import Flask, request, jsonify
 from inspect import signature, Signature
@@ -42,18 +42,24 @@ BASIC_TYPES = {int, float, str, bool}
 
 T = TypeVar('T')
 class FlaskifyDecorator:
-	def __init__(self, data_decorator):
+	def __init__(self, data_decorator:DATADecorator):
 		"""
 		Initialize with a DATA decorator to handle object serialization
 		"""
 		self.data_decorator = data_decorator
-		self.classes: List[Type] = []
-		# Maps semi_qualname -> {method_name -> MethodInfo}
-		self.methods: Dict[str, Dict[str, MethodInfo]] = {}
-		# Maps semi_qualname -> {uuid -> instance}
-		self.instance_map: Dict[str, Dict[str, Any]] = {}
+		'''Used to create temporary storage engines for serialization'''
 		
-		self.routes: Dict[str,RouteInfo] = {}
+		self.classes: List[Type] = []
+		'''Classes that have been decorated'''
+		
+		self.methods: Dict[str, Dict[str, MethodInfo]] = {}
+		'''Maps semi_qualname -> {method_name -> MethodInfo}'''
+		
+		self.instance_map: Dict[str, Dict[str, Any]] = {}
+		'''Maps semi_qualname -> {uuid -> instance}'''
+		
+		self.routes: Dict[str, RouteInfo] = {}
+		'''Routes (methods decorated with route), by method.__qualname__'''
 		
 	def __call__(self, cls: Type[T]) -> Type[T]:
 		"""Class decorator - simply returns class for registration during make_server/client"""
@@ -264,132 +270,127 @@ class FlaskifyDecorator:
 			kwargs[key] = kwarg
 			
 		return tuple(args), kwargs
-
+	
+	def _get_class_methods(self, cls:type) -> Dict[str, MethodInfo]:
+		cls_methods = {}
+		for method_name in dir(cls):
+			if method_name.startswith('_'):
+				continue
+				
+			method_info = self._get_method_info(cls, method_name)
+			if method_info:
+				cls_methods[method_name] = method_info
+		return cls_methods
+	
 	def make_server(self, host: str, port: int, run: bool = True) -> Flask:
 		"""Convert registered classes to server implementations"""
 		app = Flask(__name__)
 		
 		# Process all classes with route-decorated methods
 		for cls in self.classes:
-			if not isinstance(cls, type):
-				continue
-				
-			# Find methods with route info
-			cls_methods :Dict[str, MethodInfo] = {}
 			cls_name = ClassInfo.get_semi_qual_name(cls)
+			cls_methods = self._get_class_methods(cls)
+			if len(cls_methods) == 0:
+				continue
 			
-			for method_name in dir(cls):
-				if method_name.startswith('_'):
-					continue
+			self.methods[cls_name] = cls_methods
+			self.methods[cls_name]["cls"] = cls
+			self.instance_map[cls_name] = {}
+			
+			# Create instance __init__ endpoint:
+			def create_instance(cls_name:str, cls:Type):
+				method_info = self._get_method_info(cls, '__init__')
+				try:
+					data = request.get_json()
+					args, kwargs = self._deserialize_args(method_info, data)
 					
-				method_info = self._get_method_info(cls, method_name)
-				if method_info:
-					cls_methods[method_name] = method_info
+					instance = cls(*args, **kwargs)
+					instance_id = str(uuid.uuid4())
+					self.instance_map[cls_name][instance_id] = instance
+					
+					return jsonify({"instance_id": instance_id})
+					
+				except Exception as e:
+					if method_info:
+						method_info.error(e)
+					return jsonify({"error": str(e)}), 500
 			
-			if cls_methods:
-				self.methods[cls_name] = cls_methods
-				self.methods[cls_name]["cls"] = cls
-				self.instance_map[cls_name] = {}
-				
-				# Create instance creation endpoint
-				def create_instance(cls_name:str, cls:Type):
-					method_info = self._get_method_info(cls, '__init__')
+			app.add_url_rule(
+				f"/{cls_name}/__init__",
+				f"{cls_name}___init__",
+				lambda cn=cls_name, cls=cls: create_instance(cn, cls),
+				methods=["POST"]
+			)
+		
+			# Create method endpoints:
+			def handle_method_call(method_info: MethodInfo, cls_name: str) -> Any:
+				"""Common handler for both instance and static method calls"""
+				try:
+					data = request.get_json()
 					storage = JSONStorageEngine(
 						storage_path=None, 
+						initial_data=data['objects'],
 						data_decorator=self.data_decorator,
-						group_names=['main', method_info.group_name] if method_info else None
+						group_names=['main', method_info.group_name]
 					)
-					try:
-						data = request.get_json()
-						args, kwargs = self._deserialize_args(method_info, data)
+					args, kwargs = self._deserialize_args(method_info, data)
+					
+					if method_info.is_static:
+						result = getattr(self.methods[cls_name]["cls"], method_info.method_name)(*args, **kwargs)
+					else:
+						instance_id = data.get("instance_id")
+						if not instance_id:
+							raise ValueError("No instance ID provided")
+						instance = self.instance_map[cls_name].get(instance_id)
+						if not instance:
+							raise ValueError(f"No instance found with ID: {instance_id}")
 						
-						instance = cls(*args, **kwargs)
-						instance_id = str(uuid.uuid4())
-						self.instance_map[cls_name][instance_id] = instance
-						
-						return jsonify({"instance_id": instance_id})
-						
-					except Exception as e:
-						if method_info:
-							method_info.error(e)
-						return jsonify({"error": str(e)}), 500
-				
-				app.add_url_rule(
-					f"/{cls_name}/__init__",
-					f"{cls_name}___init__",
-					lambda cn=cls_name, cls=cls: create_instance(cn, cls),
-					methods=["POST"]
-				)
-			
-				# Create method endpoints
-				def handle_method_call(method_info: MethodInfo, cls_name: str) -> Any:
-					"""Common handler for both instance and static method calls"""
-					try:
-						data = request.get_json()
-						storage = JSONStorageEngine(
-							storage_path=None, 
-							initial_data=data['objects'],
+						result = getattr(instance, method_info.method_name)(*args, **kwargs)
+					
+					# Handle return value if any
+					if result is not None:
+						result_storage = JSONStorageEngine(
+							storage_path=None,
 							data_decorator=self.data_decorator,
 							group_names=['main', method_info.group_name]
 						)
-						args, kwargs = self._deserialize_args(method_info, data)
 						
-						if method_info.is_static:
-							result = getattr(self.methods[cls_name]["cls"], method_info.method_name)(*args, **kwargs)
+						if method_info.return_class:
+							container = method_info.return_class(value=result)
+							result_storage.merge(container)
+							return jsonify({
+								'container_id': container.get_primary_key(),
+								'objects': result_storage._data
+							})
+						elif ClassInfo.has_ClassInfo(method_info.type_hints.get('return')):
+							result_storage.merge(result)
+							return jsonify({
+								'value': result.get_primary_key(),
+								'objects': result_storage._data
+							})
 						else:
-							instance_id = data.get("instance_id")
-							if not instance_id:
-								raise ValueError("No instance ID provided")
-							instance = self.instance_map[cls_name].get(instance_id)
-							if not instance:
-								raise ValueError(f"No instance found with ID: {instance_id}")
-							
-							result = getattr(instance, method_info.method_name)(*args, **kwargs)
-						
-						# Handle return value if any
-						if result is not None:
-							result_storage = JSONStorageEngine(
-								storage_path=None,
-								data_decorator=self.data_decorator,
-								group_names=['main', method_info.group_name]
-							)
-							
-							if method_info.return_class:
-								container = method_info.return_class(value=result)
-								result_storage.merge(container)
-								return jsonify({
-									'container_id': container.get_primary_key(),
-									'objects': result_storage._data
-								})
-							elif ClassInfo.has_ClassInfo(method_info.type_hints.get('return')):
-								result_storage.merge(result)
-								return jsonify({
-									'value': result.get_primary_key(),
-									'objects': result_storage._data
-								})
-							else:
-								return jsonify({
-									'value': result,
-									'type': type(result).__name__
-								})
-						
-						return jsonify({"status": "success"})
-						
-					except Exception as e:
-						if method_info:
-							method_info.error(e)
-						return jsonify({"error": str(e)}), 500
+							return jsonify({
+								'value': result,
+								'type': type(result).__name__
+							})
 					
-				for method_name, method_info in cls_methods.items():
-					if method_name == "__init__" or method_name == "cls":
-						continue
+					return jsonify({"status": "success"})
 					
-					app.add_url_rule(
-						f"/{cls_name}{method_info.path}",
-						f"{cls_name}_{method_name}",
-						lambda mi=method_info, cn=cls_name: handle_method_call(mi,cn),
-						methods=["POST"]
-					)
+				except Exception as e:
+					if method_info:
+						method_info.error(e)
+					return jsonify({"error": str(e)}), 500
+				
+			for method_name, method_info in cls_methods.items():
+				if method_name == "__init__" or method_name == "cls":
+					continue
+				
+				app.add_url_rule(
+					f"/{cls_name}{method_info.path}",
+					f"{cls_name}_{method_name}",
+					lambda mi=method_info, cn=cls_name: handle_method_call(mi,cn),
+					methods=["POST"]
+				)
 		
 		if run:
 			app.run(host=host, port=port)
@@ -397,117 +398,103 @@ class FlaskifyDecorator:
 
 	def make_client(self, host: str, port: int):
 		"""Convert registered classes to client stubs"""
+		flaskify = self
+		
 		for cls in self.classes:
-			if not isinstance(cls, type):
-				continue
-				
 			cls_name = ClassInfo.get_semi_qual_name(cls)
+			cls_methods = self._get_class_methods(cls)
+			if len(cls_methods) == 0:
+				continue
 			
-			# Find methods with route info
-			cls_methods :Dict[str, MethodInfo] = {}
-			for method_name in dir(cls):
-				if method_name.startswith('_'):
-					continue
-					
-				method_info = self._get_method_info(cls, method_name)
-				if method_info:
-					cls_methods[method_name] = method_info
+			# Override cls __init__ to create instance on and get id from server:
+			def make_init(cls:Type, cls_name:str):
+				method_info = flaskify._get_method_info(cls, '__init__')
+				def __init__(self, *args, **kwargs):
+					try:
+						# Serialize init args
+						data = flaskify._serialize_args(method_info, args, kwargs)
+						
+						# Make request to server to create instance
+						response = requests.post(
+							f"http://{host}:{port}/{cls_name}/__init__",
+							json=data
+						)
+						
+						if response.status_code != 200:
+							raise Exception(f"Failed to create instance: {response.text}")
+							
+						# Store instance ID
+						self._instance_id = response.json()["instance_id"]
+						
+					except Exception as e:
+						if method_info:
+							method_info.error(e)
+						raise
+				return __init__
+			cls.__init__ = make_init(cls=cls, cls_name=cls_name)
 			
-			flaskify = self
-			if cls_methods:
-				# Create client method implementation
-				def make_method(method_info: MethodInfo, cls_name:str):
-					def method_impl(*args, **kwargs):
-						try:
-							self = None
-							if not method_info.is_static:
-								assert len(args)>0, "Must pass self to instance methods"
-								self = args[0]
-								args = args[1:]
+			# Create client method implementations:
+			def make_method(method_info: MethodInfo, cls_name:str):
+				def method_impl(*args, **kwargs):
+					try:
+						self = None
+						if not method_info.is_static:
+							assert len(args)>0, "Must pass self to instance methods"
+							self = args[0]
+							args = args[1:]
+						
+						
+						# Serialize method args
+						data = flaskify._serialize_args(method_info, args, kwargs)
+						
+						# Add instance ID if instance method
+						if not method_info.is_static:
+							data["instance_id"] = self._instance_id
 							
+						# Make request to server
+						response = requests.post(
+							f"http://{host}:{port}/{cls_name}{method_info.path}",
+							json=data
+						)
+						
+						if response.status_code != 200:
+							raise Exception(f"Request failed: {response.text}")
 							
-							# Serialize method args
-							data = flaskify._serialize_args(method_info, args, kwargs)
-							
-							# Add instance ID if instance method
-							if not method_info.is_static:
-								data["instance_id"] = self._instance_id
-								
-							# Make request to server
-							response = requests.post(
-								f"http://{host}:{port}/{cls_name}{method_info.path}",
-								json=data
+						# Deserialize response if needed
+						result = response.json()
+						if 'container_id' in result:
+							storage = JSONStorageEngine(
+								storage_path=None,
+								data_decorator=flaskify.data_decorator,
+								initial_data=result['objects'],
+								group_names=['main', method_info.group_name]
 							)
-							
-							if response.status_code != 200:
-								raise Exception(f"Request failed: {response.text}")
-								
-							# Deserialize response if needed
-							result = response.json()
-							if 'container_id' in result:
+							container = storage.query(method_info.return_class).filter_by_id(result['container_id'])
+							return container.value
+						elif 'value' in result:
+							if 'objects' in result:
 								storage = JSONStorageEngine(
 									storage_path=None,
 									data_decorator=flaskify.data_decorator,
 									initial_data=result['objects'],
 									group_names=['main', method_info.group_name]
 								)
-								container = storage.query(method_info.return_class).filter_by_id(result['container_id'])
-								return container.value
-							elif 'value' in result:
-								if 'objects' in result:
-									storage = JSONStorageEngine(
-										storage_path=None,
-										data_decorator=flaskify.data_decorator,
-										initial_data=result['objects'],
-										group_names=['main', method_info.group_name]
-									)
-									return_type = method_info.type_hints.get('return')
-									return storage.query(return_type).filter_by_id(result['value'])
-								else:
-									return_type = method_info.type_hints.get('return', type(None))
-									return return_type(result['value'])
-							return None
-							
-						except Exception as e:
-							if method_info:
-								method_info.error(e)
-							raise
-							
-					if method_info.is_static:
-						return staticmethod(method_impl)
-					return method_impl
-
-				# Create __init__ that gets instance ID from server
-				def make_init(cls:Type, cls_name:str):
-					original_init = cls.__init__
-					method_info = flaskify._get_method_info(cls, '__init__')
-					def __init__(self, *args, **kwargs):
-						try:
-							# Serialize init args
-							data = flaskify._serialize_args(method_info, args, kwargs)
-							
-							# Make request to server to create instance
-							response = requests.post(
-								f"http://{host}:{port}/{cls_name}/__init__",
-								json=data
-							)
-							
-							if response.status_code != 200:
-								raise Exception(f"Failed to create instance: {response.text}")
-								
-							# Store instance ID
-							self._instance_id = response.json()["instance_id"]
-							
-						except Exception as e:
-							if method_info:
-								method_info.error(e)
-							raise
-					return __init__
-
-				# Apply modifications to class
-				cls.__init__ = make_init(cls=cls, cls_name=cls_name)
-				
-				# Add all methods
-				for method_name, method_info in cls_methods.items():
-					if method_name != "__init__":
-						setattr(cls, method_name, make_method(method_info, cls_name))
+								return_type = method_info.type_hints.get('return')
+								return storage.query(return_type).filter_by_id(result['value'])
+							else:
+								return_type = method_info.type_hints.get('return', type(None))
+								return return_type(result['value'])
+						return None
+						
+					except Exception as e:
+						if method_info:
+							method_info.error(e)
+						raise
+						
+				if method_info.is_static:
+					return staticmethod(method_impl)
+				return method_impl
+			
+			for method_name, method_info in cls_methods.items():
+				if method_name != "__init__":
+					setattr(cls, method_name, make_method(method_info, cls_name))
