@@ -19,10 +19,10 @@ json_transcoder_collection = TranscoderCollection()
 T = TypeVar('T')
 class JSONStorageEngine(StorageEngine):
     def __init__(self, 
+                data_decorator: DATADecorator,
                 storage_path: Optional[str] = None,
                 initial_data: Optional[Dict[str, Any]] = None,
                 use_folders: bool = False,
-                data_decorator: 'DATADecorator' = None,
                 extra_transcoders: List[Transcoder] = [],
                 files_dir: Optional[str] = None,
                 group_names:Optional[Iterable[str]]=None):
