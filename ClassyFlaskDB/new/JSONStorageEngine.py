@@ -516,6 +516,8 @@ class JsonDictTranscoder(Transcoder):
         
         if origin is dict:
             key_type, value_type = get_args(type_)
+            if key_type is str and value_type is Any:
+                return True
             return (cls.is_json_primitive(key_type) and 
                    cls._validate_type(value_type, seen))
         
@@ -523,6 +525,8 @@ class JsonDictTranscoder(Transcoder):
 
     @classmethod
     def validate(cls, type_: Type) -> bool:
+        if type_ is dict:
+            return True
         origin = get_origin(type_)
         if origin is not dict:
             return False
