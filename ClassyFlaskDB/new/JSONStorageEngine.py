@@ -150,7 +150,6 @@ class JSONStorageEngine(StorageEngine):
         for transcoder in self.transcoders:
             try:
                 if transcoder.validate(type_):
-                    print(f"Transcoder for {type_} is: {transcoder}")
                     self.transcoder_map[type_] = transcoder
                     return transcoder
             except Exception as e:
