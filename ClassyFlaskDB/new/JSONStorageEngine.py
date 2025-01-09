@@ -154,7 +154,7 @@ class JSONStorageEngine(StorageEngine):
                     return transcoder
             except Exception as e:
                 print(f"Transcoder validate {type_} error {e}")
-        return None
+        raise ValueError(f"No Transcoder found for type {type_}, in field {field_.name}")
 
     def query(self, cls: Type[T]) -> 'JSONStorageEngineQuery[T]':
         return JSONStorageEngineQuery(self, cls)

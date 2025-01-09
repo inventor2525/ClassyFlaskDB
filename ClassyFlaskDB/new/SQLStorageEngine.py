@@ -103,7 +103,7 @@ class SQLStorageEngine(StorageEngine):
                     return transcoder
             except:
                 pass
-        return None
+        raise ValueError(f"No Transcoder found for type {type_}, in field {field_.name}")
     
     def get_table_by_name(self, table_name: str) -> Table:
         if table_name in self.metadata.tables:
