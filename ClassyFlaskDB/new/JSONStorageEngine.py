@@ -12,6 +12,7 @@ from enum import Enum
 from zoneinfo import ZoneInfo
 import json
 from pathlib import Path
+import base64
 import uuid
 
 json_transcoder_collection = TranscoderCollection()
@@ -666,3 +667,24 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def create_lazy_instance(cls, cf_instance: DictCFInstance) -> InstrumentedDict:
         return InstrumentedDict.from_cf_instance(cf_instance)
+
+@json_transcoder_collection.add
+class BytesTranscoder(Transcoder):
+    @classmethod
+    def validate(cls, type_: Type) -> bool:
+        return type_ == bytes
+
+    @classmethod
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Any]:
+        return []  # No setup needed for JSON
+
+    @classmethod
+    def _encode(cls, merge_args: JSONMergeArgs, value: bytes) -> None:
+        # Convert bytes to base64-encoded string for JSON compatibility
+        merge_args.encodes[merge_args.base_name] = base64.b64encode(value).decode('ascii')
+
+    @classmethod
+    def decode(cls, decode_args: JSONDecodeArgs) -> bytes:
+        # Convert base64-encoded string back to bytes
+        encoded_value = decode_args.encodes[decode_args.base_name]
+        return base64.b64decode(encoded_value)

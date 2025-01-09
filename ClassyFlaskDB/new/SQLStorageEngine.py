@@ -18,6 +18,7 @@ from ClassyFlaskDB.new.InstrumentedList import InstrumentedList, ListCFInstance
 from ClassyFlaskDB.new.InstrumentedDict import InstrumentedDict, DictCFInstance
 
 from sqlalchemy.orm import Session
+from sqlalchemy import LargeBinary
 
 @dataclass
 class SQLMergeArgs(MergeArgs):
@@ -719,3 +720,21 @@ class DictionaryTranscoder(LazyLoadingTranscoder):
     @classmethod
     def create_lazy_instance(cls, cf_instance: DictCFInstance) -> 'InstrumentedDict':
         return InstrumentedDict.from_cf_instance(cf_instance)
+
+@sql_transcoder_collection.add
+class BytesTranscoder(Transcoder):
+    @classmethod
+    def validate(cls, type_: Type) -> bool:
+        return type_ == bytes
+
+    @classmethod
+    def setup(cls, setup_args: SetupArgs, name: str, type_: Type, is_primary_key: bool) -> List[Column]:
+        return [Column(name, LargeBinary, primary_key=is_primary_key)]
+
+    @classmethod
+    def _encode(cls, merge_args: SQLMergeArgs, value: bytes) -> None:
+        merge_args.encodes[merge_args.base_name] = value
+
+    @classmethod
+    def decode(cls, decode_args: DecodeArgs) -> bytes:
+        return decode_args.encodes[decode_args.base_name]
