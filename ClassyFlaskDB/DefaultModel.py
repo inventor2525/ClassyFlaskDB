@@ -7,6 +7,10 @@ def get_local_time():
 	local_tz = tzlocal.get_localzone()
 	return datetime.now(local_tz)
 
+def make_local_time(dt:datetime) -> datetime:
+	local_tz = tzlocal.get_localzone()
+	return dt.replace(tzinfo=local_tz)
+
 def default(mutable_default_value) -> Field:
 	'''
 	Creates a dataclasses.field that accepts
