@@ -13,7 +13,10 @@ def make_local_time(dt:datetime) -> datetime:
 
 def environ_getter(environment_variable_name:str) -> Callable[[], str]:
 	def inner() -> str:
-		return os.environ.get(environment_variable_name)
+		try:
+			return os.environ.get(environment_variable_name)
+		except:
+			return None
 	return inner
 
 def default(mutable_default_value) -> Field:
