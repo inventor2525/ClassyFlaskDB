@@ -328,7 +328,11 @@ class newDATADecorator_tests(unittest.TestCase):
 		self.assertEqual(queried_family.surname, family.surname)
 		self.assertEqual(len(queried_family.children), len(family.children))
 		self.assertEqual(len(queried_family.parents), len(family.parents))
-
+		
+		# Validate loaded list type
+		self.assertEqual(type(queried_family.children), InstrumentedList)
+		self.assertEqual(type(queried_family.parents), InstrumentedList)
+		
 		# Validate children
 		for original, queried in zip(family.children, queried_family.children):
 			self.assertEqual(queried.name, original.name)

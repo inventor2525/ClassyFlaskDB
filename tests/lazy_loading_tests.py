@@ -4,6 +4,7 @@ from ClassyFlaskDB.new.DATADecorator import DATADecorator
 from ClassyFlaskDB.new.JSONStorageEngine import JSONStorageEngine
 from ClassyFlaskDB.new.SQLStorageEngine import SQLStorageEngine
 from ClassyFlaskDB.new.InstrumentedValue import InstrumentedValue
+from ClassyFlaskDB.new.InstrumentedList import InstrumentedList
 from dataclasses import dataclass
 from typing import List, Dict
 
@@ -32,6 +33,10 @@ class LazyLoadingTests(unittest.TestCase):
 			return storage.query(ListContainer).filter_by_id(container.get_primary_key())
 		
 		for engine_type in range(0, 2):
+			# Test Loaded type
+			queried = setup_and_query(engine_type)
+			self.assertEqual(type(queried.items), InstrumentedList)
+			
 			# Test length
 			queried = setup_and_query(engine_type)
 			self.assertEqual(len(queried.items), 5)
