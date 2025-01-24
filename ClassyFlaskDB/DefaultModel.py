@@ -1,6 +1,6 @@
 from ClassyFlaskDB.new.SQLStorageEngine import *
 from datetime import datetime
-from typing import Any, List, TypeVar
+from typing import Any, List, TypeVar, Callable
 import tzlocal
 
 def get_local_time():
@@ -10,6 +10,11 @@ def get_local_time():
 def make_local_time(dt:datetime) -> datetime:
 	local_tz = tzlocal.get_localzone()
 	return dt.replace(tzinfo=local_tz)
+
+def environ_getter(environment_variable_name:str) -> Callable[[], str]:
+	def inner() -> str:
+		return os.environ.get(environment_variable_name)
+	return inner
 
 def default(mutable_default_value) -> Field:
 	'''
