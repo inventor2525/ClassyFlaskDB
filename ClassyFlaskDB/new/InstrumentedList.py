@@ -105,3 +105,6 @@ class InstrumentedList(list):
 	
 	def get_primary_key(self) -> str:
 		return self._cf_instance.list_id
+	
+	def copy(self) -> list:
+		return [v for v in self]
