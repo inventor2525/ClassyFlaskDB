@@ -19,6 +19,9 @@ from ClassyFlaskDB.new.InstrumentedDict import InstrumentedDict, DictCFInstance
 
 from sqlalchemy.orm import Session
 from sqlalchemy import LargeBinary
+from threading import Lock
+
+from ClassyFlaskDB.ReadWriteLock import ReaderWriterLock
 
 @dataclass
 class SQLMergeArgs(MergeArgs):
@@ -45,6 +48,7 @@ class SQLStorageEngine(StorageEngine):
         self._extra_transcoders = extra_transcoders
         self.transcoder_map: Dict[Type, Transcoder] = {}
         
+        self.lock = ReaderWriterLock()
         self.data_decorator = data_decorator
         self.data_decorator.finalize()
         self.setup()
@@ -70,21 +74,22 @@ class SQLStorageEngine(StorageEngine):
         self.metadata.create_all(self.engine)
 
     def merge(self, obj: Any, persist: bool = False, merge_depth_limit:int=-1):
-        context = self.context if persist else {}
-        with self.session_maker() as session:
-            merge_args = SQLMergeArgs(
-                storage_engine=self,
-                context=context,
-                is_dirty={},
-                encodes={},
-                base_name='id',
-                type=type(obj),
-                merge_depth_limit=merge_depth_limit,
-                session=session
-            )
-            transcoder = self.get_transcoder_type(type(obj))
-            transcoder.merge(merge_args, obj)
-            session.commit()
+        with self.lock.write_lock():
+            context = self.context if persist else {}
+            with self.session_maker() as session:
+                merge_args = SQLMergeArgs(
+                    storage_engine=self,
+                    context=context,
+                    is_dirty={},
+                    encodes={},
+                    base_name='id',
+                    type=type(obj),
+                    merge_depth_limit=merge_depth_limit,
+                    session=session
+                )
+                transcoder = self.get_transcoder_type(type(obj))
+                transcoder.merge(merge_args, obj)
+                session.commit()
     
     def query(self, cls: Type[T]) -> 'SQLStorageEngineQuery[T]':
         return SQLStorageEngineQuery(self, cls)
@@ -136,61 +141,64 @@ class SQLStorageEngineQuery(StorageEngineQuery[T]):
             raise ValueError(f"Transcoder for {cls} does not support lazy loading")
     
     def filter_by_id(self, obj_id: Any) -> T:
-        # Check context first:
-        context_obj = self._get_from_context(obj_id)
-        if context_obj is not MISSING:
-            return context_obj
-        
-        # Create query:
-        class_info = ClassInfo.get(self.cls)
-        primary_key_name = class_info.primary_key_name
-        query = select(self.table).where(getattr(self.table.c, primary_key_name) == obj_id)
-        
-        # Run query:
-        with self.storage_engine.session_maker() as session:
-            result = session.execute(query).first()
-            if result:
-                return self._create_lazy_instance(result._asdict())
-            return None
+        with self.storage_engine.lock.read_lock():
+            # Check context first:
+            context_obj = self._get_from_context(obj_id)
+            if context_obj is not MISSING:
+                return context_obj
+            
+            # Create query:
+            class_info = ClassInfo.get(self.cls)
+            primary_key_name = class_info.primary_key_name
+            query = select(self.table).where(getattr(self.table.c, primary_key_name) == obj_id)
+            
+            # Run query:
+            with self.storage_engine.session_maker() as session:
+                result = session.execute(query).first()
+                if result:
+                    return self._create_lazy_instance(result._asdict())
+                return None
     
     def first(self) -> T:
-        # Create query:
-        class_info = ClassInfo.get(self.cls)
-        primary_key_name = class_info.primary_key_name
-        query = select(self.table)
-        
-        # Run query:
-        with self.storage_engine.session_maker() as session:
-            result = session.execute(query).first()
+        with self.storage_engine.lock.read_lock():
+            # Create query:
+            class_info = ClassInfo.get(self.cls)
+            primary_key_name = class_info.primary_key_name
+            query = select(self.table)
             
-            if result:
-                encodes = result._asdict()
+            # Run query:
+            with self.storage_engine.session_maker() as session:
+                result = session.execute(query).first()
                 
-                # Check context first:
-                obj_id = encodes[primary_key_name]
-                context_obj = self._get_from_context(obj_id)
-                if context_obj is not MISSING:
-                    return context_obj
-                
-                return self._create_lazy_instance(encodes)
-            return None
+                if result:
+                    encodes = result._asdict()
+                    
+                    # Check context first:
+                    obj_id = encodes[primary_key_name]
+                    context_obj = self._get_from_context(obj_id)
+                    if context_obj is not MISSING:
+                        return context_obj
+                    
+                    return self._create_lazy_instance(encodes)
+                return None
     
     def all(self, where: Optional[str] = None) -> Iterator[T]:
-        with self.storage_engine.session_maker() as session:
-            query = select(self.table)
-            if where:
-                query = query.where(text(where))
-            results = session.execute(query)
-            for row in results:
-                encoded_values = row._asdict()
-                obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
-                
-                # Check context:
-                context_obj = self._get_from_context(obj_id)
-                if context_obj is not MISSING:
-                    yield context_obj
-                else: # Decode from query:
-                    yield self._create_lazy_instance(encoded_values)
+        with self.storage_engine.lock.read_lock():
+            with self.storage_engine.session_maker() as session:
+                query = select(self.table)
+                if where:
+                    query = query.where(text(where))
+                results = session.execute(query)
+                for row in results:
+                    encoded_values = row._asdict()
+                    obj_id = encoded_values[ClassInfo.get(self.cls).primary_key_name]
+                    
+                    # Check context:
+                    context_obj = self._get_from_context(obj_id)
+                    if context_obj is not MISSING:
+                        yield context_obj
+                    else: # Decode from query:
+                        yield self._create_lazy_instance(encoded_values)
     
     def _get_from_context(self, id_value:Any):
         return self.storage_engine.context.get(self.cls, {}).get(id_value, MISSING)
